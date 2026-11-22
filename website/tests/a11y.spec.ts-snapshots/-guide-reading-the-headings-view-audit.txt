@@ -14,18 +14,26 @@ navigation "On this page"
 main
   heading "Reading the Headings View" (level 1)
   blockquote
-    paragraph "The Headings view matches the output of in the testing package — same ordering, same formatting. Whether you're reading it in the Chrome extension, the Storybook addon, a committed Playwright snapshot fixture, the command, or the MCP tool, this page applies."
+    paragraph
+      text "The Headings view matches the output of"
       link "outlineSnapshot()"
         code "outlineSnapshot()"
+      text "in the testing package — same ordering, same formatting. Whether you're reading it in the Chrome extension, the Storybook addon, a committed Playwright snapshot fixture, the"
       link "real-a11y outline"
         code "real-a11y outline"
+      text "command, or the"
       link "get_heading_outline"
         code "get_heading_outline"
-  paragraph "The Headings view answers one question:"
+      text "MCP tool, this page applies."
+  paragraph
+    text "The Headings view answers one question:"
     strong "can a screen reader user navigate this page by structure?"
-  paragraph "Headings are how screen reader users scan a page — the same way sighted users scan titles and section labels. The Headings view extracts every through and shows them as a leveled outline, like a table of contents."
+  paragraph
+    text "Headings are how screen reader users scan a page — the same way sighted users scan titles and section labels. The Headings view extracts every"
     code "<h1>"
+    text "through"
     code "<h6>"
+    text "and shows them as a leveled outline, like a table of contents."
   img "Headings view: only the heading elements from the page, shown as indigo bars indented by level — one H1 at the top, followed by H2s and H3s forming the document outline."
   button "Enlarge image: Headings view"
   paragraph "Each bar is one heading. The indentation shows the level — H1 at the top, H2 nested under it, H3 nested under H2."
@@ -33,80 +41,119 @@ main
   heading "What you see" (level 2)
   paragraph "Each row is one heading element, in document order. For each one you'll see:"
   list
-    listitem "— , , , , , or"
+    listitem
       strong "The heading level"
+      text "—"
       code "H1"
+      text ","
       code "H2"
+      text ","
       code "H3"
+      text ","
       code "H4"
+      text ","
       code "H5"
+      text ", or"
       code "H6"
-    listitem "— the text content of the heading (what gets announced)"
+    listitem
       strong "The accessible name"
-    listitem "— deeper levels are indented further, showing the nesting visually"
+      text "— the text content of the heading (what gets announced)"
+    listitem
       strong "Indentation"
+      text "— deeper levels are indented further, showing the nesting visually"
   separator
   heading "How heading levels work" (level 2)
   paragraph "Heading levels create a hierarchy — like an outline in a word processor:"
   list
-    listitem "is the page title. There should be exactly one per page."
+    listitem
       strong
         code "<h1>"
-    listitem "marks major sections under the page title."
+      text "is the page title. There should be exactly one per page."
+    listitem
       strong
         code "<h2>"
-    listitem "marks subsections within an section."
+      text "marks major sections under the page title."
+    listitem
       strong
         code "<h3>"
+      text "marks subsections within an"
       code "<h2>"
-    listitem "And so on, down to ."
+      text "section."
+    listitem
+      text "And so on, down to"
       code "<h6>"
-  paragraph "The level number indicates depth, not visual size. CSS controls how big headings look — the HTML level controls what they ."
+      text "."
+  paragraph
+    text "The level number indicates depth, not visual size. CSS controls how big headings look — the HTML level controls what they"
     emphasis "mean"
-  paragraph "Screen readers let users jump directly to any heading. A user can press a key to hear all headings to get an overview, then drill into a section by listening to its s. A broken outline makes this navigation useless."
+    text "."
+  paragraph
+    text "Screen readers let users jump directly to any heading. A user can press a key to hear all"
     code "<h2>"
+    text "headings to get an overview, then drill into a section by listening to its"
     code "<h3>"
+    text "s. A broken outline makes this navigation useless."
   separator
   heading "What to check" (level 2)
   heading "Exactly one H1" (level 3)
-  paragraph "Every page should have exactly one — the page title. Zero means there's no top-level label. More than one means the page has multiple "titles" and the hierarchy has no single root."
+  paragraph
+    text "Every page should have exactly one"
     code "<h1>"
+    text "— the page title. Zero means there's no top-level label. More than one means the page has multiple "titles" and the hierarchy has no single root."
   button "Copy Code"
   code "H1 "Our Products" H1 "About Us" ← two H1s — which is the page title?"
-  paragraph "Keep one for the page title. Demote the other to or restructure the page."
+  paragraph
     strong "The fix:"
+    text "Keep one"
     code "<h1>"
+    text "for the page title. Demote the other to"
     code "<h2>"
+    text "or restructure the page."
   heading "No skipped levels" (level 3)
-  paragraph "Heading levels should only increase by one at a time. Jumping from to breaks the outline — screen reader users navigating by heading level lose their place in the hierarchy."
+  paragraph
+    text "Heading levels should only increase by one at a time. Jumping from"
     code "<h1>"
+    text "to"
     code "<h3>"
+    text "breaks the outline — screen reader users navigating by heading level lose their place in the hierarchy."
   button "Copy Code"
   code "H1 "Dashboard" H3 "Recent Activity" ← skipped H2"
-  paragraph "Insert the missing level, or demote the deeper heading. In this case, either add an section above "Recent Activity" or make it an ."
+  paragraph
     strong "The fix:"
+    text "Insert the missing level, or demote the deeper heading. In this case, either add an"
     code "<h2>"
+    text "section above "Recent Activity" or make it an"
     code "<h2>"
+    text "."
   heading "Headings that aren't headings" (level 3)
-  paragraph "Sometimes developers use or to get a specific font size, not to create structure. The Headings view will reveal this — you'll see headings that don't belong in the outline."
+  paragraph
+    text "Sometimes developers use"
     code "<h3>"
+    text "or"
     code "<h4>"
+    text "to get a specific font size, not to create structure. The Headings view will reveal this — you'll see headings that don't belong in the outline."
   button "Copy Code"
   code "H1 "Settings" H2 "Account" H4 "Note: changes take 24 hours" ← not a real section H2 "Privacy""
-  paragraph "Use CSS to style the text at the size you want. Don't pick a heading level based on how it looks — pick it based on where it falls in the outline."
+  paragraph
     strong "The fix:"
+    text "Use CSS to style the text at the size you want. Don't pick a heading level based on how it looks — pick it based on where it falls in the outline."
   heading "Missing headings" (level 3)
   paragraph "If a major section of the page has no heading, screen reader users can't jump to it. They have to arrow through every element sequentially to find it."
   paragraph "Compare the Headings view to the visual layout. Every distinct section a sighted user would recognize should have a heading in the outline."
   heading "Headings inside interactive elements" (level 3)
-  paragraph "A heading inside a or creates confusing behavior — the element shows up both in heading navigation and interactive navigation, and screen readers may announce it inconsistently."
+  paragraph
+    text "A heading inside a"
     code "<button>"
+    text "or"
     code "<a>"
+    text "creates confusing behavior — the element shows up both in heading navigation and interactive navigation, and screen readers may announce it inconsistently."
   button "Copy Code"
   code "H2 "Click here to expand" ← heading inside a button"
-  paragraph "Remove the heading from inside the interactive element. Use or visible text instead."
+  paragraph
     strong "The fix:"
+    text "Remove the heading from inside the interactive element. Use"
     code "aria-label"
+    text "or visible text instead."
   separator
   heading "Common patterns and what they look like" (level 2)
   paragraph
@@ -154,7 +201,8 @@ main
         cell "Can keyboard users reach everything?"
 contentinfo
   link "Edit this page on GitHub"
-  paragraph "Last updated:"
+  paragraph
+    text "Last updated:"
     time "[redacted]"
   navigation "Pager"
     link "Previous page A11y View"

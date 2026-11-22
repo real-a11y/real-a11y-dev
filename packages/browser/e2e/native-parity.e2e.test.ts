@@ -1055,9 +1055,13 @@ describe("a paragraph's text through role-less inline wrappers", () => {
       '  paragraph "ABC"',
       '  paragraph "Line one Line two"',
       '  paragraph "Hiddenbreak"',
-      '  paragraph "A s1 s2 B"',
+      // Text beside kept children: a `text` row per run, in reading order,
+      // with the `<span>` part of the runs around it.
+      "  paragraph",
+      '    text "A s1"',
       '    emphasis "em"',
       '    link "L"',
+      '    text "s2 B"',
       '  paragraph "Kept out"',
       "  list",
       '    listitem "Item text"',
@@ -1066,6 +1070,77 @@ describe("a paragraph's text through role-less inline wrappers", () => {
     ];
     expect(domTree.split("\n")).toEqual(expected);
     // A list item carries no level in either producer.
+    expect(nativeTree.split("\n")).toEqual(expected);
+  });
+});
+
+// A prose element that mixes its text with children that have a node of their
+// own keeps the reading order: Chromium hangs `StaticText, link, StaticText`
+// on the paragraph, and both producers print each run as a `text` row there.
+// Folded into the paragraph's name, the runs read "You accept our and have read
+// our ." and said where neither link sits.
+describe("text beside kept children", () => {
+  it("reads in order in both producers", async () => {
+    await session.open(
+      dataUrl(
+        `<main>
+          <p>You accept our <a href="/terms">terms</a> and have read our <a href="/privacy">privacy policy</a>.</p>
+          <p>Run <code>pnpm verify</code> before you <strong>push</strong>, <b>always</b>.</p>
+          <p>Sent</p>
+          <p>Pure <b>bold</b> text.</p>
+          <h2>Read the <a href="/docs">docs</a></h2>
+          <ul><li>Buy <a href="/milk">milk</a> now</li><li>Plain item</li></ul>
+          <blockquote>Quote <a href="/src">source</a></blockquote>
+          <p><a href="/a">a</a> <a href="/b">b</a></p>
+          <p>Line one<br>Line two <a href="/c">c</a></p>
+          <p aria-label="Named">Text <a href="/d">d</a></p>
+        </main>`,
+      ),
+    );
+    const domTree = await session.call<string>("treeSnapshot", "body", [
+      { markFocus: false },
+    ]);
+    const nativeTree = serializeTree(await session.nativeTree(), {
+      markFocus: false,
+    });
+
+    const expected = [
+      "main",
+      "  paragraph",
+      '    text "You accept our"',
+      '    link "terms"',
+      '    text "and have read our"',
+      '    link "privacy policy"',
+      '    text "."',
+      "  paragraph",
+      '    text "Run"',
+      '    code "pnpm verify"',
+      '    text "before you"',
+      '    strong "push"',
+      '    text ", always."',
+      '  paragraph "Sent"',
+      '  paragraph "Pure bold text."',
+      '  heading "Read the docs" (level 2)',
+      '    link "docs"',
+      "  list",
+      "    listitem",
+      '      text "Buy"',
+      '      link "milk"',
+      '      text "now"',
+      '    listitem "Plain item"',
+      "  blockquote",
+      '    text "Quote"',
+      '    link "source"',
+      "  paragraph",
+      '    link "a"',
+      '    link "b"',
+      "  paragraph",
+      '    text "Line one Line two"',
+      '    link "c"',
+      '  paragraph "Named"',
+      '    link "d"',
+    ];
+    expect(domTree.split("\n")).toEqual(expected);
     expect(nativeTree.split("\n")).toEqual(expected);
   });
 });

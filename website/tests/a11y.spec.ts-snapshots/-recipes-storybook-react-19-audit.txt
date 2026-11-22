@@ -17,90 +17,140 @@ navigation "On this page"
       link "Known constraints"
 main
   heading "Storybook + React 19" (level 1)
-  paragraph "supports Storybook 9.x, 10.x and 11.x with React 18 or React 19; its own suite runs on React 19. If you hit at story render time, the Vite pipeline needs one small nudge — explained below."
+  paragraph
     code "@real-a11y-dev/storybook-addon"
+    text "supports Storybook 9.x, 10.x and 11.x with React 18 or React 19; its own suite runs on React 19. If you hit"
     code "React is not defined"
+    text "at story render time, the Vite pipeline needs one small nudge — explained below."
   heading "Install" (level 2)
   button "Copy Code"
   code "npm install -D @real-a11y-dev/storybook-addon"
-  paragraph "Peer dependencies ( 9.x or 10.x, your framework package, and React) must already be installed in your project. Storybook 8 is not supported — see for why."
+  paragraph
+    text "Peer dependencies ("
     code "storybook"
+    text "9.x or 10.x, your framework package, and React) must already be installed in your project. Storybook 8 is not supported — see"
     link "the package page"
+    text "for why."
   heading "Register the addon" (level 2)
   button "Copy Code"
   code "// .storybook/main.ts import type { StorybookConfig } from "@storybook/react-vite"; const config: StorybookConfig = { stories: ["../src/**/*.stories.@(ts|tsx)"], addons: ["@real-a11y-dev/storybook-addon"], framework: { name: "@storybook/react-vite", options: {}, }, }; export default config;"
-  paragraph "A panel appears next to Controls and A11y for every story, showing the tree, heading outline, and tab sequence."
+  paragraph
+    text "A"
     strong "Semantic Navigator"
+    text "panel appears next to Controls and A11y for every story, showing the tree, heading outline, and tab sequence."
   separator
   heading "React 19 — pin the JSX runtime" (level 2)
-  paragraph "Storybook externalizes for addon manager bundles but does externalize — still true as of Storybook 11's manager globals map. When Vite's esbuild falls back to the classic JSX transform (which it does for some source files under React 19), story files emit calls that fail with — because automatic runtime is the default for React 19 projects and classic transform needs in scope."
+  paragraph
+    text "Storybook externalizes"
     code "react"
+    text "for addon manager bundles but does"
     strong "not"
+    text "externalize"
     code "react/jsx-runtime"
+    text "— still true as of Storybook 11's manager globals map. When Vite's esbuild falls back to the classic JSX transform (which it does for some source files under React 19), story files emit"
     code "React.createElement(...)"
+    text "calls that fail with"
     code "ReferenceError: React is not defined"
+    text "— because automatic runtime is the default for React 19 projects and classic transform needs"
     code "React"
-  paragraph "The one-line fix lives in :"
+    text "in scope."
+  paragraph
+    text "The one-line fix lives in"
     code ".storybook/main.ts"
+    text ":"
   button "Copy Code"
   code "// .storybook/main.ts import type { StorybookConfig } from "@storybook/react-vite"; import { mergeConfig } from "vite"; const config: StorybookConfig = { stories: ["../src/**/*.stories.@(ts|tsx)"], addons: ["@real-a11y-dev/storybook-addon"], framework: { name: "@storybook/react-vite", options: {}, }, // Force esbuild's automatic JSX runtime on source .tsx files — matches // the React 19 / Next.js default so stories don't need to import React. async viteFinal(config) { return mergeConfig(config, { esbuild: { jsx: "automatic", jsxImportSource: "react" }, }); }, }; export default config;"
-  paragraph "No source-file changes required — stories can keep writing JSX without ."
+  paragraph
+    text "No source-file changes required — stories can keep writing JSX without"
     code "import React from "react""
+    text "."
   heading "When you don't need this" (level 2)
     emphasis "don't"
   list
     listitem "React 18 projects — the default transform is already compatible."
-    listitem "Projects that always at the top of every component/story (classic-runtime hygiene)."
+    listitem
+      text "Projects that always"
       code "import React from "react""
+      text "at the top of every component/story (classic-runtime hygiene)."
     listitem "Future Storybook versions where this is fixed upstream."
-  paragraph "If you hit at story render time, add the override."
+  paragraph
+    text "If you hit"
     code "React is not defined"
+    text "at story render time, add the"
     code "viteFinal"
+    text "override."
   separator
   heading "Clear the cache after adding the addon" (level 2)
-  paragraph "Storybook caches its addon bundles under . If you install the addon and it doesn't appear — or if you change addon configuration and nothing updates — clear the cache:"
+  paragraph
+    text "Storybook caches its addon bundles under"
     code "node_modules/.cache/storybook/"
+    text ". If you install the addon and it doesn't appear — or if you change addon configuration and nothing updates — clear the cache:"
   button "Copy Code"
   code "rm -rf node_modules/.cache/storybook"
-  paragraph "Then restart ."
+  paragraph
+    text "Then restart"
     code "storybook dev"
+    text "."
   separator
   heading "CI" (level 2)
   paragraph "Storybook's addon build is deterministic; include Storybook in your regular CI jobs."
   button "Copy Code"
   code "- run: npm run build-storybook"
-  paragraph "For accessibility-specific CI coverage on Storybook stories, pair it with the Playwright adapter — load the built Storybook and run against each story's iframe. That's more setup than most projects need; for per-story audits the panel itself + manual review is usually enough."
+  paragraph
+    text "For accessibility-specific CI coverage on Storybook stories, pair it with the Playwright adapter — load the built Storybook and run"
     code "treeSnapshot()"
+    text "against each story's iframe. That's more setup than most projects need; for per-story audits the panel itself + manual review is usually enough."
   separator
   heading "Known constraints" (level 2)
   list
-    listitem "is required. The addon's manager entry imports and its preview entry imports — the subpath exports Storybook 9 introduced when it folded the standalone packages into core. Those packages stopped publishing at 8.6 and has no equivalent subpath, so 8.x cannot be supported by the same build."
+    listitem
       strong "Storybook 9.x, 10.x or 11.x"
+      text "is required. The addon's manager entry imports"
       code "storybook/manager-api"
+      text "and its preview entry imports"
       code "storybook/preview-api"
+      text "— the subpath exports Storybook 9 introduced when it folded the standalone"
       code "@storybook/*-api"
+      text "packages into core. Those packages stopped publishing at 8.6 and"
       code "storybook@8"
-    listitem "is in the peer range as (the is required for the range to match a prerelease, and 11 has published nothing else so far). An advisory CI job keeps re-checking against — against Storybook 11's own / declarations, plus the tests that compose the addon through Storybook's real — and the panel was checked by hand on . Provisional until 11 ships stable. With a CSF Next preview, also name the addon in — see ."
+      text "has no equivalent subpath, so 8.x cannot be supported by the same build."
+    listitem
       strong "Storybook 11"
+      text "is in the peer range as"
       code "^11.0.0-0"
+      text "(the"
       code "-0"
+      text "is required for the range to match a prerelease, and 11 has published nothing else so far). An advisory CI job keeps re-checking against"
       code "storybook@next"
+      text "—"
       code "tsc"
+      text "against Storybook 11's own"
       code "manager-api"
+      text "/"
       code "preview-api"
+      text "declarations, plus the tests that compose the addon through Storybook's real"
       code "definePreview"
+      text "— and the panel was checked by hand on"
       code "11.0.0-alpha.8"
+      text ". Provisional until 11 ships stable. With a CSF Next preview, also name the addon in"
       code "definePreview"
+      text "— see"
       link "CSF Next"
-    listitem "as a peer. React 19 works with the override above."
+      text "."
+    listitem
       strong "React 18 or 19"
+      text "as a peer. React 19 works with the"
       code "viteFinal"
-    listitem "If anything in your Storybook config transitively loads a second copy of React (some legacy addons do this), the manager will crash. Run — there should be exactly one resolution."
+      text "override above."
+    listitem
       strong "Mixed React versions on the page will fail."
+      text "If anything in your Storybook config transitively loads a second copy of React (some legacy addons do this), the manager will crash. Run"
       code "npm ls react"
+      text "— there should be exactly one resolution."
 contentinfo
   link "Edit this page on GitHub"
-  paragraph "Last updated:"
+  paragraph
+    text "Last updated:"
     time "[redacted]"
   navigation "Pager"
     link "Previous page Next.js (App Router + React 19)"

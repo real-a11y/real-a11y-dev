@@ -22,35 +22,49 @@ navigation "On this page"
 main
   heading "@real-a11y-dev/inspector" (level 1)
   blockquote
-    paragraph "— A drop-in, framework-agnostic tree-inspector panel. Call and you get an interactive A11y / DOM / TAB view rendered into any DOM node, CSS-isolated via Shadow DOM. Reach for this in , or when you want the panel without framework coupling."
+    paragraph
       strong "TL;DR"
+      text "— A drop-in, framework-agnostic tree-inspector panel. Call"
       code "createInspector({ root, container })"
+      text "and you get an interactive A11y / DOM / TAB view rendered into any DOM node, CSS-isolated via Shadow DOM. Reach for this in"
       strong "vanilla / non-React projects"
+      text ", or when you want the panel without framework coupling."
   paragraph "Framework-agnostic interactive accessibility tree panel. Mounts into any container element, isolated via Shadow DOM by default."
   heading "Install" (level 2)
   button "Copy Code"
   code "npm install -D @real-a11y-dev/inspector"
-  paragraph "none (Preact is bundled)."
+  paragraph
     strong "Peer dependencies:"
+    text "none (Preact is bundled)."
   paragraph "Install as a dev dependency"
-  paragraph "is a developer audit panel (~46 KB gzipped, Preact + tree view). Keep it in and load it via a dynamic behind a build flag so it never ships to end users."
+  paragraph
     code "@real-a11y-dev/inspector"
+    text "is a developer audit panel (~46 KB gzipped, Preact + tree view). Keep it in"
     code "devDependencies"
+    text "and load it via a dynamic"
     code "import()"
-  paragraph "See for the Vite / webpack / vanilla gating patterns."
+    text "behind a build flag so it never ships to end users."
+  paragraph
+    text "See"
     link "Keep it out of production"
+    text "for the Vite / webpack / vanilla gating patterns."
   separator
   heading "Quick start" (level 2)
   button "Copy Code"
   code "import { createInspector } from "@real-a11y-dev/inspector"; const inspector = createInspector({ root: document.getElementById("app")!, container: document.getElementById("inspector-panel")!, }); inspector.mount();"
-  paragraph "The panel renders inside a attached to . Your app's CSS cannot leak in; the panel's CSS cannot leak out. Toggle mode, switch view, or unmount programmatically at any time."
+  paragraph
+    text "The panel renders inside a"
     code "ShadowRoot"
+    text "attached to"
     code "#inspector-panel"
+    text ". Your app's CSS cannot leak in; the panel's CSS cannot leak out. Toggle mode, switch view, or unmount programmatically at any time."
   separator
   heading "createInspector(config)" (level 2)
     code "createInspector(config)"
-  paragraph "Returns an ."
+  paragraph
+    text "Returns an"
     code "InspectorInstance"
+    text "."
   heading "Config" (level 3)
   table
     rowgroup
@@ -191,38 +205,58 @@ main
           code "interactive: false"
           code "focusHostOnActivate"
   paragraph "Shadow DOM is the right default"
-  paragraph "With , the panel's styles live inside the ShadowRoot and cannot conflict with your app. Your app's CSS cannot accidentally override the panel's layout. Keep this default unless you have a specific reason to opt out."
+  paragraph
+    text "With"
     code "mount: "shadow""
+    text ", the panel's styles live inside the ShadowRoot and cannot conflict with your app. Your app's CSS cannot accidentally override the panel's layout. Keep this default unless you have a specific reason to opt out."
   heading "What changed" (level 3)
-  paragraph "The panel marks what each update of the tree changed, so opening a menu shows the button that went expanded and the menu that came, without hunting for them. What a click or a key of yours on the page brought, in the few seconds after it, stays marked together and is said to a screen reader ("3 new, 1 changed in the tree"); typing in a field isn't read out at every key, and what the page changes on its own is marked without being said. A modal that hides the rest of the page from the tree, or a menu or listbox opened the same way (as Radix's are), is marked as new, not as the page removed. The checkpoint button (⎌) pins the tree instead: everything that changes from then on stays marked until you press it again. Turn the automatic marks off with ; the checkpoint still works."
+  paragraph
+    text "The panel marks what each update of the tree changed, so opening a menu shows the button that went expanded and the menu that came, without hunting for them. What a click or a key of yours on the page brought, in the few seconds after it, stays marked together and is said to a screen reader ("3 new, 1 changed in the tree"); typing in a field isn't read out at every key, and what the page changes on its own is marked without being said. A modal that hides the rest of the page from the tree, or a menu or listbox opened the same way (as Radix's are), is marked as new, not as the page removed. The checkpoint button (⎌) pins the tree instead: everything that changes from then on stays marked until you press it again. Turn the automatic marks off with"
     code "markChanges: false"
-  paragraph "Why / / default to false"
+    text "; the checkpoint still works."
+  paragraph
+    text "Why"
     code "highlightOnHover"
+    text "/"
     code "scrollHostOnSelect"
+    text "/"
     code "focusHostOnActivate"
-  paragraph "The inspector renders into the same document as your app, so activating a tree row could steal focus from the panel or scroll the page underneath you. The panel itself stays fully interactive either way — selection, chip navigation, keyboard movement — what's gated is the side effect on the DOM element. is the safe one to turn on: it only paints an outline over the page. Turn on the other two when the panel is your own inspection tool, and leave them off where end users see it."
+    text "default to false"
+  paragraph
+    text "The inspector renders into the same document as your app, so activating a tree row could steal focus from the panel or scroll the page underneath you. The panel itself stays fully interactive either way — selection, chip navigation, keyboard movement — what's gated is the side effect on the"
     emphasis "real"
+    text "DOM element."
     code "highlightOnHover"
+    text "is the safe one to turn on: it only paints an outline over the page. Turn on the other two when the panel is your own inspection tool, and leave them off where end users see it."
   separator
   heading "Instance API" (level 2)
   button "Copy Code"
   code "interface InspectorInstance { mount(): void; unmount(): void; destroy(): void; // alias for unmount() setViewMode(mode: "a11y" | "dom" | "tab"): void; setRoot(root: Element): void; refresh(): void; getTree(): ExtractionResult; }"
   heading "mount()" (level 3)
     code "mount()"
-  paragraph "Attaches the panel to and starts observing for DOM mutations."
+  paragraph
+    text "Attaches the panel to"
     code "container"
+    text "and starts observing"
     code "root"
+    text "for DOM mutations."
   heading "unmount() / destroy()" (level 3)
     code "unmount()"
     code "destroy()"
-  paragraph "Removes the panel from , stops the observer, and cleans up all event listeners. Safe to call multiple times."
+  paragraph
+    text "Removes the panel from"
     code "container"
+    text ", stops the observer, and cleans up all event listeners. Safe to call multiple times."
   heading "setViewMode(mode)" (level 3)
     code "setViewMode(mode)"
-  paragraph "Switches between , , and modes without remounting."
+  paragraph
+    text "Switches between"
     code ""a11y""
+    text ","
     code ""dom""
+    text ", and"
     code ""tab""
+    text "modes without remounting."
   heading "setRoot(root)" (level 3)
     code "setRoot(root)"
   paragraph "Swaps the observed root element. The observer is restarted on the new root; the panel re-renders immediately."
@@ -233,30 +267,46 @@ main
   paragraph "Forces an immediate re-extraction without waiting for the next DOM mutation. Useful in tests or after programmatic DOM changes. The panel keeps its selection, open rows and checkpoint, and marks what the re-extraction finds changed."
   heading "getTree()" (level 3)
     code "getTree()"
-  paragraph "Returns the most recently extracted tree as an ."
+  paragraph
+    text "Returns the most recently extracted tree as an"
     code "ExtractionResult"
+    text "."
   button "Copy Code"
   code "const tree = inspector.getTree(); const submit = findByRole(tree, "button", { name: /submit/i });"
   separator
   heading "Shadow DOM explained" (level 2)
-  paragraph "When (the default), the inspector:"
+  paragraph
+    text "When"
     code "mount: "shadow""
+    text "(the default), the inspector:"
   list
-    listitem "Calls ."
+    listitem
+      text "Calls"
       code "container.attachShadow({ mode: "open" })"
-    listitem "Injects a element with the bundled panel CSS inside the shadow root."
+      text "."
+    listitem
+      text "Injects a"
       code "<style>"
-    listitem "Renders the tree panel into an inner inside the shadow root."
+      text "element with the bundled panel CSS inside the shadow root."
+    listitem
+      text "Renders the tree panel into an inner"
       code "<div>"
-  paragraph "Your application's CSS does not pierce the shadow boundary. The panel's CSS does not leak out. If you set , the same nonce is applied to the injected style element for CSP compliance."
+      text "inside the shadow root."
+  paragraph
+    text "Your application's CSS does not pierce the shadow boundary. The panel's CSS does not leak out. If you set"
     code "styleNonce"
+    text ", the same nonce is applied to the injected style element for CSP compliance."
   heading "Opting out" (level 3)
   button "Copy Code"
   code "createInspector({ root, container, mount: "light", // renders directly into container, no shadow root });"
-  paragraph "With , a element is injected into instead."
+  paragraph
+    text "With"
     code "mount: "light""
+    text ", a"
     code "<style id="sn-styles">"
+    text "element is injected into"
     code "document.head"
+    text "instead."
   separator
   heading "Interaction flags" (level 2)
   paragraph "All host-side effects are opt-in:"
@@ -270,24 +320,34 @@ main
   separator
   heading "See it running" (level 2)
   list
-    listitem "— : mode switcher, to narrow the audit to an open dialog, after programmatic DOM changes."
+    listitem
       strong "Vanilla / Vite"
+      text "—"
       link "examples/vanilla/"
         code "examples/vanilla/"
+      text ": mode switcher,"
       code "setRoot()"
+      text "to narrow the audit to an open dialog,"
       code "refresh()"
+      text "after programmatic DOM changes."
   separator
   heading "Panel features" (level 2)
-  paragraph "The inspector renders the same tree panel as the Chrome extension, with its search, role filters, and , and scopes with . Focus sync, the scope breadcrumb and the live region log are the extension's alone."
+  paragraph
+    text "The inspector renders the same tree panel as the Chrome extension, with its search, role filters,"
     link "keyboard"
+    text "and"
     link "change marks"
+    text ", and scopes with"
     link "setRoot()"
       code "setRoot()"
-  paragraph "→"
+    text ". Focus sync, the scope breadcrumb and the live region log are the extension's alone."
+  paragraph
+    text "→"
     link "Using the panel"
 contentinfo
   link "Edit this page on GitHub"
-  paragraph "Last updated:"
+  paragraph
+    text "Last updated:"
     time "[redacted]"
   navigation "Pager"
     link "Previous page Overview & Install"

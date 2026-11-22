@@ -80,15 +80,24 @@ main
           link "Chrome extension"
         cell "—"
   paragraph "Install as a dev dependency by default"
-  paragraph "Real A11y is a , not runtime infrastructure. Install everything under ( / ) and gate any UI it renders on a development build flag. That way the tree extractor, Preact renderer, and accessibility heuristics never reach your production bundle."
+  paragraph
+    text "Real A11y is a"
     strong "developer-time audit suite"
+    text ", not runtime infrastructure. Install everything under"
     code "devDependencies"
+    text "("
     code "-D"
+    text "/"
     code "--save-dev"
-  paragraph "See below for the gating patterns."
+    text ") and gate any UI it renders on a development build flag. That way the tree extractor, Preact renderer, and accessibility heuristics never reach your production bundle."
+  paragraph
+    text "See"
     link "Keep it out of production"
-  paragraph "There is no runtime-dependency case left to make. The extraction engine used to be installable on its own, for people building published tooling on top of it; it is internal now, and each package bundles the exact version it was tested against. If you are building tooling of your own, drive a surface — , or the MCP tools — rather than importing the engine."
+    text "below for the gating patterns."
+  paragraph
+    text "There is no runtime-dependency case left to make. The extraction engine used to be installable on its own, for people building published tooling on top of it; it is internal now, and each package bundles the exact version it was tested against. If you are building tooling of your own, drive a surface —"
     code "real-a11y --format json"
+    text ", or the MCP tools — rather than importing the engine."
   separator
   heading "Quick install" (level 2)
   paragraph "All packages are installed as dev dependencies below. This is the right default for apps."
@@ -108,20 +117,28 @@ main
   paragraph "In CI, pick a machine envelope and the failure threshold:"
   button "Copy Code"
   code "npx real-a11y audit https://example.com --format json --fail-on error"
-  paragraph "is the default ( | also available). See for / , device emulation, and auditing pages behind a login."
+  paragraph
     code "--fail-on error"
+    text "is the default ("
     code "warning"
+    text "|"
     code "never"
+    text "also available). See"
     link "@real-a11y-dev/cli"
       code "@real-a11y-dev/cli"
+    text "for"
     code "snapshot"
+    text "/"
     code "diff"
+    text ", device emulation, and auditing pages behind a login."
   separator
   heading "Framework-agnostic embed" (level 3)
   button "Copy Code"
   code "import { createInspector } from "@real-a11y-dev/inspector"; const sn = createInspector({ root: document.getElementById("app")!, container: document.getElementById("sn-panel")!, viewMode: "a11y", // "dom" | "a11y" | "tab" // Shadow DOM isolation is on by default — no CSS conflicts. }); sn.mount();"
-  paragraph "The panel renders inside a ShadowRoot attached to . Your app's CSS cannot leak in; the panel's CSS cannot leak out."
+  paragraph
+    text "The panel renders inside a ShadowRoot attached to"
     code "#sn-panel"
+    text ". Your app's CSS cannot leak in; the panel's CSS cannot leak out."
   separator
   heading "React" (level 3)
   button "Copy Code"
@@ -133,21 +150,31 @@ main
   heading "Testing (Vitest / Jest)" (level 3)
   button "Copy Code"
   code "import { treeSnapshot, assertNoUnlabeledInteractive } from "@real-a11y-dev/testing"; import { render } from "@testing-library/react"; test("login form is fully labeled", () => { const { container } = render(<LoginForm />); // Throws with a clear message if any interactive element is unlabeled. assertNoUnlabeledInteractive(container); // Deterministic string snapshot of the A11y tree — great for CI. expect(treeSnapshot(container)).toMatchSnapshot(); });"
-  paragraph "Those are the helpers — zero setup. Prefer the jest-axe-style matchers? Register them once in a setup file — plus a types-only import naming your runner () — and the same checks read as native matchers under Vitest Jest:"
+  paragraph
+    text "Those are the"
     strong "function-style"
+    text "helpers — zero setup. Prefer the jest-axe-style"
     code "expect"
+    text "matchers? Register them once in a setup file —"
     code "registerA11yMatchers(expect)"
+    text "plus a types-only import naming your runner ("
     link "./matchers/vitest, ./matchers/jest or ./matchers/jest-globals"
       code "./matchers/vitest"
       code "./matchers/jest"
       code "./matchers/jest-globals"
+    text ") — and the same checks read as native matchers under Vitest"
     strong "and"
+    text "Jest:"
   button "Copy Code"
   code "import { boxedTreeSnapshot } from "@real-a11y-dev/testing/matchers"; test("login form is fully labeled", () => { const { container } = render(<LoginForm />); expect(container).toHaveNoUnlabeledInteractive(); expect(container).toHaveValidHeadingOrder(); expect(boxedTreeSnapshot(container)).toMatchSnapshot(); });"
-  paragraph "See for the one-time setup, and for what the snapshot captures and why it complements axe."
+  paragraph
+    text "See"
     link "Matchers"
+    text "for the one-time"
     code "registerA11yMatchers(expect)"
+    text "setup, and"
     link "Accessibility Snapshots"
+    text "for what the snapshot captures and why it complements axe."
   separator
   heading "Playwright (E2E)" (level 3)
   button "Copy Code"
@@ -155,15 +182,22 @@ main
   paragraph "The adapter injects the audit engine into the real browser page. No changes to your app code required."
   separator
   heading "Storybook addon" (level 3)
-  paragraph "Add to :"
+  paragraph
+    text "Add to"
     code ".storybook/main.ts"
+    text ":"
   button "Copy Code"
   code "export default { addons: ["@real-a11y-dev/storybook-addon"], };"
-  paragraph "That's it. A panel appears next to Controls and A11y for every story, showing the tree, heading outline, and tab sequence — updated live while the panel is open. If your uses (CSF Next), add one more line there — see ."
+  paragraph
+    text "That's it. A"
     strong "Semantic Navigator"
+    text "panel appears next to Controls and A11y for every story, showing the tree, heading outline, and tab sequence — updated live while the panel is open. If your"
     code ".storybook/preview.ts"
+    text "uses"
     code "definePreview"
+    text "(CSF Next), add one more line there — see"
     link "CSF Next"
+    text "."
   separator
   heading "Requirements" (level 2)
   table
@@ -207,29 +241,42 @@ main
           code "playwright"
   separator
   heading "Keep it out of production" (level 2)
-  paragraph "and render a full tree view (~46 KB gzipped for , Preact included; see for the gated budgets). If you drop or into a component that ships to production, bundlers can't tree-shake the renderer away — . You want it dev-only."
+  paragraph
     code "@real-a11y-dev/inspector"
+    text "and"
     code "@real-a11y-dev/react"
+    text "render a full tree view (~46 KB gzipped for"
     code "inspector"
+    text ", Preact included; see"
     link ".size-limit.json"
       code ".size-limit.json"
+    text "for the gated budgets). If you drop"
     code "<SemanticNavigator />"
+    text "or"
     code "createInspector()"
+    text "into a component that ships to production, bundlers can't tree-shake the renderer away —"
     emphasis "the reference exists at runtime"
+    text ". You want it dev-only."
   paragraph "Two patterns, pick the one that matches your toolchain."
   heading "Pattern 1 — static gate (ideal, fully tree-shaken)" (level 3)
-  paragraph "Your bundler erases a -branch at build time. Works with Vite, Rollup, webpack, esbuild."
+  paragraph
+    text "Your bundler erases a"
     code "false"
+    text "-branch at build time. Works with Vite, Rollup, webpack, esbuild."
   radio "Vite / React" {checked}
   radio "webpack / Next.js" {checked=false}
   radio "vanilla / any bundler" {checked=false}
   button "Copy Code"
   code "// DevA11y.tsx import { lazy, Suspense } from "react"; const SemanticNavigatorLazy = lazy(async () => { const mod = await import("@real-a11y-dev/react"); return { default: mod.SemanticNavigator }; }); export function DevA11y({ rootRef, ...props }) { if (!import.meta.env.DEV) return null; // Vite replaces with `false` in prod return ( <Suspense fallback={null}> <SemanticNavigatorLazy root={rootRef} {...props} /> </Suspense> ); }"
-  paragraph "Use it anywhere — it's a no-op in production, and the is code-split so the inspector chunk only loads when the gate is true."
+  paragraph
+    text "Use it anywhere — it's a no-op in production, and the"
     code "import(...)"
+    text "is code-split so the inspector chunk only loads when the gate is true."
   heading "Pattern 2 — runtime query param (useful for staging)" (level 3)
-  paragraph "You want to audit a deployed staging URL without a rebuild. Enable via ."
+  paragraph
+    text "You want to audit a deployed staging URL without a rebuild. Enable via"
     code "?a11y=1"
+    text "."
   button "Copy Code"
   code "import { lazy, Suspense, useSyncExternalStore } from "react"; const DevInspector = lazy(() => import("@real-a11y-dev/react").then((m) => ({ default: m.SemanticNavigator })) ); function useA11yFlag() { return useSyncExternalStore( (cb) => { window.addEventListener("popstate", cb); return () => window.removeEventListener("popstate", cb); }, () => new URLSearchParams(location.search).has("a11y"), () => false, ); } export function OptionalA11y(props) { const enabled = useA11yFlag(); if (!enabled) return null; return <Suspense fallback={null}><DevInspector {...props} /></Suspense>; }"
   paragraph "This ships the inspector into the production bundle (as a separate chunk) — acceptable for internal apps / staging, not ideal for consumer-facing production. Prefer Pattern 1 when you can."
@@ -267,15 +314,19 @@ main
   separator
   heading "Next steps" (level 2)
   list
-    listitem "— roles, names and states, and the two engines that build the tree"
+    listitem
       link "Reading the A11y view"
-    listitem "— what it means to snapshot the a11y tree, and how it complements axe and visual regression testing"
+      text "— roles, names and states, and the two engines that build the tree"
+    listitem
       link "Accessibility Snapshots"
-    listitem "— how this compares to axe, Playwright's ARIA snapshots and screen-reader testing"
+      text "— what it means to snapshot the a11y tree, and how it complements axe and visual regression testing"
+    listitem
       link "Snapshots vs. other tools"
+      text "— how this compares to axe, Playwright's ARIA snapshots and screen-reader testing"
 contentinfo
   link "Edit this page on GitHub"
-  paragraph "Last updated:"
+  paragraph
+    text "Last updated:"
     time "[redacted]"
   navigation "Pager"
     link "Next page Accessibility Snapshots"

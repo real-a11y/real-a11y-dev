@@ -157,6 +157,32 @@ describe("TreeView (smoke)", () => {
     }
   });
 
+  it("shows the parent's element for a text row, which has none of its own", async () => {
+    // A `text` row is a run of its parent's text. Selecting it has to reveal
+    // something on the page, and the paragraph it reads is the element there is.
+    const root = document.createElement("div");
+    root.innerHTML = `<p>See <a href="/x">this</a> now</p>`;
+    document.body.appendChild(root);
+    const scrolled: Element[] = [];
+    Element.prototype.scrollIntoView = function (this: Element) {
+      scrolled.push(this);
+    };
+    try {
+      render(<TreeView root={root} scrollHostOnSelect />, container);
+      const tree = (await waitFor(container, '[role="tree"]')) as HTMLElement;
+      const row = [
+        ...tree.querySelectorAll<HTMLElement>('[role="treeitem"]'),
+      ].find((item) => item.querySelector(".sn-role")?.textContent === "text");
+      expect(row?.textContent).toContain("See");
+
+      row!.click();
+      await waitFor(container, '[role="tree"][aria-activedescendant]');
+      expect(scrolled).toContain(root.querySelector("p"));
+    } finally {
+      root.remove();
+    }
+  });
+
   it("keeps aria-activedescendant ids unique across concurrent light-DOM panels", async () => {
     // Two TreeViews on the same document (inspector light-DOM mounts) must not
     // share row ids — aria-activedescendant is a document-wide IDREF, so a

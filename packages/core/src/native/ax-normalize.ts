@@ -18,6 +18,7 @@
  * sibling order is Chromium's own.
  */
 
+import { TEXT_RUN_ROLE } from "../text-run.js";
 import { collapseAscii } from "../utils/ascii-whitespace.js";
 
 import {
@@ -178,12 +179,13 @@ function carriesValue(node: RawNativeAXNode): boolean {
  * extraction/dom-extractor) — the very runs Chromium hangs here — and skips
  * every other child element's text.
  *
- * This is how a paragraph that mixes plain text with inline elements keeps its
- * words: `<p>See <a>#386</a> and <code>x</code> here.</p>` puts "See ", " and "
- * and " here." on `StaticText` children of the paragraph, between a kept `link`
- * and `code` — and since a node with kept children is not a leaf, the deep
- * search below never runs for it. Chromium keeps each run's own whitespace
- * (`"See "`, `" and "`), so plain concatenation reads right.
+ * It names a leaf: `<p>Pure <b>bold</b> text.</p>` puts "Pure ", "bold" and
+ * " text." on `StaticText` children of the paragraph, and Chromium keeps each
+ * run's own whitespace, so plain concatenation reads right. A prose node that
+ * also has kept children (`<p>See <a>#386</a> and <code>x</code> here.</p>`)
+ * is not named from it: the same runs print as `text` rows between those
+ * children — see `visitTextRuns` in {@link normalizeNativeAX}, which asks here
+ * only whether there is any text to print.
  *
  * Strictly direct: it never enters another node, dropped or kept. A kept child
  * owns its text; a dropped wrapper (`LabelText`, a bare `generic`, an ignored
@@ -191,9 +193,10 @@ function carriesValue(node: RawNativeAXNode): boolean {
  * keeps off the element around it too — and crossing into an out-of-flow one
  * glues words, because the whitespace beside it has already collapsed.
  *
- * On a node with kept children it runs only for the prose roles in
- * {@link NATIVE_AX_OWN_TEXT_ROLES}: a dialog or landmark with a loose sentence
- * beside its buttons has no accessible name, and must keep reading that way.
+ * On a node with kept children only the prose roles in
+ * {@link NATIVE_AX_OWN_TEXT_ROLES} keep this text, as rows: a dialog or landmark
+ * with a loose sentence beside its buttons has no accessible name, and must
+ * keep reading that way.
  * It never runs for {@link NATIVE_AX_AUTHOR_NAMED_ROLES}, even on a leaf, nor
  * for a node that {@link carriesValue}. It also names a block of text that is
  * kept for holding it — see {@link textBlock}.
@@ -427,10 +430,117 @@ export function normalizeNativeAX(rawNodes: RawNativeAXNode[]): NativeAXNode[] {
     out.push(node);
     rawOf.set(node, raw);
     parent?.childIds.push(node.id);
+    if (!block && readsAsTextRuns(raw)) {
+      visitTextRuns(raw, node, depth + 1, owned);
+      return;
+    }
     for (const childId of raw.childIds ?? []) {
       visit(childId, depth + 1, node, owned);
     }
   };
+
+  // Whether `raw` has a kept node below it that every view prints: anything
+  // but a `generic`, which the serializers leave out unless asked. Looked for
+  // through dropped nodes and kept generics alike, as the DOM producer does
+  // (`holdsPrintedNode` in extraction/a11y-extractor.ts). Memoized.
+  const printedBelow = new Map<string, boolean>();
+  const hasPrintedBelow = (raw: RawNativeAXNode): boolean => {
+    let known = printedBelow.get(raw.nodeId);
+    if (known === undefined) {
+      known = (raw.childIds ?? []).some((childId) => {
+        const child = byId.get(childId);
+        return (
+          child !== undefined &&
+          ((isKept(child, byId) &&
+            mapNativeAXRole(child.role?.value ?? "") !== "generic") ||
+            hasPrintedBelow(child))
+        );
+      });
+      printedBelow.set(raw.nodeId, known);
+    }
+    return known;
+  };
+
+  // Whether `raw`'s own text prints as `text` rows between its kept children,
+  // not as its name: a prose role (NATIVE_AX_OWN_TEXT_ROLES) Chromium left
+  // unnamed, with text of its own and a printed node below it. Everything else
+  // keeps the post-pass: a leaf is still named from its text, and so is a
+  // paragraph whose only kept child is a `generic` (a `<span title>`), where
+  // rows would read as a sentence with a hole no printed row fills.
+  const readsAsTextRuns = (raw: RawNativeAXNode): boolean =>
+    NATIVE_AX_OWN_TEXT_ROLES.has(raw.role?.value ?? "") &&
+    collapseWhitespace(raw.name?.value ?? "") === "" &&
+    !carriesValue(raw) &&
+    hasPrintedBelow(raw) &&
+    directText(raw, byId) !== "";
+
+  // `raw`'s children in reading order, each run of its own `StaticText` as one
+  // `text` row: `<p>See <a>#386</a> and <code>x</code> here.</p>` is
+  //
+  //     paragraph
+  //       text "See"
+  //       link "#386"
+  //       text "and"
+  //       code "x"
+  //       text "here."
+  //
+  // which is Chromium's own order, where `paragraph "See and here."` said
+  // neither where the link sits nor a sentence anyone reads. A run goes on
+  // through a child that leaves nothing in the tree (an ignored span), as the
+  // DOM producer's does (`splitTextRuns` in extraction/a11y-extractor.ts).
+  const visitTextRuns = (
+    raw: RawNativeAXNode,
+    node: NativeAXNode,
+    depth: number,
+    owned: boolean,
+  ): void => {
+    textRunHosts.add(node);
+    let run = "";
+    let first: RawNativeAXNode | undefined;
+    // Ends the run before the rows from `at` on, which a child just added.
+    const endRun = (at: number, childAt: number): void => {
+      const name = collapseWhitespace(run);
+      if (name !== "" && first !== undefined) {
+        const row: NativeAXNode = {
+          id: idOf(first),
+          role: TEXT_RUN_ROLE,
+          name,
+          depth,
+          backendDOMNodeId:
+            typeof first.backendDOMNodeId === "number"
+              ? first.backendDOMNodeId
+              : null,
+          childIds: [],
+        };
+        out.splice(at, 0, row);
+        node.childIds.splice(childAt, 0, row.id);
+      }
+      run = "";
+      first = undefined;
+    };
+    for (const childId of raw.childIds ?? []) {
+      const child = byId.get(childId);
+      const role = child && !child.ignored ? child.role?.value : undefined;
+      if (child && role === "StaticText") {
+        run += child.name?.value ?? "";
+        first ??= child;
+        continue;
+      }
+      if (role === "LineBreak") {
+        run += " ";
+        continue;
+      }
+      const at = out.length;
+      const childAt = node.childIds.length;
+      visit(childId, depth, node, owned);
+      if (out.length > at) endRun(at, childAt);
+    }
+    endRun(out.length, node.childIds.length);
+  };
+
+  // The nodes whose text went into `text` rows, which the post-pass leaves
+  // unnamed.
+  const textRunHosts = new Set<NativeAXNode>();
 
   // Multi-frame note: every raw node without a parentId is treated as a
   // top-level root, so a cross-frame payload (multiple RootWebAreas)
@@ -447,12 +557,14 @@ export function normalizeNativeAX(rawNodes: RawNativeAXNode[]): NativeAXNode[] {
   // shape. An unnamed leaf takes the text on its own StaticText children
   // (directText), else the first text in its dropped subtree
   // (promoteNameFromDroppedDescendants). A node with kept children takes its
-  // own text only if it is a prose role — see NATIVE_AX_OWN_TEXT_ROLES. A
+  // own text only if it is a prose role — see NATIVE_AX_OWN_TEXT_ROLES — and
+  // only where that text is not in `text` rows already (visitTextRuns): one
+  // whose kept children are all generics, such as a `<span title>`. A
   // block of text was named from its own text as it was kept, and is no kept
   // child here: a node holding only blocks is named as a leaf, after its own
   // text or the one block left dropped for it (see namingBlock).
   for (const node of out) {
-    if (node.name) continue;
+    if (node.name || textRunHosts.has(node)) continue;
     const raw = rawOf.get(node);
     if (!raw) continue;
     const role = raw.role?.value ?? "";

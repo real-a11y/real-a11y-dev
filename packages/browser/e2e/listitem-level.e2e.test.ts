@@ -62,7 +62,8 @@ describe("list item level", () => {
     const { dom, native, nativePrinted } = await bothPrinted(REPRO);
 
     expect(nativePrinted).toContain('listitem "Item 1"');
-    expect(nativePrinted).toContain('listitem "Outer"');
+    // The outer item holds a list too, so its own text is a row beside it.
+    expect(nativePrinted).toContain('listitem\n    text "Outer"');
     expect(nativePrinted).toContain('listitem "Inner"');
     expect(nativePrinted).not.toMatch(/listitem[^\n]*\(level/);
     for (const n of native.nodes.values()) {
@@ -80,7 +81,7 @@ describe("list item level", () => {
         .map((l) => l.trim());
     expect(lines(native)).toEqual([
       'listitem "Item 1"',
-      'listitem "Outer"',
+      "listitem",
       'listitem "Inner"',
     ]);
   });

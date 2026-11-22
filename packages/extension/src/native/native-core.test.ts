@@ -2765,6 +2765,19 @@ describe("in-page actions — reveal", () => {
     expect(events).toHaveLength(1);
   });
 
+  it("shows the parent element for a text row's text node", () => {
+    // A `text` row is a run of its parent's text: Chromium backs it with the
+    // text node, which can take neither an outline nor focus.
+    document.body.innerHTML = `<p>See <a href="/x">this</a></p>`;
+    const paragraph = document.querySelector("p")!;
+    const events = captured();
+    expect(
+      pageReveal.call(paragraph.firstChild as unknown as Element, "n-5"),
+    ).toEqual({ ok: true });
+    expect(events).toHaveLength(1);
+    expect(events[0]!.target).toBe(paragraph);
+  });
+
   it("works on a form whose controls shadow dispatchEvent and focus", () => {
     document.body.innerHTML = `<form tabindex="-1"><input name="dispatchEvent"><input name="focus"></form>`;
     const form = document.querySelector("form")!;
@@ -2809,6 +2822,17 @@ describe("in-page actions — preview", () => {
     expect(reveals).toHaveLength(0);
     expect(focusSpy).not.toHaveBeenCalled();
     focusSpy.mockRestore();
+  });
+
+  it("outlines the parent element for a text row's text node", () => {
+    document.body.innerHTML = `<p>See <a href="/x">this</a></p>`;
+    const paragraph = document.querySelector("p")!;
+    const { previews } = captured();
+    expect(
+      pagePreview.call(paragraph.firstChild as unknown as Element, "n-3"),
+    ).toEqual({ ok: true });
+    expect(previews).toHaveLength(1);
+    expect(previews[0]!.target).toBe(paragraph);
   });
 
   it("doesn't bubble, and works on a form whose controls shadow dispatchEvent", () => {

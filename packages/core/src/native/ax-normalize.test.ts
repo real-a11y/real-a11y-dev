@@ -252,9 +252,11 @@ describe("name promotion depth and guard", () => {
 });
 
 describe("a node's own text (direct StaticText children)", () => {
-  it("keeps a paragraph's plain text around its kept inline children", () => {
+  it("keeps a paragraph's plain text around its kept inline children, in order", () => {
     // `<p>See <a>#386</a> and <code>x</code> here.</p>` — the paragraph is not
     // a leaf, so leaf-only promotion never ran and all three runs were lost.
+    // Each run is a `text` row where Chromium has its `StaticText`: folded
+    // into a name they read "See and here.", which said where nothing sits.
     const nodes = normalizeNativeAX([
       raw("1", "paragraph", { childIds: ["2", "3", "5", "6", "8"] }),
       raw("2", "StaticText", { parentId: "1", name: "See " }),
@@ -266,7 +268,14 @@ describe("a node's own text (direct StaticText children)", () => {
       raw("8", "StaticText", { parentId: "1", name: " here." }),
     ]);
     expect(serializeNativeAX(nodes)).toBe(
-      ['paragraph "See and here."', '  link "#386"', '  code "x"'].join("\n"),
+      [
+        "paragraph",
+        '  text "See"',
+        '  link "#386"',
+        '  text "and"',
+        '  code "x"',
+        '  text "here."',
+      ].join("\n"),
     );
   });
 
@@ -335,16 +344,142 @@ describe("a node's own text (direct StaticText children)", () => {
   });
 
   it.each([...NATIVE_AX_OWN_TEXT_ROLES])(
-    "names a %s from its own text beside a kept child",
+    "keeps a %s's own text as a row beside a kept child",
     (role) => {
       const nodes = normalizeNativeAX([
         raw("1", role, { childIds: ["2", "3"] }),
         raw("2", "StaticText", { parentId: "1", name: "Own text " }),
         raw("3", "link", { parentId: "1", name: "kept" }),
       ]);
-      expect(nodes[0].name).toBe("Own text");
+      expect(nodes.map((n) => [n.role, n.name, n.depth])).toEqual([
+        [mapNativeAXRole(role), "", 0],
+        ["text", "Own text", 1],
+        ["link", "kept", 1],
+      ]);
+      expect(nodes[0].childIds).toEqual([nodes[1].id, nodes[2].id]);
     },
   );
+
+  it.each([...NATIVE_AX_OWN_TEXT_ROLES])(
+    "still names a %s from its own text when it holds nothing else",
+    (role) => {
+      const nodes = normalizeNativeAX([
+        raw("1", role, { childIds: ["2"] }),
+        raw("2", "StaticText", { parentId: "1", name: "Own text " }),
+      ]);
+      expect(nodes.map((n) => [n.role, n.name])).toEqual([
+        [mapNativeAXRole(role), "Own text"],
+      ]);
+    },
+  );
+
+  it("joins the runs either side of a child that leaves nothing in the tree", () => {
+    // An ignored span between two runs and a link after them: one row, as the
+    // DOM producer reads it, not one either side of a node nobody sees.
+    const nodes = normalizeNativeAX([
+      raw("1", "paragraph", { childIds: ["2", "3", "5", "6", "7"] }),
+      raw("2", "StaticText", { parentId: "1", name: "Visible " }),
+      raw("3", "none", { parentId: "1", ignored: true, childIds: ["4"] }),
+      raw("4", "StaticText", { parentId: "3", name: "screen-reader" }),
+      raw("5", "StaticText", { parentId: "1", name: "text " }),
+      raw("6", "link", { parentId: "1", name: "here" }),
+      raw("7", "StaticText", { parentId: "1", name: "." }),
+    ]);
+    expect(serializeNativeAX(nodes)).toBe(
+      [
+        "paragraph",
+        '  text "Visible text"',
+        '  link "here"',
+        '  text "."',
+      ].join("\n"),
+    );
+  });
+
+  it("reads a LineBreak inside a run as a space, and drops a run of only spaces", () => {
+    const nodes = normalizeNativeAX([
+      raw("1", "paragraph", { childIds: ["2", "3", "4", "5", "6", "7"] }),
+      raw("2", "StaticText", { parentId: "1", name: "Line one" }),
+      raw("3", "LineBreak", { parentId: "1", name: "\n" }),
+      raw("4", "StaticText", { parentId: "1", name: "Line two " }),
+      raw("5", "link", { parentId: "1", name: "a" }),
+      raw("6", "StaticText", { parentId: "1", name: " " }),
+      raw("7", "link", { parentId: "1", name: "b" }),
+    ]);
+    expect(serializeNativeAX(nodes)).toBe(
+      [
+        "paragraph",
+        '  text "Line one Line two"',
+        '  link "a"',
+        '  link "b"',
+      ].join("\n"),
+    );
+  });
+
+  it("gives a row the id of the run's first StaticText, and no children", () => {
+    const nodes = normalizeNativeAX([
+      raw("1", "paragraph", { childIds: ["2", "3", "4"] }),
+      {
+        ...raw("2", "StaticText", { parentId: "1", name: "See " }),
+        backendDOMNodeId: 42,
+      },
+      raw("3", "StaticText", { parentId: "1", name: "this " }),
+      raw("4", "link", { parentId: "1", name: "x" }),
+    ]);
+    expect(nodes[1]).toMatchObject({
+      id: "ax-dom-42",
+      role: "text",
+      name: "See this",
+      backendDOMNodeId: 42,
+      childIds: [],
+    });
+  });
+
+  it("still names a paragraph whose only kept children are generics", () => {
+    // `<p>Kept <span title="t">title</span> out</p>`: Chromium names the span
+    // from its `title`, so it is kept, but no view prints a `generic` unless
+    // asked. Rows either side of it would read as a sentence with a hole.
+    const nodes = normalizeNativeAX([
+      raw("1", "paragraph", { childIds: ["2", "3", "5"] }),
+      raw("2", "StaticText", { parentId: "1", name: "Kept " }),
+      raw("3", "generic", { parentId: "1", name: "t", childIds: ["4"] }),
+      raw("4", "StaticText", { parentId: "3", name: "title" }),
+      raw("5", "StaticText", { parentId: "1", name: " out" }),
+    ]);
+    expect(serializeNativeAX(nodes)).toBe(
+      ['paragraph "Kept out"', '  generic "t"'].join("\n"),
+    );
+  });
+
+  it("reads around a link inside a kept generic", () => {
+    const nodes = normalizeNativeAX([
+      raw("1", "paragraph", { childIds: ["2", "3", "5"] }),
+      raw("2", "StaticText", { parentId: "1", name: "See " }),
+      raw("3", "generic", { parentId: "1", name: "t", childIds: ["4"] }),
+      raw("4", "link", { parentId: "3", name: "docs" }),
+      raw("5", "StaticText", { parentId: "1", name: " now" }),
+    ]);
+    expect(serializeNativeAX(nodes)).toBe(
+      [
+        "paragraph",
+        '  text "See"',
+        '  generic "t"',
+        '    link "docs"',
+        '  text "now"',
+      ].join("\n"),
+    );
+  });
+
+  it("leaves a paragraph its author named as it is", () => {
+    // Chromium reports the `aria-label` as the name: the text is not it.
+    const nodes = normalizeNativeAX([
+      raw("1", "paragraph", { name: "Label", childIds: ["2", "3"] }),
+      raw("2", "StaticText", { parentId: "1", name: "Own text " }),
+      raw("3", "link", { parentId: "1", name: "kept" }),
+    ]);
+    expect(serializeNativeAX(nodes)).toBe(
+      ['paragraph "Label"', '  link "kept"'].join("\n"),
+    );
+  });
 
   it("does not enter an ignored wrapper, even on a leaf with direct text", () => {
     // A clipped screen-reader-only span: Chromium ignores the span but not its
@@ -547,25 +682,37 @@ describe("author-named leaves", () => {
 describe("normalizeNativeAX (recorded mixed inline text)", () => {
   const nodes = normalizeNativeAX(mixedTextFixture.nodes as RawNativeAXNode[]);
 
-  it("keeps every paragraph's own text, and no author-named role takes one", () => {
+  it("keeps every paragraph's own text where it reads, and no author-named role takes one", () => {
     expect(serializeNativeAX(nodes)).toBe(
       [
         "main",
-        '  paragraph "Follow-up to /. Selecting a row in \'s moves focus."',
+        // Text beside kept children: a row per run, in Chromium's order.
+        "  paragraph",
+        '    text "Follow-up to"',
         '    link "#386"',
+        '    text "/"',
         '    link "#390"',
+        '    text ". Selecting a row in"',
         '    code "NativeTreeView.tsx"',
+        '    text "\'s"',
         '    code "selectedId"',
         '    strong "and"',
+        '    text "moves focus."',
+        // Text alone, a `<b>` and a `<br>` included, is still the name.
         '  paragraph "Pure bold text."',
         '  paragraph "Line one Line two"',
         "  list",
-        '    listitem "Alpha tail"',
+        "    listitem",
+        '      text "Alpha"',
         '      link "link"',
+        '      text "tail"',
         // The clipped span's text sits under an ignored wrapper — not the
-        // paragraph's own text, exactly as the DOM producer reads it.
-        '  paragraph "Visible text ."',
+        // paragraph's own text, exactly as the DOM producer reads it — and
+        // the run goes on through it.
+        "  paragraph",
+        '    text "Visible text"',
         '    link "here"',
+        '    text "."',
         '  textbox "Email"',
         // A block of text beside other content is a node of its own.
         '  generic "Loose block"',

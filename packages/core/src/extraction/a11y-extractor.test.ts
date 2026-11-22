@@ -1,8 +1,9 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { afterEach, describe, it, expect, beforeEach } from "vitest";
 
 import { resetIdCounter } from "../utils/id-generator.js";
 
 import { extractA11yTree } from "./a11y-extractor.js";
+import { extractDomTree } from "./dom-extractor.js";
 
 beforeEach(() => {
   resetIdCounter();
@@ -779,5 +780,195 @@ describe("presentational tables", () => {
       `<table role="presentation" aria-label="L">${repro}</table>`,
     ).map((n) => n.role);
     expect(roles).toEqual(expect.arrayContaining(["table", "row", "cell"]));
+  });
+});
+
+// A prose element that mixes its own text with children that have a node of
+// their own prints the text as `text` rows between them, in reading order —
+// Chromium's `StaticText, link, StaticText`. Folded into a name it read
+// `paragraph "You accept our and have read our ."`: no sentence, and no way to
+// tell where a link sits.
+describe("text runs beside kept children", () => {
+  // In the document: a wrapper is a run only where it has an inline box, and a
+  // detached element has no computed display to read.
+  const treeOf = (html: string, options?: { redactInput?: boolean }) => {
+    document.body.innerHTML = `<main>${html}</main>`;
+    return extractA11yTree(document.body.firstElementChild!, options);
+  };
+  const print = (html: string, options?: { redactInput?: boolean }) => {
+    const tree = treeOf(html, options);
+    const lines: string[] = [];
+    const visit = (id: string, depth: number) => {
+      const node = tree.nodes.get(id)!;
+      const name = node.a11y.name ? ` "${node.a11y.name}"` : "";
+      lines.push(`${"  ".repeat(depth)}${node.a11y.role}${name}`);
+      for (const childId of node.childIds) visit(childId, depth + 1);
+    };
+    for (const childId of tree.nodes.get(tree.rootId)!.childIds) {
+      visit(childId, 0);
+    }
+    return lines;
+  };
+
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it("keeps each run where it reads, between the links", () => {
+    expect(
+      print(
+        `<p>You accept our <a href="/terms">terms</a> and have read our <a href="/privacy">privacy policy</a>.</p>`,
+      ),
+    ).toEqual([
+      "paragraph",
+      '  text "You accept our"',
+      '  link "terms"',
+      '  text "and have read our"',
+      '  link "privacy policy"',
+      '  text "."',
+    ]);
+  });
+
+  it.each([
+    ["listitem", `<ul><li>Buy <a href="#">milk</a> now</li></ul>`],
+    ["blockquote", `<blockquote>Buy <a href="#">milk</a> now</blockquote>`],
+    ["definition", `<dl><dt>t</dt><dd>Buy <a href="#">milk</a> now</dd></dl>`],
+    ["code", `<code>Buy <a href="#">milk</a> now</code>`],
+    ["strong", `<strong>Buy <a href="#">milk</a> now</strong>`],
+    ["time", `<time>Buy <a href="#">milk</a> now</time>`],
+  ])("does the same for a %s", (role, html) => {
+    const lines = print(html).map((line) => line.trim());
+    const at = lines.indexOf(role);
+    expect(lines.slice(at, at + 4)).toEqual([
+      role,
+      'text "Buy"',
+      'link "milk"',
+      'text "now"',
+    ]);
+  });
+
+  it("covers the native producer's prose roles", async () => {
+    const { mapNativeAXRole, NATIVE_AX_OWN_TEXT_ROLES } =
+      await import("../native/ax-vocabulary.js");
+    const { TEXT_RUN_HOST_ROLES } = await import("./text-runs.js");
+    // A `<figcaption>` is a `generic` in this producer, so it has no entry.
+    const native = [...NATIVE_AX_OWN_TEXT_ROLES]
+      .filter((role) => role !== "Figcaption")
+      .map(mapNativeAXRole);
+    expect([...TEXT_RUN_HOST_ROLES].sort()).toEqual(native.sort());
+  });
+
+  it("leaves text with no such child as the name it was", () => {
+    expect(print(`<p>Sent</p>`)).toEqual(['paragraph "Sent"']);
+    // A `<b>` is part of the run, and Chromium gives it no node.
+    expect(print(`<p>Pure <b>bold</b> text.</p>`)).toEqual([
+      'paragraph "Pure bold text."',
+      '  generic "bold"',
+    ]);
+    // A `generic` named from its own text is no child to read around either.
+    expect(print(`<p>Hello <span id="w">world</span> end</p>`)).toEqual([
+      'paragraph "Hello end"',
+      '  generic "world"',
+    ]);
+  });
+
+  it("leaves a role named from its content alone", () => {
+    expect(print(`<h2>Read the <a href="#">docs</a></h2>`)).toEqual([
+      'heading "Read the docs"',
+      '  link "docs"',
+    ]);
+  });
+
+  it.each([
+    ["an aria-label", `<p aria-label="A B">A <a href="#">x</a> B</p>`, "A B"],
+    [
+      "aria-labelledby",
+      `<p aria-labelledby="h">A <a href="#">x</a> B</p><h2 id="h">Head</h2>`,
+      "Head",
+    ],
+  ])("leaves a paragraph named by %s alone", (_, html, name) => {
+    expect(print(html).slice(0, 2)).toEqual([
+      `paragraph "${name}"`,
+      '  link "x"',
+    ]);
+  });
+
+  it("reads a role-less inline wrapper as part of the run around it", () => {
+    // The `<span>` and the `<b>` get no node; what they hold moves up.
+    expect(
+      print(
+        `<p>A <span>s1 <em>em</em> <a href="#">L</a> s2</span> <b>bold</b> B</p>`,
+      ),
+    ).toEqual([
+      "paragraph",
+      '  text "A s1"',
+      '  emphasis "em"',
+      '  link "L"',
+      '  text "s2 bold B"',
+    ]);
+  });
+
+  it("carries a run on through a child that leaves nothing in the tree", () => {
+    expect(
+      print(`<p>A <span hidden>h</span> B<br>C <a href="#">x</a> <i></i></p>`),
+    ).toEqual(["paragraph", '  text "A B C"', '  link "x"']);
+  });
+
+  it("prints no row for a run of white space", () => {
+    expect(print(`<p><a href="#">a</a> <a href="#">b</a> end</p>`)).toEqual([
+      "paragraph",
+      '  link "a"',
+      '  link "b"',
+      '  text "end"',
+    ]);
+  });
+
+  it("makes a row a leaf with nothing to act on, under the element it reads", () => {
+    const tree = treeOf(`<p>See <a href="#">this</a></p>`);
+    const paragraph = [...tree.nodes.values()].find(
+      (n) => n.a11y.role === "paragraph",
+    )!;
+    const row = tree.nodes.get(paragraph.childIds[0])!;
+    expect(row).toMatchObject({
+      parentId: paragraph.id,
+      childIds: [],
+      depth: paragraph.depth + 1,
+      a11y: { role: "text", name: "See", isExposedToAT: true },
+      interaction: { isInteractive: false, actions: [], isFocusable: false },
+    });
+  });
+
+  it("keeps a row's id from one read to the next", () => {
+    document.body.innerHTML = `<main><p>See <a href="#">this</a> now</p></main>`;
+    const rowIds = () =>
+      [...extractA11yTree(document.body).nodes.values()]
+        .filter((n) => n.a11y.role === "text")
+        .map((n) => n.id);
+    const first = rowIds();
+    expect(first).toHaveLength(2);
+    expect(rowIds()).toEqual(first);
+  });
+
+  it("adds no row to the DOM view", () => {
+    document.body.innerHTML = `<main><p>See <a href="#">this</a> now</p></main>`;
+    const nodes = [...extractDomTree(document.body).nodes.values()];
+    expect(nodes.some((n) => n.a11y.role === "text")).toBe(false);
+    expect(nodes.find((n) => n.a11y.role === "paragraph")!.a11y.name).toBe(
+      "See now",
+    );
+  });
+
+  it("shows no typed text in strict mode", () => {
+    // What a user typed is withheld from the name, so there is none to divide.
+    const lines = print(
+      `<p contenteditable="true">secret <a href="#">x</a> typed</p><p>Read <a href="#">y</a> on</p>`,
+      { redactInput: true },
+    );
+    expect(lines.join("\n")).not.toMatch(/secret|typed/);
+    expect(lines.slice(-3)).toEqual([
+      '  text "Read"',
+      '  link "y"',
+      '  text "on"',
+    ]);
   });
 });
