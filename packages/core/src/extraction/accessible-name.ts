@@ -1,6 +1,10 @@
 // Name and description reads that sit around the accname walk in
 // dom-extractor.ts: the embedded-control, reference, label and SVG-title
 // alternatives, and the name/description entry points.
+//
+// This module and dom-extractor.ts import each other on purpose: the walk is
+// mutually recursive. Every cross-import is a function declaration used at call
+// time, so keep top-level evaluation in both files off the other one.
 
 import { collapseAscii, trimAscii } from "../utils/ascii-whitespace.js";
 
