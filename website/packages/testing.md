@@ -191,6 +191,8 @@ interface SemanticNode {
     description: string;
     value?: string;              // what a screen reader announces for a field ("Spain", not "es");
                                  // "[redacted]" for a filled password, card or one-time-code field
+    choiceWithheld?: true;       // a focusable item a sensitive field's choice is made among: the
+                                 // tab order names it "[redacted]" (DOM producer only)
     states: Record<string, string | boolean>; // checked, expanded, pressed, disabled…
     properties: Record<string, string>;       // aria-* properties, and a heading's "level"
     isExposedToAT: boolean;

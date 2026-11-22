@@ -102,7 +102,7 @@ menu, grid, tree or dialog it controls, owns or points `aria-activedescendant`
 into, or one a combobox around it holds) says which choice is made: no
 `selected`, no `checked` on an option, menu item or radio, no `pressed`, no
 `current`. In `get_tab_order`, a stop that is one of those items reads
-`option "[redacted]"`: under a roving `tabindex` the popup's one stop is its
+`"[redacted]"` (`option "[redacted]"`): under a roving `tabindex` the popup's one stop is its
 chosen item. Findings checkpoints leave values out unless
 `checkpoint_findings` and `export_checkpoint` are both passed `values: true`.
 Start the server with `REAL_A11Y_REDACT_INPUT=1` to keep every field value and

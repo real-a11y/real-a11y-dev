@@ -18,7 +18,8 @@ import type { QueryInput } from "./types.js";
  *
  * A stop that is one of the items a sensitive field's choice is made among
  * (`a11y.choiceWithheld`, ADR-0001) comes back as a copy whose name reads
- * `"[redacted]"`, with no description or text: singled out as a stop, it
+ * `"[redacted]"`, with no description, text or naming attribute: singled out
+ * as a stop, it
  * says which choice is made, since the one tab stop of a roving-tabindex list
  * box is its chosen option. The tree keeps its name, beside the others'.
  *
@@ -61,18 +62,34 @@ export function getTabSequence(input: QueryInput): SemanticNode[] {
   return [...positives, ...zeros].map((f) => asStop(f.node));
 }
 
+/** The attributes a withheld stop keeps: what places it, none that names it. */
+const STOP_ATTRIBUTES = ["tabindex", "role", "type"] as const;
+
 /**
  * `node` as the tab order shows it: where it says a choice, with no name,
- * description or text to tell it by. The panels' search filters on the text,
- * so a search for the chosen option would otherwise still find it.
+ * description, text or naming attribute (`aria-label`, `id`, `name`, `class`)
+ * to tell it by. The panels' search filters on the text, so a search for the
+ * chosen option would otherwise still find it.
  */
 function asStop(node: SemanticNode): SemanticNode {
   if (!node.a11y.choiceWithheld) return node;
+  const attributes: Record<string, string> = {};
+  for (const name of STOP_ATTRIBUTES) {
+    const value = node.dom?.attributes[name];
+    if (value !== undefined) attributes[name] = value;
+  }
   return {
     ...node,
     a11y: { ...node.a11y, name: REDACTED_VALUE, description: "" },
     ...(node.dom
-      ? { dom: { ...node.dom, textContent: null, descendantText: "" } }
+      ? {
+          dom: {
+            ...node.dom,
+            attributes,
+            textContent: null,
+            descendantText: "",
+          },
+        }
       : {}),
   };
 }

@@ -248,7 +248,8 @@ its text, never its length, and nothing in it or in its popup (a listbox, menu,
 grid, tree or dialog it controls, owns or points `aria-activedescendant` into,
 or one a combobox around it holds) says which choice is made: no `selected`, no
 `checked` on an option, menu item or radio, no `pressed`, no `current`. In
-`tabs`, a stop that is one of those items reads `option "[redacted]"`: under a
+`tabs`, a stop that is one of those items reads `"[redacted]"`
+(`option "[redacted]"`): under a
 roving `tabindex` the popup's one stop is its chosen item. A
 `snapshot` artifact is committed and posted, so
 it leaves values out unless you pass `--values`. `--redact-input` (config

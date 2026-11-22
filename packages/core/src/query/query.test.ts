@@ -337,7 +337,7 @@ describe("getTabSequence", () => {
       <input role="combobox" aria-label="Month" autocomplete="cc-exp-month" aria-expanded="true" aria-controls="lb">
       <ul role="listbox" id="lb" aria-label="Months">
         <li role="option" tabindex="-1">01</li>
-        <li role="option" tabindex="0" aria-selected="true" title="March">03</li>
+        <li role="option" tabindex="0" aria-selected="true" title="March" aria-label="March 03" id="m03">03</li>
       </ul>
       <ul role="listbox" aria-label="Colors"><li role="option" tabindex="0">Red</li></ul>
     `);
@@ -353,8 +353,10 @@ describe("getTabSequence", () => {
     expect(stop.a11y.description).toBe("");
     expect(stop.dom?.textContent).toBeNull();
     expect(stop.dom?.descendantText).toBe("");
+    // Nor an attribute that names it: only what places it stays.
+    expect(stop.dom?.attributes).toEqual({ tabindex: "0", role: "option" });
     // A copy, with the same id to act on: the tree keeps its name.
-    expect(tree.nodes.get(stop.id)?.a11y.name).toBe("03");
+    expect(tree.nodes.get(stop.id)?.a11y.name).toBe("March 03");
     expect(stop).not.toBe(tree.nodes.get(stop.id));
   });
 
