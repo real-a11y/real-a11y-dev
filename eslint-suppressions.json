@@ -422,11 +422,6 @@
       "count": 1
     }
   },
-  "packages/testing/src/contract-parse.ts": {
-    "complexity": {
-      "count": 1
-    }
-  },
   "packages/testing/src/playwright.ts": {
     "max-lines-per-function": {
       "count": 1
