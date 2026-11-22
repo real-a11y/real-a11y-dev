@@ -360,6 +360,22 @@ describe("getTabSequence", () => {
     expect(stop).not.toBe(tree.nodes.get(stop.id));
   });
 
+  it("drops a withheld stop's value, which can say the choice too", () => {
+    const root = createPage(`
+      <input autocomplete="cc-exp" aria-label="Expiry" aria-controls="dlg">
+      <div role="dialog" id="dlg" aria-label="Pick">
+        <div role="grid" aria-label="Years"><div role="row"><div role="gridcell">
+          <input type="number" aria-label="Year" value="2027">
+        </div></div></div>
+      </div>
+    `);
+    const tree = extractDomTree(root);
+    const year = getTabSequence(tree).find((n) => n.a11y.role === "spinbutton");
+    expect(year?.a11y.name).toBe("[redacted]");
+    expect(year?.a11y).not.toHaveProperty("value");
+    expect(tree.nodes.get(year!.id)?.a11y.value).toBe("2027");
+  });
+
   // The stops below were each checked with a Tab walk in Chromium 151.
 
   it("skips a link with no href, which Chromium never focuses", () => {

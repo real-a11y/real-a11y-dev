@@ -1074,6 +1074,31 @@ describe("the items a sensitive popup's choice is made among", () => {
     ]);
   });
 
+  it("marks what carries a withheld choice state, in no choice container", () => {
+    // A toolbar of pressed buttons and a tab list: no list box or grid, but
+    // each item's choice state is withheld, so its stop would say the choice.
+    expect(
+      markedOf(
+        `<input autocomplete="cc-exp" aria-label="Expiry" aria-controls="dlg">` +
+          `<div role="dialog" id="dlg" aria-label="Pick">` +
+          `<div role="group" aria-label="Months">` +
+          `<button tabindex="-1" aria-pressed="false">01</button>` +
+          `<button tabindex="0" aria-pressed="true">03</button></div>` +
+          `<div role="tablist" aria-label="Years">` +
+          `<button role="tab" aria-selected="true">2031</button></div>` +
+          `<label><input type="checkbox" checked> Remember</label>` +
+          `<button>Cancel</button></div>`,
+      ),
+    ).toEqual([
+      ["textbox", "Expiry", false],
+      ["button", "01", true],
+      ["button", "03", true],
+      ["tab", "2031", true],
+      ["checkbox", "Remember", false],
+      ["button", "Cancel", false],
+    ]);
+  });
+
   it("marks no popup container itself, only its items", () => {
     expect(
       markedOf(

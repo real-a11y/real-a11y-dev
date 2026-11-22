@@ -258,10 +258,11 @@ export function withholdsChoiceItem(
 
 /**
  * The choice part of `element`'s `a11y`, spread into it: its `states` without
- * what {@link withholdsState} keeps off them, and `choiceWithheld` where
- * {@link withholdsChoiceItem} marks it. That is asked only of a tab stop's
- * candidates: a node nothing can focus is never singled out by the tab order,
- * so it costs no climb.
+ * what {@link withholdsState} keeps off them, and `choiceWithheld` on a
+ * focusable node whose own choice state is withheld (a pressed button in a
+ * popup's toolbar, a selected tab), or that {@link withholdsChoiceItem}
+ * marks. Singled out as a tab stop, either says which choice is made. A node
+ * nothing can focus is never a stop, so it costs no climb for the mark.
  */
 export function choiceFacet(
   element: Element,
@@ -270,9 +271,11 @@ export function choiceFacet(
   read: { focusable: boolean; redactInput: boolean },
 ): Pick<SemanticNode["a11y"], "states" | "choiceWithheld"> {
   const { focusable, redactInput } = read;
+  const held = withheldChoiceStates(element, role, states, redactInput);
   return {
-    states: withholdStates(element, role, states, redactInput),
-    ...(focusable && withholdsChoiceItem(element, role, redactInput)
+    states: withoutStates(states, held),
+    ...(focusable &&
+    (held.length > 0 || withholdsChoiceItem(element, role, redactInput))
       ? { choiceWithheld: true as const }
       : {}),
   };
@@ -297,9 +300,37 @@ export function withholdsLentValue(
 }
 
 /**
- * `states` without what {@link withholdsState} keeps off `element`'s node.
- * Every choice state is withheld or none is, so the climb runs once, and only
- * for a node that carries one.
+ * The choice states of `states` that {@link withholdsState} keeps off
+ * `element`'s node. Every choice state is withheld or none is, so the climb
+ * runs once, and only for a node that carries one.
+ */
+function withheldChoiceStates(
+  element: Element,
+  role: string,
+  states: SemanticNode["a11y"]["states"],
+  redactInput: boolean,
+): string[] {
+  const choice = Object.keys(states).filter((s) => isChoiceState(s, role));
+  return choice.length > 0 &&
+    withholdsState(element, role, choice[0]!, redactInput)
+    ? choice
+    : [];
+}
+
+/** `states` without `held`. */
+function withoutStates(
+  states: SemanticNode["a11y"]["states"],
+  held: readonly string[],
+): SemanticNode["a11y"]["states"] {
+  if (held.length === 0) return states;
+  return Object.fromEntries(
+    Object.entries(states).filter(([state]) => !held.includes(state)),
+  );
+}
+
+/**
+ * `states` without what {@link withholdsState} keeps off `element`'s node
+ * ({@link choiceFacet} without the mark).
  */
 export function withholdStates(
   element: Element,
@@ -307,14 +338,8 @@ export function withholdStates(
   states: SemanticNode["a11y"]["states"],
   redactInput: boolean,
 ): SemanticNode["a11y"]["states"] {
-  const choice = Object.keys(states).filter((s) => isChoiceState(s, role));
-  if (
-    choice.length === 0 ||
-    !withholdsState(element, role, choice[0]!, redactInput)
-  ) {
-    return states;
-  }
-  return Object.fromEntries(
-    Object.entries(states).filter(([state]) => !choice.includes(state)),
+  return withoutStates(
+    states,
+    withheldChoiceStates(element, role, states, redactInput),
   );
 }
