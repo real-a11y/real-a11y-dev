@@ -1,6 +1,6 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 
-import { choiceWithheld, computeFieldState } from "./field-state.js";
+import { actOnItem, choiceWithheld, computeFieldState } from "./field-state.js";
 
 afterEach(() => {
   document.body.innerHTML = "";
@@ -415,5 +415,37 @@ describe("choiceWithheld", () => {
     for (const id of ["o1", "t1", "m1"]) {
       expect(choiceWithheld(byId(id)), id).toBe(false);
     }
+  });
+});
+
+describe("actOnItem", () => {
+  it("still acts, and names nothing, when the read throws", async () => {
+    vi.resetModules();
+    vi.doMock("@real-a11y-dev/core", async (importOriginal) => ({
+      ...(await importOriginal<typeof import("@real-a11y-dev/core")>()),
+      withholdsState: () => {
+        throw new Error("a page's own getter");
+      },
+    }));
+    try {
+      const { actOnItem: act } = await import("./field-state.js");
+      document.body.innerHTML = `<div role="option" id="o">03</div>`;
+      let acted = false;
+      const reply = act(document.getElementById("o")!, () => {
+        acted = true;
+        return { success: true };
+      });
+      expect(acted).toBe(true);
+      expect(reply).toEqual({ success: true, choiceWithheld: true });
+    } finally {
+      vi.doUnmock("@real-a11y-dev/core");
+      vi.resetModules();
+    }
+  });
+
+  it("names nothing for an element it can't find, and reports the action's own result", () => {
+    expect(
+      actOnItem(undefined, () => ({ success: false, error: "gone" })),
+    ).toEqual({ success: false, error: "gone", choiceWithheld: true });
   });
 });

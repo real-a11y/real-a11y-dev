@@ -187,12 +187,17 @@ export function choiceWithheld(el: Element): boolean {
  * tree withholds a choice ({@link choiceWithheld}): asked before the action
  * lands, of the item as the user picked it, since picking it can close the
  * popup it was picked in. Fails closed: an element gone can't say, and its
- * action fails.
+ * action fails; nor can a read the page broke, and its action still runs.
  */
 export function actOnItem(
   el: Element | undefined,
   act: () => ActionResult,
 ): DispatchReply {
-  const withheld = el ? choiceWithheld(el) : true;
+  let withheld = true;
+  try {
+    if (el) withheld = choiceWithheld(el);
+  } catch {
+    // A page's own getter can throw under the climb.
+  }
   return { ...act(), choiceWithheld: withheld };
 }
