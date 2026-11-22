@@ -578,6 +578,33 @@ describe("the native producer is the only producer (built bin)", () => {
     expect(stdout.trimEnd()).toBe('01. textbox "Radius"\n02. button "Save"');
   });
 
+  it("tabs --root stays on the root beside a menubar, and takes in a menu it opens", async () => {
+    // A site's top navigation is a bar the page shows, not an overlay. It
+    // used to widen the read to <body>, so the bar's items were listed.
+    const page = (menuShown: boolean) =>
+      dataUrl(
+        "<!doctype html><title>Scoped</title><header><nav>" +
+          "<ul role='menubar' aria-label='Site'>" +
+          "<li role='none'><a role='menuitem' href='/'>Home</a></li>" +
+          "<li role='none'><a role='menuitem' href='/docs'>Docs</a>" +
+          `<ul role='menu' aria-label='Docs'${menuShown ? "" : " hidden"}>` +
+          "<li role='none'><a role='menuitem' href='/guide'>Guide</a></li>" +
+          "</ul></li></ul></nav></header>" +
+          "<main><form aria-label='Zone'><input aria-label='Radius'>" +
+          "<button>Save</button></form></main>",
+      );
+    const closed = await runCli(["tabs", page(false), "--root", "form", "-q"]);
+    expect(closed.code).toBe(0);
+    expect(closed.stdout.trimEnd()).toBe(
+      '01. textbox "Radius"\n02. button "Save"',
+    );
+    // An open menu is still an overlay, wherever it sits.
+    const open = await runCli(["tabs", page(true), "--root", "form", "-q"]);
+    expect(open.code).toBe(0);
+    expect(open.stdout).toContain('menuitem "Guide"');
+    expect(open.stdout).toContain('button "Save"');
+  });
+
   it("rejects --producer entirely — the axis is gone", async () => {
     const { code, stderr } = await runCli([
       "tree",
