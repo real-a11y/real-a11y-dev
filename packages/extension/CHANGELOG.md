@@ -44,7 +44,7 @@
   `role="menubar"` sat outside it, such as a site's top navigation. The
   extension re-bundles the updated extractor. Nothing changes for users: the
   TAB view reads each frame from `<body>`, where the rule never applies
-  ([#PR](https://github.com/real-a11y/real-a11y-dev/pull/PR)).
+  ([#707](https://github.com/real-a11y/real-a11y-dev/pull/707)).
 
 ## 0.1.21
 
