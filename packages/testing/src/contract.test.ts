@@ -41,6 +41,37 @@ describe("parseA11yTree", () => {
     expect(() => parseA11yTree(" button")).toThrow(/indent/);
   });
 
+  it("names the 1-based line of an odd indent, counting skipped lines", () => {
+    expect(() =>
+      parseA11yTree("---\nsource: x\n---\n\n# note\nform\n   button"),
+    ).toThrow(
+      "a11y contract line 7: 3-space indent — the grammar indents 2 spaces per level",
+    );
+  });
+
+  it("rejects an unterminated frontmatter block", () => {
+    expect(() => parseA11yTree("---\nsource: x\nform")).toThrow(
+      "a11y contract: unterminated `---` frontmatter block",
+    );
+  });
+
+  it("finds frontmatter after leading blank lines and CRLF line endings", () => {
+    const { roots, frontmatter } = parseA11yTree(
+      "\r\n  \r\n---\r\na: 1\r\nb: 2\r\n---\r\nform\r\n  button",
+    );
+    expect(frontmatter).toBe("a: 1\nb: 2");
+    expect(roots[0]!.role).toBe("form");
+    expect(roots[0]!.children[0]!.role).toBe("button");
+  });
+
+  it("returns no roots for frontmatter, comments and blank lines alone", () => {
+    expect(parseA11yTree("---\na: 1\n---\n\n# only a comment\n")).toEqual({
+      roots: [],
+      frontmatter: "a: 1",
+    });
+    expect(parseA11yTree("")).toEqual({ roots: [], frontmatter: undefined });
+  });
+
   it("rejects a malformed name token", () => {
     expect(() => parseA11yTree('button "unterminated')).toThrow(/cannot parse/);
   });

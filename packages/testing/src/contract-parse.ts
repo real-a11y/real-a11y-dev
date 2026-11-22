@@ -164,6 +164,56 @@ function checkPrintable(node: ContractNode): void {
   }
 }
 
+/** A content line of a contract, with its literal (un-rebased) indent depth. */
+interface ContractEntry {
+  content: string;
+  line: number;
+  rawDepth: number;
+}
+
+/**
+ * Read an optional `---` frontmatter block that opens the text (after any
+ * blank lines). Returns its body, if there is one, and the index of the first
+ * line after it.
+ */
+function readFrontmatter(lines: string[]): {
+  frontmatter: string | undefined;
+  next: number;
+} {
+  let i = 0;
+  while (i < lines.length && lines[i]!.trim() === "") i++;
+  if (lines[i]?.trim() !== "---") return { frontmatter: undefined, next: i };
+  const start = ++i;
+  while (i < lines.length && lines[i]!.trim() !== "---") i++;
+  if (i === lines.length) {
+    throw new Error("a11y contract: unterminated `---` frontmatter block");
+  }
+  return { frontmatter: lines.slice(start, i).join("\n"), next: i + 1 };
+}
+
+/**
+ * Collect the content lines from `start` on, skipping blank lines and `#`
+ * comments, each with its literal indent depth.
+ */
+function readEntries(lines: string[], start: number): ContractEntry[] {
+  const entries: ContractEntry[] = [];
+  for (let i = start; i < lines.length; i++) {
+    const raw = lines[i]!;
+    const trimmed = raw.trim();
+    const line = i + 1;
+    if (trimmed === "" || trimmed.startsWith("#")) continue;
+
+    const indent = raw.length - raw.trimStart().length;
+    if (indent % 2 !== 0) {
+      throw new Error(
+        `a11y contract line ${line}: ${indent}-space indent — the grammar indents 2 spaces per level`,
+      );
+    }
+    entries.push({ content: trimmed, line, rawDepth: indent / 2 });
+  }
+  return entries;
+}
+
 /**
  * Parse a serialized a11y tree — either an authored contract (may contain blank
  * lines, `#` comments, and a `---` frontmatter block) or the output of
@@ -178,36 +228,10 @@ export function parseA11yTree(
   const lines = text.split(/\r?\n/);
   const roots: ContractNode[] = [];
   const ancestors: ContractNode[] = []; // ancestors[d] = open node at depth d
-  let frontmatter: string | undefined;
-
-  let i = 0;
-  while (i < lines.length && lines[i]!.trim() === "") i++;
-  if (lines[i]?.trim() === "---") {
-    const start = ++i;
-    while (i < lines.length && lines[i]!.trim() !== "---") i++;
-    if (i === lines.length) {
-      throw new Error("a11y contract: unterminated `---` frontmatter block");
-    }
-    frontmatter = lines.slice(start, i).join("\n");
-    i++;
-  }
+  const { frontmatter, next } = readFrontmatter(lines);
 
   // Pass 1 — content lines with their literal indent depth.
-  const entries: { content: string; line: number; rawDepth: number }[] = [];
-  for (; i < lines.length; i++) {
-    const raw = lines[i]!;
-    const trimmed = raw.trim();
-    const line = i + 1;
-    if (trimmed === "" || trimmed.startsWith("#")) continue;
-
-    const indent = raw.length - raw.trimStart().length;
-    if (indent % 2 !== 0) {
-      throw new Error(
-        `a11y contract line ${line}: ${indent}-space indent — the grammar indents 2 spaces per level`,
-      );
-    }
-    entries.push({ content: trimmed, line, rawDepth: indent / 2 });
-  }
+  const entries = readEntries(lines, next);
   if (entries.length === 0) return { roots, frontmatter };
 
   // Pass 2 — rebase so the shallowest node is depth 0, then build, clamping a
