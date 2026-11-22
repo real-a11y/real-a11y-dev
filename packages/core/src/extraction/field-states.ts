@@ -43,7 +43,6 @@ const KNOWN_TYPES = new Set([
 const READONLY_ROLES = new Set([
   "textbox",
   ...HTML_INPUT_READONLY_ROLES,
-
   "searchbox",
   "combobox",
   "spinbutton",

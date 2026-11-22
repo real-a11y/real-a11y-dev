@@ -361,9 +361,7 @@ const ROLE_MAP: Record<string, RoleResolver> = {
     hasSectioningAncestor(el) && !hasAccessibleName(el)
       ? "generic"
       : "complementary",
-  // <audio>/<video>: (the same "no corresponding role" case as the date, time
-  // and color inputs, which print html-* roles; see input-type-roles.ts)
-  // ARIA has no media roles and HTML-AAM says "no
+  // <audio>/<video>: ARIA has no media roles and HTML-AAM says "no
   // corresponding role", but real browser accessibility trees disagree
   // with that framing — Chromium exposes internal Audio/Video roles
   // (what DevTools' a11y panel shows and what CDP returns), and that is
