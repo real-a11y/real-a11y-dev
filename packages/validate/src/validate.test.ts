@@ -233,6 +233,25 @@ describe("aria-schema", () => {
     }
   });
 
+  it("requires a name on an implicit date, time or color input", () => {
+    for (const role of ["html-input-date", "html-input-color"]) {
+      const bare: ValidatedNode = {
+        id: "n",
+        parentId: null,
+        role,
+        name: "",
+        attrs: {},
+        implicitRole: true,
+      };
+      expect(
+        validateNode(bare, new Map([["n", bare]])).map((i) => i.message),
+        role,
+      ).toEqual([`role "${role}" requires an accessible name`]);
+      const named = { ...bare, name: "Start" };
+      expect(validateNode(named, new Map([["n", named]])), role).toEqual([]);
+    }
+  });
+
   it("still rejects abstract roles and engine/author-invented tokens", () => {
     for (const r of ["widget", "roletype", "video", "Iframe", "doc-nope"])
       expect(isValidRole(r)).toBe(false);
