@@ -24,7 +24,7 @@
 - **The TAB view no longer calls a date, time or color input a text box.**
   HTML-AAM gives these input types no ARIA role, so a tab stop on one now reads
   `html-input-date`, `html-input-time`, `html-input-color` and so on, and a file
-  input reads `button`, instead of `textbox`. (PR link added when the PR opens.)
+  input reads `button`, instead of `textbox`. ([#710](https://github.com/real-a11y/real-a11y-dev/pull/710))
 
 ## 0.1.21
 
