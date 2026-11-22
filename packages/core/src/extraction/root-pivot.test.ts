@@ -292,14 +292,19 @@ describe("an in-flow live region — in the root's own child of <body> — is no
     );
   });
 
-  it("still widens for a container role that also announces", () => {
-    page(
-      `<main><div role="dialog" aria-live="polite" aria-label="Saved"><button>OK</button></div>${FORM}</main>`,
-    );
-    expect(resolveEffectiveRoot(document.getElementById("host")!)).toBe(
-      document.body,
-    );
-  });
+  // By the role the element resolves to: a native non-modal <dialog> counted
+  // only for its `aria-live`, and was taken for a live region.
+  for (const container of [
+    `<div role="dialog" aria-live="polite" aria-label="Saved"><button>OK</button></div>`,
+    `<dialog open aria-live="polite" aria-label="Uploading"><button>Cancel</button></dialog>`,
+  ]) {
+    it(`still widens for a container that also announces: ${container}`, () => {
+      page(`<main>${container}${FORM}</main>`);
+      expect(resolveEffectiveRoot(document.getElementById("host")!)).toBe(
+        document.body,
+      );
+    });
+  }
 });
 
 describe("aria-live=off declares the element inert", () => {

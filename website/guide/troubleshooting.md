@@ -104,9 +104,10 @@ outside that container, so this one is plainly part of the page:
 ```
 
 The same goes for a toaster that renders where you put it rather than through a
-portal, as react-hot-toast's and Sonner's `<Toaster />` do: inside the app's
-container, its toasts are page content, not an overlay of your component's. To
-see them in the tree, pass a root that contains the toaster.
+portal, as react-hot-toast's and Sonner's `<Toaster />` do, and for a toast
+portaled into a host element inside the app's container: there, its toasts are
+page content, not an overlay of your component's. To see them in the tree, pass
+a root that contains the toaster or the host.
 
 The catch is a live region in a **different** child of `<body>` from your root —
 a status in `<header>` while your root is in `<main>`, or both directly under

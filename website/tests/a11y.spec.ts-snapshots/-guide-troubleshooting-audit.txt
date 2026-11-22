@@ -179,7 +179,7 @@ main
   paragraph
     text "The same goes for a toaster that renders where you put it rather than through a portal, as react-hot-toast's and Sonner's"
     code "<Toaster />"
-    text "do: inside the app's container, its toasts are page content, not an overlay of your component's. To see them in the tree, pass a root that contains the toaster."
+    text "do, and for a toast portaled into a host element inside the app's container: there, its toasts are page content, not an overlay of your component's. To see them in the tree, pass a root that contains the toaster or the host."
   paragraph
     text "The catch is a live region in a"
     strong "different"

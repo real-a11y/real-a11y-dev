@@ -11,6 +11,7 @@ import { isOutOfReach } from "./overlay-reach.js";
 import {
   getCachedComputedStyle,
   getExplicitRole,
+  getImplicitRole,
   isSubtreeHidden,
   type StyleCache,
 } from "./role-map.js";
@@ -285,11 +286,15 @@ export function bodyChildHolding(el: Element): Element | null {
  * widening for it turned every component snapshot on a page that had one into
  * a page snapshot. A portal does not produce this shape: the component kits
  * mount their portals into `<body>` by default, outside the app's container.
+ * One the app portals into a host of its own inside that container has the
+ * same shape as one rendered in place, and reads as one.
  *
  * Live regions only. A menu, a listbox or a dialog the page renders in place
- * still widens: it is what the user is looking at, wherever it mounted. And
- * a region that is itself a child of `<body>`, beside a root that is too,
- * still widens: nothing in the markup tells it from a portal.
+ * still widens: it is what the user is looking at, wherever it mounted. That
+ * goes by the role the element resolves to, so a native `<dialog>` that also
+ * carries `aria-live` is a dialog, as `role="dialog"` is. And a region that is
+ * itself a child of `<body>`, beside a root that is too, still widens: nothing
+ * in the markup tells it from a portal.
  *
  * @internal Shared by the extractor and `row-scope.ts`; not a stability
  * promise.
@@ -303,7 +308,7 @@ export function isInFlowLiveRegion(
     !!shell &&
     safeContains(shell, el) &&
     countsAsOverlay(el) &&
-    !OVERLAY_ROLES.has(getExplicitRole(el) ?? "")
+    !OVERLAY_ROLES.has(getImplicitRole(el))
   );
 }
 
