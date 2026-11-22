@@ -92,18 +92,55 @@ export function isSensitiveField(element: Element): boolean {
 }
 
 /**
- * The roles a popup's choice is made in, which lend that choice to a name
- * built around them (AccName's embedded control): those `aria-haspopup` names
- * but a dialog, which holds anything, and a menu, whose choice is `checked`.
- * One set for the DOM producer (`lendsSensitiveChoice`) and the native ones
- * (`sensitivePopupRoots`).
+ * The roles a popup's choice is made in: those `aria-haspopup` names but a
+ * dialog, which holds anything, and a radio group, which a dialog popup can
+ * hold. A name or description that reads one with a choice made in it
+ * ({@link isChoiceState}) gives that choice away, and the container an
+ * `aria-activedescendant` sits in is the popup it reaches. One set for the DOM
+ * producer (`lendsSensitiveChoice`) and the native ones (`sensitivePopupRoots`).
  */
 export const POPUP_CHOICE_ROLES: ReadonlySet<string> = new Set([
   "listbox",
   "grid",
   "treegrid",
   "tree",
+  "menu",
+  "radiogroup",
 ]);
+
+/**
+ * The roles whose `checked` marks which item of a set is chosen: an option or
+ * tree item that marks its choice with `aria-checked`, a menu's radio and
+ * check items, and a radio. A menu's check item is one of its choices, in a
+ * menu that picks several, as an option in a multi-select list box is. Not a
+ * checkbox or a switch: each is a control of its own, classified for
+ * sensitivity on its own, so one in a panel a sensitive field controls keeps
+ * its state.
+ */
+export const CHOICE_ITEM_ROLES: ReadonlySet<string> = new Set([
+  "option",
+  "treeitem",
+  "menuitemradio",
+  "menuitemcheckbox",
+  "radio",
+]);
+
+/**
+ * True when `state` on a node in `role` can say which choice is made, so it
+ * is withheld wherever a sensitive field's choice is made (ADR-0001):
+ * `selected` on anything, as Chromium carries it on options, tabs, rows and
+ * cells; `checked` on a choice item ({@link CHOICE_ITEM_ROLES}); and `pressed`
+ * and `current`, which a page can mark its chosen item with too (a date
+ * picker's pressed day button, an option marked `aria-current`). One rule for
+ * the DOM producer (`withholdsState`) and the native ones
+ * (`dropChoiceStates`).
+ *
+ * @internal Shared with the native transports and the extension's panel.
+ */
+export function isChoiceState(state: string, role: string): boolean {
+  if (state === "checked") return CHOICE_ITEM_ROLES.has(role);
+  return state === "selected" || state === "pressed" || state === "current";
+}
 
 /** `<input>` types with no announced value: a state, a name, or nothing. */
 export const VALUELESS_INPUT_TYPES: ReadonlySet<string> = new Set([

@@ -1131,6 +1131,125 @@ describe("LiveTreeExtractor", () => {
       expect(read(nodes, "button")).toEqual([["March", undefined]]);
     });
 
+    it("reads the whole popup, and what references it, once a choice is marked by another state", async () => {
+      // A menu's radio item checked, an option pressed or marked current.
+      const marked: Array<[string, string, string]> = [
+        ["menuitemradio", "aria-checked", "true"],
+        ["option", "aria-pressed", "true"],
+        ["option", "aria-current", "true"],
+      ];
+      for (const [role, attr, value] of marked) {
+        const container = role === "option" ? "listbox" : "menu";
+        const nodes = await refreshed(
+          `<main>${field}<div role="${container}" id="lb" aria-label="Months">` +
+            `<div role="${role}" id="o3" aria-checked="false">03</div>` +
+            `<div role="${role}" aria-checked="false"><span id="cap">March</span></div></div></main>${outside}`,
+          () => byId("o3").setAttribute(attr, value),
+        );
+        expect(read(nodes, "button"), attr).toEqual([
+          ["[redacted]", undefined],
+        ]);
+        expect(
+          nodes
+            .filter((n) => n.a11y.role === role)
+            .map((n) => Object.keys(n.a11y.states)),
+          attr,
+        ).toEqual([[], []]);
+      }
+    });
+
+    it("reads the whole popup once a radio in it is checked, which no mutation says", async () => {
+      // A click checks a native radio and fires `change`; its `checked`
+      // property moves with no attribute. The popup then holds a choice, so
+      // no radio keeps its description and the name that reads one is
+      // withheld.
+      const nodes = await refreshed(
+        `<main><input role="combobox" aria-label="Year" autocomplete="cc-exp-year" aria-controls="d" aria-expanded="true">` +
+          `<div role="dialog" id="d" aria-label="Pick"><div role="radiogroup" aria-label="Years">` +
+          `<label><input type="radio" name="y" id="r1" aria-description="one"> 2041</label>` +
+          `<label><input type="radio" name="y" id="r2" aria-description="two"> 2042</label>` +
+          `<p id="cap">Pick a year</p></div></div></main>` +
+          `<section><button aria-labelledby="r2"></button><button aria-labelledby="cap"></button></section>`,
+        () => {
+          const radio = byId("r1") as HTMLInputElement;
+          radio.checked = true;
+          radio.dispatchEvent(new Event("change", { bubbles: true }));
+        },
+      );
+      expect(read(nodes, "radio")).toEqual([
+        ["2041", undefined],
+        ["2042", undefined],
+      ]);
+      expect(read(nodes, "button")).toEqual([
+        ["[redacted]", undefined],
+        ["[redacted]", undefined],
+      ]);
+    });
+
+    it("reads no more than it needs while nothing in a sensitive radio popup moves", async () => {
+      // Each radio withholds a `checked` and an unset `pressed`: kept apart,
+      // neither reads as moved, so an unrelated change splices.
+      document.body.innerHTML =
+        `<main><input role="combobox" aria-label="Year" autocomplete="cc-exp-year" aria-controls="d" aria-expanded="true">` +
+        `<div role="dialog" id="d" aria-label="Pick"><div role="radiogroup" aria-label="Years">` +
+        `<label><input type="radio" name="y" checked> 2041</label>` +
+        `<label><input type="radio" name="y"> 2042</label></div></div>` +
+        `<p id="note">one</p></main>`;
+      const live = new LiveTreeExtractor(document.body, { mode: "dom" });
+      live.extract();
+      const full = vi.spyOn(live, "extract");
+      for (const text of ["two", "three"]) {
+        let lastChange: TreeChange | undefined;
+        const observer = new DomObserver(
+          document.body,
+          (c) => {
+            lastChange = c;
+          },
+          50,
+        );
+        observer.start();
+        byId("note").textContent = text;
+        await vi.advanceTimersByTimeAsync(100);
+        observer.stop();
+        expect(lastChange).toBeDefined();
+        live.refresh(lastChange);
+      }
+      expect(full).not.toHaveBeenCalled();
+    });
+
+    it("reads the whole popup once the item a sensitive field's active descendant names arrives", async () => {
+      // The radio group the active item lands in sits in a grid: the grid is
+      // the field's popup only from now, and its chosen row must go.
+      const nodes = await refreshed(
+        `<main><input role="combobox" aria-label="Year" autocomplete="cc-exp-year" aria-expanded="true" aria-activedescendant="r1">` +
+          `<div role="grid" aria-label="Pick"><div role="row" aria-selected="true"><div role="gridcell">2041</div></div>` +
+          `<div role="row"><div role="gridcell"><div role="radiogroup" id="g" aria-label="Mode"></div></div></div></div></main>`,
+        () =>
+          byId("g").insertAdjacentHTML(
+            "beforeend",
+            `<div role="radio" id="r1" aria-checked="false">Exact</div>`,
+          ),
+      );
+      expect(
+        nodes
+          .filter((n) => n.a11y.role === "row")
+          .map((n) => n.a11y.states["selected"]),
+      ).toEqual([undefined, undefined]);
+    });
+
+    it("reads it once a checked item arrives", async () => {
+      const nodes = await refreshed(
+        `<main>${field}<div role="menu" id="lb" aria-label="Months">` +
+          `<div role="menuitemradio" aria-checked="false"><span id="cap">March</span></div></div></main>${outside}`,
+        () =>
+          byId("lb").insertAdjacentHTML(
+            "beforeend",
+            `<div role="menuitemradio" aria-checked="true">04</div>`,
+          ),
+      );
+      expect(read(nodes, "button")).toEqual([["[redacted]", undefined]]);
+    });
+
     it("reads it once a chosen option arrives", async () => {
       const nodes = await refreshed(
         `<main>${field}<ul role="listbox" id="lb" aria-label="Months">` +

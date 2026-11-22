@@ -8,7 +8,7 @@
 
 import {
   buildCssPath,
-  domChoiceTargets,
+  domChoiceReads,
   domLabels,
   opensFieldInternals,
 } from "@real-a11y-dev/core";
@@ -205,10 +205,16 @@ export async function enrichFromDom(
   };
   walk(root, start.inside === true, undefined, start.frame);
   // Where a sensitive field's choice is made by a relation Chromium's tree
-  // drops: see NativeDomInfo.choiceTarget.
-  for (const id of domChoiceTargets(root)) {
+  // drops, and what marks itself chosen where the tree doesn't say: see
+  // NativeDomInfo.choiceTarget and .chosen.
+  const reads = domChoiceReads(root);
+  for (const id of reads.targets) {
     const info = out.get(id);
     if (info) info.choiceTarget = true;
+  }
+  for (const id of reads.chosen) {
+    const info = out.get(id);
+    if (info) info.chosen = true;
   }
   return { info: out, inEditable };
 }

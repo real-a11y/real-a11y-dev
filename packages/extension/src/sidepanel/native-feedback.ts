@@ -4,7 +4,11 @@ import {
 } from "../native/native-actions.js";
 import type { NativeAction } from "../native/native-core.js";
 
-import { describeAction, describeSelection } from "./action-feedback.js";
+import {
+  describeAction,
+  describeSelection,
+  type FeedbackTarget,
+} from "./action-feedback.js";
 
 /**
  * The action-feedback line for a native action that landed, worded by the
@@ -28,19 +32,26 @@ export function nativeActionFeedback(
   if (action === "select" && node?.role === "option") {
     return selectFeedback(node, nodes);
   }
-  const role = node?.role ?? "";
+  const target = feedbackTarget(node);
+  const role = target.role;
   return describeAction(
-    {
-      role,
-      name: node?.name || node?.role || "element",
-      checked: node?.states?.["checked"],
-    },
+    target,
     action === "reveal"
       ? "focus"
       : action === "click" && role === "link"
         ? "navigate"
         : action,
   );
+}
+
+/** What the feedback line reads of `node` (`describeAction`). */
+function feedbackTarget(node: NativeNode | undefined): FeedbackTarget {
+  return {
+    role: node?.role ?? "",
+    name: node?.name || node?.role || "element",
+    checked: node?.states?.["checked"],
+    valueWithheld: node?.valueWithheld === true,
+  };
 }
 
 /**

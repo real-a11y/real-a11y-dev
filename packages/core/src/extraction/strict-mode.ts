@@ -25,7 +25,7 @@ import { isEditable } from "./editing.js";
 import { PAGE_STATE_VALUE_ROLES } from "./field-text.js";
 import { flatParentElement } from "./flat-tree.js";
 import { getImplicitRole } from "./role-map.js";
-import { holdsEnteredValue } from "./sensitivity.js";
+import { holdsEnteredValue, isChoiceState } from "./sensitivity.js";
 
 /**
  * What a strict-mode extraction is asked for: the one option that
@@ -219,11 +219,12 @@ const EDITOR_CONTENT_ATTRIBUTES = ["href", "src", "poster", "id"];
 
 /**
  * True when `state` is kept off the node of `element`, since it says what a
- * withheld value is. Always: a `selected` inside a sensitive field, or inside
- * what one controls or owns ({@link inSensitiveChoice}). In strict mode also:
- * an option's `selected` inside any choice field. The native producers drop
- * the same states. One rule for {@link withholdStates} and the live
- * extractor's check for states that moved, which would otherwise see the
+ * withheld value is: a choice state ({@link isChoiceState}: `selected`; a
+ * choice item's `checked`; `pressed`, `current`). Always: inside a sensitive
+ * field, or inside what one controls or owns ({@link inSensitiveChoice}). In
+ * strict mode also: an option's, inside any choice field. The native
+ * producers drop the same states. One rule for {@link withholdStates} and the
+ * live extractor's check for states that moved, which would otherwise see the
  * missing state as a change.
  */
 export function withholdsState(
@@ -232,7 +233,7 @@ export function withholdsState(
   state: string,
   redactInput: boolean,
 ): boolean {
-  if (state !== "selected") return false;
+  if (!isChoiceState(state, role)) return false;
   if (redactInput && role === "option" && inChoiceField(element)) return true;
   return inSensitiveChoice(element);
 }
@@ -255,19 +256,25 @@ export function withholdsLentValue(
   );
 }
 
-/** `states` without what {@link withholdsState} keeps off `element`'s node. */
+/**
+ * `states` without what {@link withholdsState} keeps off `element`'s node.
+ * Every choice state is withheld or none is, so the climb runs once, and only
+ * for a node that carries one.
+ */
 export function withholdStates(
   element: Element,
   role: string,
   states: SemanticNode["a11y"]["states"],
   redactInput: boolean,
 ): SemanticNode["a11y"]["states"] {
+  const choice = Object.keys(states).filter((s) => isChoiceState(s, role));
   if (
-    "selected" in states &&
-    withholdsState(element, role, "selected", redactInput)
+    choice.length === 0 ||
+    !withholdsState(element, role, choice[0]!, redactInput)
   ) {
-    const { selected: _withheld, ...rest } = states;
-    return rest;
+    return states;
   }
-  return states;
+  return Object.fromEntries(
+    Object.entries(states).filter(([state]) => !choice.includes(state)),
+  );
 }

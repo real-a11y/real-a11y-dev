@@ -2115,6 +2115,152 @@ describe("buildNativeTree — sensitive values in states, references and races",
     }
   });
 
+  it("drops a menu's checked, a pressed day and a radio's markup in a sensitive popup, not a checkbox's", () => {
+    // A combobox (30) controlling a menu (31): radio items, a pressed button,
+    // an `<input type=radio checked>` and a checkbox.
+    const raw = [
+      { nodeId: "1", childIds: ["2", "3"], role: { value: "RootWebArea" } },
+      {
+        nodeId: "2",
+        parentId: "1",
+        role: { value: "combobox" },
+        name: { value: "Expiry" },
+        backendDOMNodeId: 30,
+        properties: [
+          {
+            name: "controls",
+            value: {
+              type: "idrefList",
+              relatedNodes: [{ backendDOMNodeId: 31 }],
+            },
+          },
+        ],
+      },
+      {
+        nodeId: "3",
+        parentId: "1",
+        childIds: ["4", "5", "6", "7", "8"],
+        role: { value: "menu" },
+        name: { value: "Dates" },
+        backendDOMNodeId: 31,
+      },
+      ...(
+        [
+          ["4", "menuitemradio", "checked", "false", 32],
+          ["5", "menuitemradio", "checked", "true", 33],
+          ["6", "button", "pressed", "true", 34],
+          ["7", "radio", "checked", "true", 35],
+          ["8", "checkbox", "checked", "true", 36],
+        ] as const
+      ).map(([nodeId, role, state, value, backendDOMNodeId]) => ({
+        nodeId,
+        parentId: "3",
+        role: { value: role },
+        name: { value: nodeId },
+        properties: [{ name: state, value: { type: "tristate", value } }],
+        backendDOMNodeId,
+      })),
+    ] as RawNodes;
+    const read = (autocomplete?: string) =>
+      nodesOf(
+        buildNativeTree(
+          raw,
+          new Map<number, NativeDomInfo>([
+            [
+              30,
+              domOf("input", {
+                role: "combobox",
+                ...(autocomplete ? { autocomplete } : {}),
+              }),
+            ],
+            [31, domOf("div", { role: "menu" })],
+            [32, domOf("div", { role: "menuitemradio" })],
+            [33, domOf("div", { role: "menuitemradio" })],
+            [34, domOf("button", {})],
+            [35, domOf("input", { type: "radio", checked: "" })],
+            [36, domOf("input", { type: "checkbox", checked: "" })],
+          ]),
+        ),
+      )
+        .filter((n) => ["4", "5", "6", "7", "8"].includes(n.a11y.name))
+        .map((n) => [n.a11y.name, n.a11y.states, n.dom?.attributes.checked]);
+    expect(read("cc-exp")).toEqual([
+      ["4", {}, undefined],
+      ["5", {}, undefined],
+      ["6", {}, undefined],
+      ["7", {}, undefined],
+      ["8", { checked: true }, ""],
+    ]);
+    // An ordinary combobox's menu still says which item is chosen.
+    expect(read()).toEqual([
+      ["4", { checked: false }, undefined],
+      ["5", { checked: true }, undefined],
+      ["6", { pressed: true }, undefined],
+      ["7", { checked: true }, ""],
+      ["8", { checked: true }, ""],
+    ]);
+  });
+
+  it("in strict mode drops an option's choice in any choice field, but keeps a toggle's own", () => {
+    // An ordinary ARIA 1.1 combobox holding a pressed toggle and a checked
+    // option: strict mode withholds what an option says it is chosen, as
+    // the DOM producer does, and leaves the toggle a control of its own.
+    const raw = [
+      { nodeId: "1", childIds: ["2"], role: { value: "RootWebArea" } },
+      {
+        nodeId: "2",
+        parentId: "1",
+        childIds: ["3", "4"],
+        role: { value: "combobox" },
+        name: { value: "Color" },
+        backendDOMNodeId: 30,
+      },
+      {
+        nodeId: "3",
+        parentId: "2",
+        role: { value: "button" },
+        name: { value: "Show all" },
+        properties: [
+          { name: "pressed", value: { type: "tristate", value: "true" } },
+        ],
+        backendDOMNodeId: 31,
+      },
+      {
+        nodeId: "4",
+        parentId: "2",
+        role: { value: "option" },
+        name: { value: "Red" },
+        properties: [
+          { name: "checked", value: { type: "tristate", value: "true" } },
+        ],
+        backendDOMNodeId: 32,
+      },
+    ] as RawNodes;
+    const read = (redactInput: boolean) =>
+      nodesOf(
+        buildNativeTree(
+          raw,
+          new Map<number, NativeDomInfo>([
+            [30, domOf("div", { role: "combobox" })],
+            [31, domOf("button", {})],
+            [32, domOf("div", { role: "option" })],
+          ]),
+          undefined,
+          { redactInput },
+        ),
+      )
+        .filter((n) => ["Show all", "Red"].includes(n.a11y.name))
+        .map((n) => [n.a11y.name, n.a11y.states]);
+    expect(read(true)).toEqual([
+      ["Show all", { pressed: true }],
+      ["Red", {}],
+    ]);
+    expect(read(false)).toEqual([
+      ["Show all", { pressed: true }],
+      ["Red", { checked: true }],
+    ]);
+  });
+
   it("drops it in the popup an ARIA 1.1 combobox around a sensitive field controls", () => {
     // The wrapper carries the relation; the textbox inside it is the field.
     const raw = [

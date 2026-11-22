@@ -807,6 +807,91 @@ describe("the states block (built bin)", () => {
     expect(tabs.stdout).not.toContain("description=");
   });
 
+  it("withholds a sensitive popup's choice marked by checked, pressed or current, in both producers", async () => {
+    // Focusable items, so the in-page tree (`tabs`) shows them too.
+    const item = (role: string, label: string, attrs: string, id = "") =>
+      `<div role="${role}" tabindex="0" ${id ? `id="${id}"` : ""} ${attrs}>${label}</div>`;
+    const field = (label: string, popup: string, attrs = "") =>
+      `<input role="combobox" aria-label="${label}" autocomplete="cc-exp" aria-expanded="true" aria-controls="${popup}" ${attrs}>`;
+    const page = dataUrl(
+      "<!doctype html><title>Expiry</title><main>" +
+        // A menu of radio and check items.
+        field("Menu", "m", 'aria-haspopup="menu"') +
+        `<div role="menu" id="m" aria-label="Dates">` +
+        item("menuitemradio", "01/30", 'aria-checked="false"') +
+        item("menuitemradio", "03/31", 'aria-checked="true"', "mpick") +
+        // A menu that picks several: its check items are its choices too.
+        item("menuitemcheckbox", "08/36", 'aria-checked="true"') +
+        "</div>" +
+        // A listbox whose page marks the choice with aria-checked.
+        field("List", "l") +
+        `<div role="listbox" id="l" aria-label="Months">` +
+        item("option", "04/32", 'aria-checked="true"', "lpick") +
+        "</div>" +
+        // A listbox whose only mark is aria-current, which Chromium's tree
+        // never reports: only the document says this popup holds a choice.
+        field("Current", "cl") +
+        `<div role="listbox" id="cl" aria-label="Current months">` +
+        item("option", "05/33", 'aria-current="true"', "cpick") +
+        item("option", "09/37", "") +
+        "</div>" +
+        // A date picker's pressed day.
+        field("Grid", "g", 'aria-haspopup="grid"') +
+        `<div role="grid" id="g" aria-label="Days"><div role="row">` +
+        `<div role="gridcell"><button aria-pressed="true">Day 7</button></div>` +
+        `<div role="gridcell"><button aria-pressed="false">Day 8</button></div></div></div>` +
+        // Radios in a dialog popup, beside a checkbox of its own.
+        field("Dialog", "d", 'aria-haspopup="dialog"') +
+        `<div role="dialog" id="d" aria-label="Pick">` +
+        `<label><input type="radio" name="y" checked> 2041</label>` +
+        `<label><input type="radio" name="y"> 2042</label>` +
+        `<label><input type="checkbox" checked> Remember</label></div>` +
+        // Reached only by aria-activedescendant: the active item isn't the chosen one.
+        `<input role="combobox" aria-label="Active" autocomplete="cc-exp" aria-expanded="true" aria-activedescendant="a1">` +
+        `<div role="menu" aria-label="Active dates">` +
+        item("menuitemradio", "06/34", 'aria-checked="false"', "a1") +
+        item("menuitemradio", "07/35", 'aria-checked="true"') +
+        "</div>" +
+        // Names that read the chosen item; Chromium's tree says nothing of
+        // the current one.
+        '<button aria-labelledby="mpick"></button><button aria-labelledby="lpick"></button>' +
+        '<button aria-labelledby="cpick"></button>' +
+        // An ordinary field's menu keeps its choice.
+        `<input role="combobox" aria-label="Color" aria-expanded="true" aria-controls="c">` +
+        `<div role="menu" id="c" aria-label="Colors">${item("menuitemradio", "Red", 'aria-checked="true"')}</div>` +
+        "</main>",
+    );
+    const leaked = (out: string) =>
+      out
+        .split("\n")
+        .filter((line) => /"(0[1-9]\/3[0-7]|Day [78]|204[12])".*\{/.test(line));
+
+    const tree = await runCli(["tree", page, "-q"]);
+    expect(tree.code).toBe(0);
+    const lines = linesOf(tree.stdout);
+    expect(lines).toContain('menuitemradio "03/31"');
+    expect(lines).toContain('option "04/32"');
+    expect(lines).toContain('button "Day 7"');
+    expect(lines).toContain('radio "2041"');
+    expect(lines).toContain('menuitemradio "07/35"');
+    expect(leaked(tree.stdout)).toEqual([]);
+    expect(lines.filter((l) => l === 'button "[redacted]"')).toHaveLength(3);
+    expect(tree.stdout).not.toMatch(/button "0[1-7]\//);
+    // A checkbox is its own control; an ordinary menu keeps its choice.
+    expect(lines).toContain('checkbox "Remember" {checked}');
+    expect(lines).toContain('menuitemradio "Red" {checked}');
+
+    const tabs = await runCli(["tabs", page, "-q"]);
+    expect(tabs.code).toBe(0);
+    expect(tabs.stdout).toMatch(/\d\d\. menuitemradio "03\/31"\n/);
+    expect(tabs.stdout).toMatch(/\d\d\. option "05\/33"\n/);
+    expect(tabs.stdout).toMatch(/\d\d\. radio "2041"\n/);
+    expect(leaked(tabs.stdout)).toEqual([]);
+    expect(tabs.stdout.match(/button "\[redacted\]"/g)).toHaveLength(3);
+    expect(tabs.stdout).toMatch(/\d\d\. checkbox "Remember" \{checked\}/);
+    expect(tabs.stdout).toMatch(/\d\d\. menuitemradio "Red" \{checked\}/);
+  });
+
   it("a title that repeats a link's text describes it in neither producer", async () => {
     const page = dataUrl(
       "<!doctype html><title>Outline</title><main>" +

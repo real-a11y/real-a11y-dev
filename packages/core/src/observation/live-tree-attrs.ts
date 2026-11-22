@@ -8,12 +8,14 @@ import {
 import {
   safeGetAttribute,
   safeMatches,
+  safeQuerySelectorAll,
   safeShadowRoot,
   safeTagName,
 } from "../extraction/clobber-safe.js";
 import {
   deepQuerySelectorAll,
   flatParentElement,
+  idScope,
 } from "../extraction/flat-tree.js";
 import { getExplicitRole, resolveRoleToken } from "../extraction/role-map.js";
 import {
@@ -40,6 +42,14 @@ export const REFERENCE_ATTRS = new Set([
   "aria-owns",
 ]);
 
+/** The attributes that make or clear a choice (core's `isChosen`). */
+const CHOICE_ATTRS: ReadonlySet<string> = new Set([
+  "aria-selected",
+  "aria-checked",
+  "aria-pressed",
+  "aria-current",
+]);
+
 /**
  * True when a change to `attr` on `target` moves which choices a sensitive
  * field withholds somewhere else: its popup listbox is not its descendant,
@@ -54,15 +64,17 @@ export const REFERENCE_ATTRS = new Set([
  * popup, or a sensitive field's own role changing, or a name (`aria-label`,
  * `title`) coming or going on an element whose role list names a combobox
  * behind a token that needs one; or a
- * choice made or cleared in a sensitive field's popup (`aria-selected`),
- * which decides what every reference into the popup reads, the other
- * options' own names and descriptions among them.
+ * choice made or cleared in a sensitive field's popup (`aria-selected`,
+ * `aria-checked`, `aria-pressed`, `aria-current`: core's `isChosen`), which
+ * decides what every reference into the popup reads, the other options' own
+ * names and descriptions among them.
  */
 export function movesSensitiveChoice(
   target: Element,
   attr: string,
   oldValue?: string | null,
 ): boolean {
+  if (CHOICE_ATTRS.has(attr)) return inSensitiveChoice(target);
   switch (attr) {
     case "aria-controls":
     case "aria-activedescendant":
@@ -79,8 +91,6 @@ export function movesSensitiveChoice(
         isSensitiveField(target) ||
         (mayBeCombobox(target, oldValue) && wrapsSensitiveField(target))
       );
-    case "aria-selected":
-      return inSensitiveChoice(target);
     // A name can decide the role: an unnamed `region` token is skipped, so
     // `role="region combobox"` turns into a combobox when its name goes.
     case "aria-label":
@@ -119,16 +129,17 @@ function wrapsSensitiveField(target: Element): boolean {
  * sensitive field withholds somewhere else: the subtree holds a sensitive
  * field (or a combobox around one) with a relation to a popup, or a sensitive
  * field going into or out of a combobox, slotted ones included; or it brings
- * a choice into, or takes one out of, a sensitive field's popup. The popup is
- * not in the subtree, or what references it is not, so splicing the subtree
- * alone leaves its choice as it was read. Shadow roots in the subtree count.
+ * a choice into, or takes one out of, a sensitive field's popup, or the item
+ * a sensitive field's `aria-activedescendant` names. The popup is not in the
+ * subtree, or what references it is not, so splicing the subtree alone
+ * leaves its choice as it was read. Shadow roots in the subtree count.
  */
 export function bringsSensitivePopup(
   subtree: Element,
   parent: Element | null,
 ): boolean {
   // One walk, shadow roots included, for all three questions.
-  const selectors = `[aria-controls], [aria-owns], [aria-activedescendant], [aria-selected], option, ${FIELD_SELECTOR}`;
+  const selectors = `[aria-controls], [aria-owns], [aria-activedescendant], [aria-selected], [aria-checked], [aria-pressed], [aria-current], option, ${FIELD_SELECTOR}`;
   const found = [
     ...(safeMatches(subtree, selectors) ? [subtree] : []),
     ...deepQuerySelectorAll(subtree, selectors),
@@ -148,10 +159,38 @@ export function bringsSensitivePopup(
   // A choice arriving where it lands, or where `aria-owns` pulls it in.
   const chosen = found.filter(isChosen);
   return (
-    chosen.length > 0 &&
-    ((parent !== null &&
-      (isSensitiveChoiceHost(parent) || inSensitiveChoice(parent))) ||
-      chosen.some(inSensitiveChoice))
+    (chosen.length > 0 &&
+      ((parent !== null &&
+        (isSensitiveChoiceHost(parent) || inSensitiveChoice(parent))) ||
+        chosen.some(inSensitiveChoice))) ||
+    bringsActiveDescendant(subtree)
+  );
+}
+
+/**
+ * True when `subtree` brings in what a sensitive field, or a combobox around
+ * one, names in `aria-activedescendant`: the choice containers around it are
+ * that field's popup only from now, so a choice they already show (a grid's
+ * chosen row beside the radio group the active item lands in) is withheld
+ * only by a full read. An id resolves only in its own tree scope: a host in
+ * a shadow root the subtree brings is an arrival of its own, caught above.
+ */
+function bringsActiveDescendant(subtree: Element): boolean {
+  if (!pageMayHoldSensitiveField(subtree)) return false;
+  const scope = idScope(subtree);
+  const named = new Set<string>();
+  for (const host of safeQuerySelectorAll(scope, "[aria-activedescendant]")) {
+    const id = (safeGetAttribute(host, "aria-activedescendant") ?? "").trim();
+    if (id && isSensitiveChoiceHost(host)) named.add(id);
+  }
+  if (named.size === 0) return false;
+  const arriving = [
+    ...(safeMatches(subtree, "[id]") ? [subtree] : []),
+    ...deepQuerySelectorAll(subtree, "[id]"),
+  ];
+  return arriving.some(
+    (el) =>
+      idScope(el) === scope && named.has(safeGetAttribute(el, "id") ?? ""),
   );
 }
 

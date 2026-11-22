@@ -592,19 +592,23 @@ describe("field-value redaction covers the extension's option picker", () => {
     ]);
   });
 
-  it("grades shortening the states withheld inside a sensitive field 🔴 high", async () => {
-    // An option's `selected` under a sensitive select names the value. Both
-    // native transports read the one list, so trimming it is the leak.
-    const vocabPath = "packages/core/src/native/ax-vocabulary.ts";
-    const vocab = `export const NATIVE_AX_CHOICE_STATES: readonly string[] = ["selected"];\n`;
+  it("grades narrowing the states withheld where a sensitive field's choice is made 🔴 high", async () => {
+    // An option's `selected` under a sensitive select names the value, and a
+    // menu item's `checked` in its popup. Both producers read the one rule,
+    // so narrowing it is the leak.
+    const rulePath = "packages/core/src/extraction/sensitivity.ts";
+    const rule =
+      `export function isChoiceState(state: string, role: string): boolean {\n` +
+      `  if (state === "checked") return CHOICE_ITEM_ROLES.has(role);\n` +
+      `  return state === "selected" || state === "pressed";\n}\n`;
     const result = await grade(
-      { [vocabPath]: vocab.replace('["selected"]', "[]") },
-      { base: { [vocabPath]: vocab } },
+      { [rulePath]: rule.replace(' || state === "pressed"', "") },
+      { base: { [rulePath]: rule } },
     );
 
     assert.equal(result.tier, "high");
     assert.deepEqual(evidenceFor(result, "field-value-redaction"), [
-      `${vocabPath} → NATIVE_AX_CHOICE_STATES`,
+      `${rulePath} → isChoiceState`,
     ]);
   });
 

@@ -1,4 +1,8 @@
-import { ACTION_LABELS, type ActionType } from "@real-a11y-dev/core";
+import {
+  ACTION_LABELS,
+  isChoiceState,
+  type ActionType,
+} from "@real-a11y-dev/core";
 
 /** What the feedback line needs to know about the node an action landed on,
  *  as it was BEFORE the action. */
@@ -8,6 +12,34 @@ export interface FeedbackTarget {
   name: string;
   /** Its `checked` state, so a checked checkbox reads "Unchecked". */
   checked?: string | boolean;
+  /** Its states, when `checked` isn't given: a TAB row's. */
+  states?: Readonly<Record<string, unknown>>;
+  /** A native row's verdict on its value: set inside a sensitive field and
+   *  where its choice is made. */
+  valueWithheld?: boolean;
+}
+
+/** The roles ARIA requires a `checked` state of: a TAB row in one with none
+ *  had it withheld. An option or tree item often carries no state at all. */
+const CHECKED_ROLES: ReadonlySet<string> = new Set([
+  "radio",
+  "menuitemradio",
+  "menuitemcheckbox",
+]);
+
+/**
+ * The item the action landed on is one whose choice the tree withholds (a
+ * choice item, core's `isChoiceState`, in a sensitive field's popup,
+ * ADR-0001): naming the item a user picked says what the field holds. A
+ * native row says so (`valueWithheld`); a TAB row by carrying no `checked`
+ * where ARIA requires one ({@link CHECKED_ROLES}).
+ */
+function choiceWithheld({ role, states, valueWithheld }: FeedbackTarget) {
+  if (!isChoiceState("checked", role)) return false;
+  if (valueWithheld !== undefined) return valueWithheld;
+  return (
+    CHECKED_ROLES.has(role) && states !== undefined && !("checked" in states)
+  );
 }
 
 /**
@@ -35,18 +67,24 @@ export function describeSelection(
  * A checkbox or switch says what it became, read from the state it had
  * before. A mixed one gets the plain label: a click checks or unchecks it by
  * a checkedness "mixed" hides, so the tree can't say which. A radio says
- * "Selected". Anything else says the action's label ("Click", "Navigate").
+ * "Selected". A choice item whose choice is withheld names only that a choice
+ * was made ({@link describeSelection}). Anything else says the action's label
+ * ("Click", "Navigate").
  *
  * Null for a slider or spinbutton step: the value changing on the page is
  * the confirmation, and a banner flashing on every rapid step would push the
  * tree around under the pointer.
  */
 export function describeAction(
-  { role, name, checked }: FeedbackTarget,
+  target: FeedbackTarget,
   action: ActionType,
 ): string | null {
+  const { role, name } = target;
+  const checked = target.checked ?? target.states?.["checked"];
   if (action === "increment" || action === "decrement") return null;
   if (action === "type") return `Typed in ${name}`;
+  if (choiceWithheld(target))
+    return describeSelection("this field", name, true);
   if (action === "select") return `Selected: ${name}`;
   if ((role === "checkbox" || role === "switch") && checked !== "mixed") {
     return checked === true ? `Unchecked: ${name}` : `Checked: ${name}`;

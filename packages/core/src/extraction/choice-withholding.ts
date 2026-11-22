@@ -11,6 +11,7 @@ import {
   type ChoiceCache,
   type RelationReach,
 } from "./aria-owner.js";
+import { ariaCurrent, ariaTristate } from "./aria-tokens.js";
 import {
   safeGetAttribute,
   safeGetElementById,
@@ -20,6 +21,7 @@ import {
   safeQuerySelectorAll,
   safeRootNode,
 } from "./clobber-safe.js";
+import { nativeChecked } from "./element-state.js";
 import {
   deepQuerySelectorAll,
   flatChildNodes,
@@ -29,6 +31,7 @@ import {
 } from "./flat-tree.js";
 import { getExplicitRole, getImplicitRole } from "./role-map.js";
 import {
+  CHOICE_ITEM_ROLES,
   FIELD_SELECTOR,
   isSensitiveField,
   POPUP_CHOICE_ROLES,
@@ -218,11 +221,27 @@ export function isSensitiveChoiceHost(element: Element): boolean {
   return host;
 }
 
-/** The nearest choice container (`POPUP_CHOICE_ROLES`) at or above `element`. */
-function choiceContainerOf(element: Element): Element | null {
-  return searchAbove(element, (el) =>
-    POPUP_CHOICE_ROLES.has(getImplicitRole(el)),
-  );
+/**
+ * The choice containers (`POPUP_CHOICE_ROLES`) `active` sits in that make up
+ * `host`'s popup, on every path {@link searchAbove} climbs. Not only the
+ * nearest: a radio group or menu nested in a grid would otherwise bound the
+ * popup, and the grid's chosen row outside it would show. But none around
+ * `host` itself, since a popup doesn't hold its own field: a data grid a
+ * sensitive editor sits in, with the editor's list box in a cell, keeps its
+ * own rows' choice. One is still taken when it is the only container: a
+ * field inside its own list box.
+ */
+function choiceContainersOf(active: Element, host: Element): Set<Element> {
+  const found = new Set<Element>();
+  let around: Element | undefined;
+  searchAbove(active, (el) => {
+    if (!POPUP_CHOICE_ROLES.has(getImplicitRole(el))) return false;
+    if (isWithin(host, el)) around ??= el;
+    else found.add(el);
+    return false;
+  });
+  if (found.size === 0 && around) found.add(around);
+  return found;
 }
 
 /** Where a field reaches a popup by relation that needs an index. */
@@ -231,7 +250,7 @@ const RELATIONS = "[aria-controls], [aria-activedescendant]";
 /**
  * Add to `reach` what each of `candidates` that is a sensitive field, or a
  * combobox around one, reaches by relation, each id read in its own tree
- * scope: the ids it names in `aria-controls`, and the choice container its
+ * scope: the ids it names in `aria-controls`, and every choice container its
  * `aria-activedescendant` sits in. The active option is always in the field's
  * popup, so a popup reached only that way is still its own. (`aria-owns`
  * needs no index: the owner climb in {@link searchAbove} meets it.)
@@ -254,7 +273,10 @@ function indexSensitiveRelations(
     ).trim();
     const searched = idSearchRoot(host);
     for (const active of activeId ? elementsWithId(searched, activeId) : []) {
-      reach.elements.add(choiceContainerOf(active) ?? active);
+      const containers = choiceContainersOf(active, host);
+      for (const reached of containers.size > 0 ? containers : [active]) {
+        reach.elements.add(reached);
+      }
     }
   }
 }
@@ -364,12 +386,40 @@ export function lendsSensitiveChoice(element: Element, role: string): boolean {
   );
 }
 
-/** `el` is chosen: `aria-selected="true"`, or without it a selected option. */
+/**
+ * `el` is chosen, by a choice state the tree withholds (`isChoiceState`):
+ * `aria-selected="true"`, or without it a selected option; a choice item
+ * checked (`aria-checked`, or a radio's own checkedness); pressed; or marked
+ * current. The attributes are read first, so an element with none of them
+ * costs no role.
+ */
 export function isChosen(el: Element): boolean {
   const selected = safeGetAttribute(el, "aria-selected");
-  return selected !== null
-    ? selected.trim().toLowerCase() === "true"
-    : (el as HTMLOptionElement).selected === true;
+  if (
+    selected !== null
+      ? selected.trim().toLowerCase() === "true"
+      : (el as HTMLOptionElement).selected === true
+  ) {
+    return true;
+  }
+  if (marksChoice(ariaTristate(safeGetAttribute(el, "aria-pressed")))) {
+    return true;
+  }
+  const current = ariaCurrent(safeGetAttribute(el, "aria-current"));
+  if (current !== null && current !== false) return true;
+  const ownChecked = nativeChecked(el);
+  const checked = safeGetAttribute(el, "aria-checked");
+  if (ownChecked === null && checked === null) return false;
+  const role = getImplicitRole(el);
+  return (
+    CHOICE_ITEM_ROLES.has(role) &&
+    marksChoice(ownChecked ?? ariaTristate(checked, role))
+  );
+}
+
+/** A tristate read marks a choice: set, or `mixed`. */
+function marksChoice(value: boolean | "mixed" | null): boolean {
+  return value === true || value === "mixed";
 }
 
 /** What `element` names in `aria-owns`, in its id scope. */

@@ -4,8 +4,9 @@
  * what is never read sits beside what is.
  */
 import { safeGetAttribute, safeTagName } from "./clobber-safe.js";
+import { getImplicitRole } from "./role-map.js";
 import { isSensitiveField, REDACTED_VALUE } from "./sensitivity.js";
-import { withheldAttributes } from "./strict-mode.js";
+import { withheldAttributes, withholdsState } from "./strict-mode.js";
 
 /**
  * Attributes recorded verbatim on every node's `dom.attributes`.
@@ -60,23 +61,49 @@ export const KEY_ATTRIBUTES = [
 ];
 
 /**
+ * `element`'s `checked` is withheld from its node (`withholdsState`): a
+ * choice item in a sensitive field's popup, so its `aria-checked` is too.
+ */
+function withholdsChecked(element: Element, redactInput: boolean): boolean {
+  return withholdsState(
+    element,
+    getImplicitRole(element),
+    "checked",
+    redactInput,
+  );
+}
+
+/** The {@link KEY_ATTRIBUTES} `element` carries, minus `withheld`. */
+function readKeyAttributes(
+  element: Element,
+  withheld: ReadonlySet<string> | undefined,
+  redactInput: boolean,
+): Record<string, string> {
+  const attrs: Record<string, string> = {};
+  for (const name of KEY_ATTRIBUTES) {
+    if (withheld?.has(name)) continue;
+    const val = safeGetAttribute(element, name);
+    if (val === null) continue;
+    // The markup says what a withheld `checked` would: which item is chosen.
+    if (name === "aria-checked" && withholdsChecked(element, redactInput)) {
+      continue;
+    }
+    attrs[name] = val;
+  }
+  return attrs;
+}
+
+/**
  * Get key attributes for display. In strict mode, minus what
- * {@link withheldAttributes} keeps out, which is never read.
+ * {@link withheldAttributes} keeps out, which is never read; and always
+ * minus the `aria-checked` of a node whose `checked` is withheld.
  */
 export function getKeyAttributes(
   element: Element,
   redactInput: boolean,
 ): Record<string, string> {
-  const attrs: Record<string, string> = {};
   const withheld = redactInput ? withheldAttributes(element) : undefined;
-
-  for (const name of KEY_ATTRIBUTES) {
-    if (withheld?.has(name)) continue;
-    const val = safeGetAttribute(element, name);
-    if (val !== null) {
-      attrs[name] = val;
-    }
-  }
+  const attrs = readKeyAttributes(element, withheld, redactInput);
 
   // Read current value from DOM property (not HTML attribute) for form controls
   // getAttribute("value") returns the initial value; .value reflects user input

@@ -80,6 +80,21 @@ describe("nativeActionFeedback", () => {
     );
   });
 
+  it("names no item picked in a sensitive field's popup", () => {
+    const picked = { ...node("menuitemradio", "03/31"), valueWithheld: true };
+    expect(nativeActionFeedback(picked, "click")).toBe(
+      "Selected an option in this field",
+    );
+    const radio = { ...node("radio", "2041"), valueWithheld: true };
+    expect(nativeActionFeedback(radio, "click")).toBe(
+      "Selected an option in this field",
+    );
+    // An ordinary menu's item names itself, its state read or not.
+    expect(nativeActionFeedback(node("menuitemradio", "Red"), "click")).toBe(
+      "Click: Red",
+    );
+  });
+
   it("says Click for a menu item, as the DOM tree does", () => {
     expect(
       nativeActionFeedback(

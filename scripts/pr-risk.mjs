@@ -1274,7 +1274,7 @@ const FIELD_VALUE_GATES = [
   "fieldSensitivity",
   "valueRegions",
   "withholdRegionNames",
-  "withoutSelection",
+  "withoutChoiceMarkup",
   "holdsContent|leavesOut|typedIn|labelLending|labelsRead|domLabels",
   // The strict mode (`redactInput`): every value and all rich-text editor
   // content withheld. The switch itself — its option, the CLI flag and config
@@ -1290,16 +1290,18 @@ const FIELD_VALUE_GATES = [
   // and which of those strict mode keeps as page state.
   "holdsTypedText|nameText|insideEditor|inChoiceField|holdsEnteredValue|hasAXText|embeddedControlText|EMBEDDED_VALUE_ROLES|PAGE_STATE_VALUE_ROLES",
   "withholdsState|withholdStates|withheldAttributes|textPreviews|forcesFullExtraction|STRICT_DOM_ADAPTER",
-  // A sensitive field's choice, which says what it holds: a `selected` in the
-  // popup it controls, owns, points `aria-activedescendant` into or sits in a
-  // combobox with, and the names and descriptions that read that popup. The
+  // A sensitive field's choice, which says what it holds: a choice state
+  // (`isChoiceState`: `selected`, a choice item's `checked`, `pressed`,
+  // `current`) in the popup it controls, owns, points `aria-activedescendant`
+  // into or sits in a combobox with, and the names and descriptions that read
+  // that popup. The
   // DOM producer (`core/src/extraction/choice-withholding.ts`, which
   // `withholdsState` and `withholdsLentValue` ask), the rule both native
   // transports share (`core/src/native/sensitive-popup.ts`,
   // `sensitive-names.ts`), with what the transports' document walks add where
   // Chromium drops a relation (`dom-choice-targets.ts`), and the live
   // refresh's triggers for it (`core/src/observation/live-tree-attrs.ts`).
-  "inSensitiveChoice|lendsSensitiveChoice|isSensitiveChoiceHost|holdsSensitiveField|pageMayHoldSensitiveField|controlledBySensitiveField|indexSensitiveRelations|choiceContainerOf|searchAbove|readsSensitivePopup|withholdPopupDescription|holdsChoice|isChosen|withholdsLentValue|POPUP_CHOICE_ROLES|sensitivePopupRoots|fieldRelationRoots|sensitiveChoiceRoots|sensitiveChoiceReach|sensitiveChoiceHosts|popupChoiceRegions|withholdPopupChoiceNames|FIELD_RELATIONS|movesSensitiveChoice|bringsSensitivePopup|hasPopupRelation|domChoiceTargets|choiceTarget|activeContainers|insideSensitiveField|namesCombobox|pageScopes|RelationReach|withheldSuppliedAttrs|elementsWithId|addHostTargets|choiceContainerIn|seePage|idSearchRoot|closedRoots|safeDocumentElement|withReadIndexes",
+  "inSensitiveChoice|lendsSensitiveChoice|isSensitiveChoiceHost|holdsSensitiveField|pageMayHoldSensitiveField|controlledBySensitiveField|indexSensitiveRelations|choiceContainerOf|searchAbove|readsSensitivePopup|withholdPopupDescription|holdsChoice|isChosen|withholdsLentValue|POPUP_CHOICE_ROLES|sensitivePopupRoots|fieldRelationRoots|sensitiveChoiceRoots|sensitiveChoiceReach|sensitiveChoiceHosts|popupChoiceRegions|withholdPopupChoiceNames|FIELD_RELATIONS|movesSensitiveChoice|bringsSensitivePopup|hasPopupRelation|domChoiceTargets|choiceTarget|activeContainers|insideSensitiveField|namesCombobox|pageScopes|RelationReach|withheldSuppliedAttrs|elementsWithId|addHostTargets|choiceContainerIn|seePage|idSearchRoot|closedRoots|safeDocumentElement|withReadIndexes|isChoiceState|CHOICE_ITEM_ROLES|marksChoice|CHOICE_AX_STATES|CHOICE_ATTRS|readKeyAttributes|withholdsChecked|REQUIRED_CHOICE_STATES|domChoiceReads|marksChosen|choiceWithheld|nativeStateMoved|movedNativeStates|choiceContainersOf|CHECKED_ROLES|WithheldStates|bringsActiveDescendant",
   // The extension's native path, which reads a live value and redacts it in
   // the page (`extension/src/native/native-core.ts`) for the roles in its
   // `VALUE_BEARING_ROLES`.
@@ -1314,7 +1316,7 @@ const FIELD_VALUE_GATES = [
   // producers' panels, and so does selecting an option row straight from the
   // native tree (`selectFeedback`). The edit box a typable native row opens
   // masks what is typed into a withheld field, empty or not (`masksRetype`).
-  "withholdInsideSensitive|controlledRegion|NATIVE_AX_CHOICE_STATES",
+  "withholdInsideSensitive|controlledRegion|dropChoiceStates|carriesChoiceState",
   "fieldValueWithheld",
   // Which fields the extension hands that name rule: `nameWithholdingRoots`,
   // and the fields outside the tree it reads because a name points at them —

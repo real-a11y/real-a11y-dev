@@ -48,6 +48,49 @@ describe("describeAction", () => {
     );
   });
 
+  it("names no item whose choice the tree withholds", () => {
+    // A TAB row: a radio or menu item with no `checked`, which ARIA
+    // requires of it, had it withheld in a sensitive field's popup; one that
+    // carries its state names itself.
+    for (const role of ["radio", "menuitemradio", "menuitemcheckbox"]) {
+      expect(
+        describeAction({ role, name: "03/31", states: {} }, "click"),
+        role,
+      ).toBe("Selected an option in this field");
+    }
+    // An option or tree item often carries no state at all: an ordinary
+    // tree branch names itself.
+    for (const role of ["treeitem", "option"]) {
+      expect(
+        describeAction({ role, name: "Docs", states: {} }, "click"),
+        role,
+      ).toBe("Click: Docs");
+    }
+    expect(
+      describeAction(
+        { role: "menuitemradio", name: "Red", states: { checked: false } },
+        "click",
+      ),
+    ).toBe("Click: Red");
+    // A checkbox is its own control.
+    expect(
+      describeAction({ role: "checkbox", name: "Save", states: {} }, "click"),
+    ).toBe("Checked: Save");
+    // A native row's verdict decides, never the missing state.
+    expect(
+      describeAction(
+        { role: "menuitemradio", name: "03/31", valueWithheld: true },
+        "click",
+      ),
+    ).toBe("Selected an option in this field");
+    expect(
+      describeAction(
+        { role: "treeitem", name: "Docs", states: {}, valueWithheld: false },
+        "click",
+      ),
+    ).toBe("Click: Docs");
+  });
+
   it("says nothing for a step", () => {
     expect(describeAction({ role: "slider", name: "V" }, "increment")).toBe(
       null,
