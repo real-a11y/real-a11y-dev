@@ -51,8 +51,9 @@ In real Chromium (Playwright), open a page with this `<main>`, then take
 - **3** — `generic "Loose"` with `generic "wrapped"` under it, as before: a
   generic does not read through its wrappers
 - **4** — every line of steps 1 and 2 is in the native tree too. On testing
-  0.1.0-beta.22 or earlier the native list item reads
-  `listitem "Item text" (level 1)`, which is the old behaviour, not a fail
+  0.1.0-beta.22 or earlier, or through `real-a11y tree` on cli 0.1.0-beta.12 or
+  earlier, the native list item reads `listitem "Item text" (level 1)`, which
+  is the old behaviour, not a fail
 
 ## Why this exists
 
