@@ -26,7 +26,8 @@
   its choice is withheld, and the line reads `Selected an option in this
   field`, as Chrome's tree's already did. An ordinary option or tree item still
   names itself, and a radio or menu item that carries no `checked` is no longer
-  taken for a withheld one (PR_LINK).
+  taken for a withheld one
+  ([#701](https://github.com/real-a11y/real-a11y-dev/pull/701)).
 
 - **A sensitive combobox's popup no longer says which item is chosen by
   `checked`, `pressed` or `current`.** Chrome's tree dropped only `selected`
