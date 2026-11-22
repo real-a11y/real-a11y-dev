@@ -1237,6 +1237,55 @@ describe("LiveTreeExtractor", () => {
       ).toEqual([undefined, undefined]);
     });
 
+    describe("the items singled out as tab stops", () => {
+      const marked = (nodes: SemanticNode[]) =>
+        nodes
+          .filter((n) => n.a11y.choiceWithheld)
+          .map((n) => [n.a11y.role, n.a11y.name]);
+      const months =
+        `<ul role="listbox" id="lb" aria-label="Months">` +
+        `<li role="option" tabindex="0" id="m3">03</li></ul>`;
+
+      it("marks a popup's items once its field turns sensitive", async () => {
+        const nodes = await refreshed(
+          `<main><input id="f" role="combobox" aria-label="Month" aria-controls="lb" aria-expanded="true">${months}</main>`,
+          () => byId("f").setAttribute("autocomplete", "cc-exp-month"),
+        );
+        expect(marked(nodes)).toEqual([["option", "03"]]);
+      });
+
+      it("marks an item arriving in a sensitive popup", async () => {
+        const nodes = await refreshed(`<main>${field}${months}</main>`, () =>
+          byId("lb").insertAdjacentHTML(
+            "beforeend",
+            `<li role="option" tabindex="-1">04</li>`,
+          ),
+        );
+        expect(marked(nodes)).toEqual([
+          ["option", "03"],
+          ["option", "04"],
+        ]);
+      });
+
+      it("marks a dialog popup's buttons once what holds them turns into a grid", async () => {
+        const nodes = await refreshed(
+          `<main><input autocomplete="cc-exp" aria-label="Expiry" aria-controls="dlg">` +
+            `<div role="dialog" id="dlg" aria-label="Pick a day"><div id="days">` +
+            `<button tabindex="0">31</button></div><button>Cancel</button></div></main>`,
+          () => byId("days").setAttribute("role", "grid"),
+        );
+        expect(marked(nodes)).toEqual([["button", "31"]]);
+      });
+
+      it("unmarks an item that leaves the popup", async () => {
+        const nodes = await refreshed(
+          `<main>${field}${months}<section id="out"></section></main>`,
+          () => byId("out").appendChild(byId("m3")),
+        );
+        expect(marked(nodes)).toEqual([]);
+      });
+    });
+
     it("reads it once a checked item arrives", async () => {
       const nodes = await refreshed(
         `<main>${field}<div role="menu" id="lb" aria-label="Months">` +

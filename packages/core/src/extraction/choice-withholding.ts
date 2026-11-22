@@ -367,6 +367,30 @@ export function inSensitiveChoice(element: Element): boolean {
 }
 
 /**
+ * True when `element`, in `role`, is one of the items a sensitive field's
+ * choice is made among ({@link inSensitiveChoice}): a choice item
+ * (`CHOICE_ITEM_ROLES`), or anything inside a choice container
+ * (`POPUP_CHOICE_ROLES`) the field's popup holds, as a date grid's day button
+ * is. Picking it makes the choice, so singling it out says which choice is
+ * made: the one tab stop of a roving-tabindex list box is its chosen option.
+ * Not the popup's other controls (a dialog's Cancel button) and not the
+ * container itself, whose names don't depend on the choice.
+ */
+export function isSensitiveChoiceItem(element: Element, role: string): boolean {
+  if (!inSensitiveChoice(element)) return false;
+  if (CHOICE_ITEM_ROLES.has(role)) return true;
+  return (
+    searchAbove(
+      element,
+      (el) =>
+        el !== element &&
+        POPUP_CHOICE_ROLES.has(getImplicitRole(el)) &&
+        inSensitiveChoice(el),
+    ) !== null
+  );
+}
+
+/**
  * True when what `element`, in `role`, lends a name or description it is
  * embedded in (AccName 2C) gives a sensitive field's value or choice away: a
  * sensitive field, or a combobox around one ({@link isSensitiveChoiceHost});

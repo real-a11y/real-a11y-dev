@@ -331,6 +331,33 @@ describe("getTabSequence", () => {
     expect(names).toEqual(["First", "Second", "Zero"]);
   });
 
+  it("withholds a stop that says which choice a sensitive field holds", () => {
+    // A roving-tabindex list box's one stop is its chosen option.
+    const root = createPage(`
+      <input role="combobox" aria-label="Month" autocomplete="cc-exp-month" aria-expanded="true" aria-controls="lb">
+      <ul role="listbox" id="lb" aria-label="Months">
+        <li role="option" tabindex="-1">01</li>
+        <li role="option" tabindex="0" aria-selected="true" title="March">03</li>
+      </ul>
+      <ul role="listbox" aria-label="Colors"><li role="option" tabindex="0">Red</li></ul>
+    `);
+    const tree = extractDomTree(root);
+    const seq = getTabSequence(tree);
+    expect(seq.map((n) => [n.a11y.role, n.a11y.name])).toEqual([
+      ["combobox", "Month"],
+      ["option", "[redacted]"],
+      ["option", "Red"],
+    ]);
+    // Nothing left to tell it by, so a search over the stops can't find it.
+    const stop = seq[1]!;
+    expect(stop.a11y.description).toBe("");
+    expect(stop.dom?.textContent).toBeNull();
+    expect(stop.dom?.descendantText).toBe("");
+    // A copy, with the same id to act on: the tree keeps its name.
+    expect(tree.nodes.get(stop.id)?.a11y.name).toBe("03");
+    expect(stop).not.toBe(tree.nodes.get(stop.id));
+  });
+
   // The stops below were each checked with a Tab walk in Chromium 151.
 
   it("skips a link with no href, which Chromium never focuses", () => {

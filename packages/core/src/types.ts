@@ -62,6 +62,17 @@ export interface A11yInfo {
    * (`"es"` where this is `"Spain"`).
    */
   value?: string;
+  /**
+   * Set by the DOM producer on a focusable node that is one of the items a
+   * sensitive field's choice is made among (ADR-0001): an option or radio in
+   * its popup, or a day button in a date grid there; in strict mode also an
+   * option in any choice field. Its choice states are withheld already, but
+   * singling it out says which choice is made: the one tab stop of a
+   * roving-tabindex list box is its chosen option. So a view that singles a
+   * node out, as the tab order does (`getTabSequence`), withholds its name.
+   * The native producers don't set it: the tab order is the DOM producer's.
+   */
+  choiceWithheld?: true;
   states: Record<string, string | boolean>;
   properties: Record<string, string>;
   isExposedToAT: boolean;

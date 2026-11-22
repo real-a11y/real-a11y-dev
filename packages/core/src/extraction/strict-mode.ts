@@ -14,6 +14,7 @@ import { trimAscii } from "../utils/ascii-whitespace.js";
 import { ariaOwner } from "./aria-owner.js";
 import {
   inSensitiveChoice,
+  isSensitiveChoiceItem,
   lendsSensitiveChoice,
 } from "./choice-withholding.js";
 import {
@@ -236,6 +237,45 @@ export function withholdsState(
   if (!isChoiceState(state, role)) return false;
   if (redactInput && role === "option" && inChoiceField(element)) return true;
   return inSensitiveChoice(element);
+}
+
+/**
+ * True when singling `element` (in `role`) out says which choice a withheld
+ * value holds, so the node carries `a11y.choiceWithheld` and the tab order
+ * withholds its name: an item a sensitive field's choice is made among
+ * ({@link isSensitiveChoiceItem}), and in strict mode an option in any choice
+ * field, whose `selected` strict mode withholds as well
+ * ({@link withholdsState}).
+ */
+export function withholdsChoiceItem(
+  element: Element,
+  role: string,
+  redactInput: boolean,
+): boolean {
+  if (redactInput && role === "option" && inChoiceField(element)) return true;
+  return isSensitiveChoiceItem(element, role);
+}
+
+/**
+ * The choice part of `element`'s `a11y`, spread into it: its `states` without
+ * what {@link withholdsState} keeps off them, and `choiceWithheld` where
+ * {@link withholdsChoiceItem} marks it. That is asked only of a tab stop's
+ * candidates: a node nothing can focus is never singled out by the tab order,
+ * so it costs no climb.
+ */
+export function choiceFacet(
+  element: Element,
+  role: string,
+  states: SemanticNode["a11y"]["states"],
+  read: { focusable: boolean; redactInput: boolean },
+): Pick<SemanticNode["a11y"], "states" | "choiceWithheld"> {
+  const { focusable, redactInput } = read;
+  return {
+    states: withholdStates(element, role, states, redactInput),
+    ...(focusable && withholdsChoiceItem(element, role, redactInput)
+      ? { choiceWithheld: true as const }
+      : {}),
+  };
 }
 
 /**

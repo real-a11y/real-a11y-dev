@@ -96,7 +96,7 @@ import type { NativeView } from "./NativeTabView.js";
 import { NativeTreeView, type NativeReveal } from "./NativeTreeView.js";
 import { describeNode } from "./scope.js";
 import { KEYS } from "./SendKeyBar.js";
-import { dispatchTabAction } from "./tab-action.js";
+import { dispatchTabAction, tabRowTarget } from "./tab-action.js";
 import { readRun, useNativeChanges } from "./use-native-changes.js";
 import { useStoredFlag } from "./use-stored-flag.js";
 import { useNativeOverlay } from "./useNativeOverlay.js";
@@ -1257,11 +1257,7 @@ export function App() {
       // step gets no feedback line, only a failure (`describeAction`).
       dispatchTabAction(
         { nodeId: id, action: primaryAction },
-        {
-          role: node.a11y.role,
-          name: node.a11y.name || node.dom.tagName,
-          states: node.a11y.states,
-        },
+        tabRowTarget(node),
         { send: sendToBoundTab, announce, reExtract },
       );
     },

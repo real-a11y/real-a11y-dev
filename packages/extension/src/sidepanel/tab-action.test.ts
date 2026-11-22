@@ -1,8 +1,17 @@
-import type { ActionType } from "@real-a11y-dev/core";
+import {
+  extractDomTree,
+  type ActionType,
+  type DomSemanticNode,
+} from "@real-a11y-dev/core";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 import type { FeedbackTarget } from "./action-feedback.js";
-import { dispatchTabAction, replyWithholdsChoice } from "./tab-action.js";
+import {
+  dispatchTabAction,
+  replyWithholdsChoice,
+  tabRowTarget,
+} from "./tab-action.js";
+import { tabStops } from "./TabSequenceView.js";
 
 /** A panel whose content script answers the action with `reply`. Returns the
  *  lines announced, in order, and whether the page is read again. */
@@ -137,5 +146,40 @@ describe("replyWithholdsChoice", () => {
     );
     expect(replyWithholdsChoice({ success: true })).toBe(true);
     expect(replyWithholdsChoice(undefined)).toBe(true);
+  });
+});
+
+describe("a TAB row that says a sensitive field's choice", () => {
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  /** A date grid in the dialog a card-expiry field controls: 31 is the stop. */
+  const read = () => {
+    document.body.innerHTML =
+      `<input autocomplete="cc-exp" aria-label="Expiry" aria-controls="dlg">` +
+      `<div role="dialog" id="dlg" aria-label="Pick a day">` +
+      `<div role="grid" aria-label="March"><div role="row">` +
+      `<div role="gridcell"><button tabindex="0" aria-pressed="true">31</button></div>` +
+      `</div></div><button>Cancel</button></div>`;
+    return extractDomTree(document.body);
+  };
+
+  it("lists as [redacted], and no search finds it by its text", () => {
+    const { nodes, rootId } = read();
+    const names = (query: string) =>
+      tabStops(nodes, rootId, query).map((n) => n.a11y.name);
+    expect(names("")).toEqual(["Expiry", "[redacted]", "Cancel"]);
+    expect(names("31")).toEqual([]);
+  });
+
+  it("is named by no line after its action, unlike an ordinary stop", () => {
+    const { nodes } = read();
+    const button = (name: string) =>
+      [...nodes.values()].find(
+        (n) => n.a11y.role === "button" && n.a11y.name === name,
+      ) as DomSemanticNode;
+    expect(tabRowTarget(button("31"))).toMatchObject({ name: "[redacted]" });
+    expect(tabRowTarget(button("Cancel"))).toMatchObject({ name: "Cancel" });
   });
 });

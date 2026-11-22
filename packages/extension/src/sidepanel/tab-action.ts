@@ -1,4 +1,9 @@
-import { isChoiceState, type ActionRequest } from "@real-a11y-dev/core";
+import {
+  isChoiceState,
+  REDACTED_VALUE,
+  type ActionRequest,
+  type DomSemanticNode,
+} from "@real-a11y-dev/core";
 
 import type { DispatchReply, PanelToContent } from "../types.js";
 
@@ -12,6 +17,24 @@ export interface TabActionPanel {
   announce: (text: string, ms: number) => void;
   /** Reads the page again, once the action had a moment to change it. */
   reExtract: () => void;
+}
+
+/**
+ * What a TAB row's feedback line reads of `node`: its role and states, and the
+ * name the tab order shows it by, withheld where singling it out says which
+ * choice a sensitive field holds (`a11y.choiceWithheld`), as a date grid's day
+ * button does. Otherwise its name, or its tag when it has none.
+ *
+ * @internal
+ */
+export function tabRowTarget(node: DomSemanticNode): FeedbackTarget {
+  return {
+    role: node.a11y.role,
+    name: node.a11y.choiceWithheld
+      ? REDACTED_VALUE
+      : node.a11y.name || node.dom.tagName,
+    states: node.a11y.states,
+  };
 }
 
 /**
