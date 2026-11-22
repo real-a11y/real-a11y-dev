@@ -258,6 +258,20 @@ describe("what an embedded control never lends", () => {
     }
   });
 
+  it("lends a labelled date, colour or file input's name, not its value", () => {
+    expect(
+      nameOf(
+        `<h2 id="t">Due <input type="date" value="2030-04-01" aria-label="Start"></h2>`,
+      ),
+    ).toBe("Due Start");
+    expect(
+      nameOf(`<h2 id="t">Pick <input type="color" aria-label="Tint"></h2>`),
+    ).toBe("Pick Tint");
+    expect(
+      nameOf(`<h2 id="t">Up <input type="file" aria-label="Doc"></h2>`),
+    ).toBe("Up Doc");
+  });
+
   it("is a hidden chosen option, and finds one the listbox aria-owns", () => {
     expect(
       nameOf(
