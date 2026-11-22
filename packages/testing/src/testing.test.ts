@@ -91,6 +91,22 @@ describe("a live region beside the root, in the same <main>", () => {
   });
 });
 
+describe("a menubar beside the root", () => {
+  // A site's top navigation is a bar the page shows, not an overlay: both
+  // snapshots stay on the element passed instead of taking in the whole page.
+  it("keeps both snapshots to the root", () => {
+    document.body.innerHTML = `<main><nav><ul role="menubar" aria-label="Site">
+      <li role="none"><a role="menuitem" href="/">Home</a></li>
+      <li role="none"><a role="menuitem" href="/docs">Docs</a></li></ul></nav>
+      <form aria-label="Zone"><input aria-label="Radius"><button>Save</button></form></main>`;
+    const form = document.querySelector("form")!;
+    expect(treeSnapshot(form)).toBe(
+      'form "Zone"\n  textbox "Radius"\n  button "Save"',
+    );
+    expect(tabSequenceSnapshot(form)).toBe('textbox "Radius"\nbutton "Save"');
+  });
+});
+
 describe("assertions", () => {
   it("assertNoUnlabeledInteractive passes on labeled controls", () => {
     const root = mount(`<button>Go</button>`);

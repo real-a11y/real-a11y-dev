@@ -90,6 +90,11 @@ region such as a toast. That is deliberate: a menu rendered through a React
 Portal is a sibling of `<body>`, not of its trigger, and a tree that stopped at
 your root would omit the thing the user is looking at.
 
+A **menubar** (`role="menubar"`) is not an overlay, wherever it sits: it is a
+bar the page keeps showing, usually the site's top navigation, so a root beside
+it stays your root. A menu it opens is one, and the tree widens to take it in
+while it is open.
+
 An **ordinary in-page live region** — a "Loading…" status, a result count, a
 save confirmation — does not count when it sits in the same child of `<body>` as
 your root, the way everything inside an app's container does. A portal mounts

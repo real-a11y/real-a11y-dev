@@ -214,10 +214,17 @@ function findPortalOverlay(doc: Document, root: Element): Element | null {
  */
 export const OVERLAY_CANDIDATE_SELECTOR = "[role], [aria-live]";
 
-/** Overlay roles that are containers, not announcements. */
+/**
+ * Overlay roles that are containers, not announcements.
+ *
+ * Not `menubar`. ARIA's menubar is a menu that usually stays visible: a site's
+ * top navigation, rendered in place and showing on every page. Counting it
+ * made every root-scoped read on such a page a whole-page read. The menus it
+ * opens are `menu`s, which still widen wherever they mount: Radix's Menubar,
+ * for one, keeps the bar in place and portals only those.
+ */
 const OVERLAY_ROLES = new Set([
   "menu",
-  "menubar",
   "listbox",
   "tooltip",
   "dialog",
