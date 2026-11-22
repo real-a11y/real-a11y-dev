@@ -206,6 +206,15 @@ export interface SelectOption {
 }
 
 /**
+ * A content script's answer to `DISPATCH_ACTION`: core's `ActionResult`, and
+ * whether the item the action landed on sits where the tree withholds a
+ * choice (`choiceWithheld` in field-state.ts), read before it landed. The
+ * panel's feedback for a TAB row then names no item a user picked in a
+ * sensitive field's popup.
+ */
+export type DispatchReply = ActionResult & { choiceWithheld: boolean };
+
+/**
  * Optional tab the side panel is bound to. Panel→content commands stamp this
  * so the background prefers it over its global `activeTabId` (which races
  * `chrome.tabs.onActivated` after a tab switch).

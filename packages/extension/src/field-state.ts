@@ -1,11 +1,15 @@
 import {
   getExplicitRole,
+  getImplicitRole,
   isSensitiveField,
   safeGetAttribute,
+  withAriaOwnerIndex,
+  withholdsState,
+  type ActionResult,
 } from "@real-a11y-dev/core";
 
 import { pageText } from "./page-text.js";
-import type { SelectOption } from "./types.js";
+import type { DispatchReply, SelectOption } from "./types.js";
 
 /** The panel's inline-input state for a field element, as returned to the
  *  side panel in response to `GET_FIELD_STATE`. */
@@ -158,4 +162,37 @@ export function computeFieldState(el: Element): FieldState {
   }
 
   return { success: false };
+}
+
+/**
+ * True when `el` sits where the tree withholds a choice (ADR-0001): inside a
+ * sensitive field, or in what one controls, owns or points
+ * `aria-activedescendant` into, the rule core's `withholdsState` drops a
+ * choice state by. Picking an item there chooses what the field holds, so
+ * the panel's feedback for a TAB row's action names no such item, as a native
+ * row's `valueWithheld` keeps it from naming one. Asked before the action
+ * lands, of the item a user picked, not of what the page made of it.
+ */
+export function choiceWithheld(el: Element): boolean {
+  // `selected` is a choice state on any role (core's `isChoiceState`), and
+  // the role decides nothing more outside strict mode, which this script
+  // never reads in. One set of read indexes, as an extraction has, so the
+  // climb reads each relation in the page once.
+  const role = getExplicitRole(el) ?? getImplicitRole(el);
+  return withAriaOwnerIndex(() => withholdsState(el, role, "selected", false));
+}
+
+/**
+ * A TAB row's action on `el`, `act`, answered with whether `el` sits where the
+ * tree withholds a choice ({@link choiceWithheld}): asked before the action
+ * lands, of the item as the user picked it, since picking it can close the
+ * popup it was picked in. Fails closed: an element gone can't say, and its
+ * action fails.
+ */
+export function actOnItem(
+  el: Element | undefined,
+  act: () => ActionResult,
+): DispatchReply {
+  const withheld = el ? choiceWithheld(el) : true;
+  return { ...act(), choiceWithheld: withheld };
 }

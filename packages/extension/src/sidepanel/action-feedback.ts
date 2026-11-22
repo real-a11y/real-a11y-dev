@@ -14,32 +14,21 @@ export interface FeedbackTarget {
   checked?: string | boolean;
   /** Its states, when `checked` isn't given: a TAB row's. */
   states?: Readonly<Record<string, unknown>>;
-  /** A native row's verdict on its value: set inside a sensitive field and
-   *  where its choice is made. */
+  /** Whether the tree withholds its choice, set inside a sensitive field and
+   *  where its choice is made: a native row's own `valueWithheld`, a TAB
+   *  row's from the content script's reply (`dispatchTabAction`). */
   valueWithheld?: boolean;
 }
-
-/** The roles ARIA requires a `checked` state of: a TAB row in one with none
- *  had it withheld. An option or tree item often carries no state at all. */
-const CHECKED_ROLES: ReadonlySet<string> = new Set([
-  "radio",
-  "menuitemradio",
-  "menuitemcheckbox",
-]);
 
 /**
  * The item the action landed on is one whose choice the tree withholds (a
  * choice item, core's `isChoiceState`, in a sensitive field's popup,
- * ADR-0001): naming the item a user picked says what the field holds. A
- * native row says so (`valueWithheld`); a TAB row by carrying no `checked`
- * where ARIA requires one ({@link CHECKED_ROLES}).
+ * ADR-0001): naming the item a user picked says what the field holds. Only
+ * the row's verdict says so (`valueWithheld`): a missing state can't, since
+ * an option or tree item often carries none.
  */
-function choiceWithheld({ role, states, valueWithheld }: FeedbackTarget) {
-  if (!isChoiceState("checked", role)) return false;
-  if (valueWithheld !== undefined) return valueWithheld;
-  return (
-    CHECKED_ROLES.has(role) && states !== undefined && !("checked" in states)
-  );
+function choiceWithheld({ role, valueWithheld }: FeedbackTarget) {
+  return isChoiceState("checked", role) && valueWithheld === true;
 }
 
 /**

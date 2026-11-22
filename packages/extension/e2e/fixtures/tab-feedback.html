@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>TAB view feedback</title>
+  </head>
+  <body>
+    <main>
+      <!-- A payment combobox's popup: the month a user picks is the field's
+           value. Picking it closes the popup, as such a popup does. -->
+      <label>
+        Expiry month
+        <input
+          role="combobox"
+          autocomplete="cc-exp-month"
+          aria-expanded="true"
+          aria-controls="months"
+        />
+      </label>
+      <ul role="listbox" id="months" aria-label="Months">
+        <li role="option" tabindex="0" id="march">03</li>
+      </ul>
+
+      <!-- Ordinary ones, beside it: each names itself. -->
+      <ul role="listbox" aria-label="Colors">
+        <li role="option" tabindex="0">Red</li>
+      </ul>
+      <div role="tree" aria-label="Docs">
+        <div role="treeitem" tabindex="0">Guides</div>
+      </div>
+    </main>
+    <script>
+      document.getElementById("march").addEventListener("click", () => {
+        const field = document.querySelector("[aria-controls='months']");
+        field.setAttribute("aria-expanded", "false");
+        field.removeAttribute("aria-controls");
+        document.getElementById("months").hidden = true;
+      });
+    </script>
+  </body>
+</html>

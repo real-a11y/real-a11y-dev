@@ -4,7 +4,6 @@ import type {
   ActionType,
   SemanticNode,
   ExtractionResult,
-  ActionRequest,
 } from "@real-a11y-dev/core";
 import { getPrimaryAction } from "@real-a11y-dev/core";
 import {
@@ -56,7 +55,7 @@ import {
 } from "../routing.js";
 import type { ContentToPanel, PanelToContent, TreeRequest } from "../types.js";
 
-import { describeAction, describeSelection } from "./action-feedback.js";
+import { describeSelection } from "./action-feedback.js";
 import { takesActiveTab, type ActiveTabTold } from "./active-tab.js";
 import { asDom } from "./dom-rows.js";
 import {
@@ -97,6 +96,7 @@ import type { NativeView } from "./NativeTabView.js";
 import { NativeTreeView, type NativeReveal } from "./NativeTreeView.js";
 import { describeNode } from "./scope.js";
 import { KEYS } from "./SendKeyBar.js";
+import { dispatchTabAction } from "./tab-action.js";
 import { readRun, useNativeChanges } from "./use-native-changes.js";
 import { useStoredFlag } from "./use-stored-flag.js";
 import { useNativeOverlay } from "./useNativeOverlay.js";
@@ -1253,54 +1253,17 @@ export function App() {
         return;
       }
 
-      // All other actions — dispatch immediately
-      const request: ActionRequest = {
-        nodeId: id,
-        action: primaryAction,
-      };
-
-      const name = node.a11y.name || node.dom.tagName;
-      const role = node.a11y.role;
-
-      // Stepper actions (slider/spinbutton ▼/▲) skip the feedback banner.
-      // The visible value change on the page IS the confirmation, and
-      // they're rapid-fire — flashing the banner on every click would
-      // shove the tree down and pop it back over and over, leaving the
-      // cursor over the wrong row by the second click. Errors still
-      // surface via the failure-path setLastAction below.
-      const isStepper =
-        primaryAction === "increment" || primaryAction === "decrement";
-
-      if (!isStepper) {
-        // Worded by the same `describeAction` as the native tree's.
-        const feedback = describeAction(
-          { role, name, states: node.a11y.states },
-          primaryAction,
-        );
-        if (feedback) announce(feedback, 2000);
-      }
-
-      sendToBoundTab({ type: "DISPATCH_ACTION", payload: request }, (res) => {
-        // Two ways an action fails to land, and both have to be read: the
-        // message never reached a content script (lastError), or one
-        // answered and refused — which is how it reports that the action
-        // can't run, the element gone since the page was read, say. Without
-        // the second, the optimistic banner set above stays on screen
-        // claiming something happened.
-        const refusal = res as
-          { success?: boolean; error?: string } | undefined;
-        const failure = chrome.runtime.lastError
-          ? chrome.runtime.lastError.message
-          : refusal && refusal.success === false
-            ? (refusal.error ?? "the page refused the action")
-            : null;
-        // Replaces the optimistic banner set above, whose own clear
-        // `announce` cancels — otherwise that 2s timer wipes this 3s
-        // message a second early.
-        if (failure) announce(`Failed: ${failure}`, 3000);
-        // Re-extract to reflect state change (checked, expanded, etc.)
-        setTimeout(reExtract, 100);
-      });
+      // All other actions — dispatch immediately. A slider or spinbutton
+      // step gets no feedback line, only a failure (`describeAction`).
+      dispatchTabAction(
+        { nodeId: id, action: primaryAction },
+        {
+          role: node.a11y.role,
+          name: node.a11y.name || node.dom.tagName,
+          states: node.a11y.states,
+        },
+        { send: sendToBoundTab, announce, reExtract },
+      );
     },
     [nodes, sendToBoundTab, reExtract, announce],
   );

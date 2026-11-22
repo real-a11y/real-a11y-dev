@@ -19,6 +19,15 @@
 
 ## Unreleased
 
+- **The TAB view's feedback after picking an item in a sensitive popup names
+  no item.** Activating an option or tree item in a payment or credential
+  field's popup from the TAB view read `Click: 03`, which says what the field
+  holds. The page now says, as the action lands, whether the item sits where
+  its choice is withheld, and the line reads `Selected an option in this
+  field`, as Chrome's tree's already did. An ordinary option or tree item still
+  names itself, and a radio or menu item that carries no `checked` is no longer
+  taken for a withheld one (PR_LINK).
+
 - **A sensitive combobox's popup no longer says which item is chosen by
   `checked`, `pressed` or `current`.** Chrome's tree dropped only `selected`
   there, so a payment combobox whose popup is a menu printed

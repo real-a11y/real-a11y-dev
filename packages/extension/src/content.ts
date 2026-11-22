@@ -17,7 +17,7 @@ import {
 import type { TreeChange } from "@real-a11y-dev/core";
 
 import { liftCurtain, showCurtain } from "./curtain.js";
-import { computeFieldState } from "./field-state.js";
+import { actOnItem, computeFieldState } from "./field-state.js";
 import {
   frameOwnerMark,
   markFrameOwner,
@@ -317,8 +317,8 @@ chrome.runtime.onMessage.addListener(
       }
 
       case "DISPATCH_ACTION": {
-        const result = dispatcher.dispatch(message.payload);
-        sendResponse(result);
+        const el = elementRefs.get(message.payload.nodeId);
+        sendResponse(actOnItem(el, () => dispatcher.dispatch(message.payload)));
 
         // Re-extract tree after interaction (page may have changed)
         setTimeout(() => sendTree(undefined, { reread: true }), 100);
