@@ -1,4 +1,9 @@
-import { isChoiceState, type ActionRequest } from "@real-a11y-dev/core";
+import {
+  isChoiceState,
+  REDACTED_VALUE,
+  type ActionRequest,
+  type DomSemanticNode,
+} from "@real-a11y-dev/core";
 
 import type { DispatchReply, PanelToContent } from "../types.js";
 
@@ -15,6 +20,24 @@ export interface TabActionPanel {
 }
 
 /**
+ * What a TAB row's feedback line reads of `node`: its role and states, and the
+ * name the tab order shows it by, withheld where singling it out says which
+ * choice a sensitive field holds (`a11y.choiceWithheld`), as a date grid's day
+ * button does. Otherwise its name, or its tag when it has none.
+ *
+ * @internal
+ */
+export function tabRowTarget(node: DomSemanticNode): FeedbackTarget {
+  return {
+    role: node.a11y.role,
+    name: node.a11y.choiceWithheld
+      ? REDACTED_VALUE
+      : node.a11y.name || node.dom.tagName,
+    states: node.a11y.states,
+  };
+}
+
+/**
  * Dispatch a TAB row's action through the content script, and say what it did
  * in the native tree's wording (`describeAction`). `target` is the row as it
  * was before the action.
@@ -25,6 +48,8 @@ export interface TabActionPanel {
  * an item from an ordinary one with no state. Only the page knows, so that
  * line waits for the content script's reply, which says
  * ({@link replyWithholdsChoice}).
+ *
+ * @internal
  */
 export function dispatchTabAction(
   request: ActionRequest,
@@ -74,6 +99,8 @@ function actionFailure(response: unknown): string | null | undefined {
  * Whether the content script's reply says the item the action landed on sits
  * where the tree withholds a choice (`DispatchReply`). Fails closed: a reply
  * that doesn't say names no item.
+ *
+ * @internal
  */
 export function replyWithholdsChoice(response: unknown): boolean {
   const reply = response as Partial<DispatchReply> | undefined;

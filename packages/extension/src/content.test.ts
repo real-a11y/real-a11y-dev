@@ -131,7 +131,8 @@ describe("content: the actions a TAB row dispatches", () => {
       payload: { nodeId, action: "type", payload: { value: "hello" } },
     });
 
-    expect(result).toEqual({ success: true, choiceWithheld: false });
+    // No line names an item after typing, so the choice isn't read for it.
+    expect(result).toEqual({ success: true, choiceWithheld: true });
     expect((document.getElementById("field") as HTMLInputElement).value).toBe(
       "hello",
     );

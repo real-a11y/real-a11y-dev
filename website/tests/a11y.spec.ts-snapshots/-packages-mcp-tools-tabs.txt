@@ -73,6 +73,7 @@ link "act tools"
 link "What a line carries"
 button "Copy Code"
 generic
+link "get_tab_order"
 link "inspect_page"
 link "list_elements"
 link "get_tab_order"

@@ -68,11 +68,11 @@ import { REDACTED_VALUE } from "./sensitivity.js";
 import { warnSkippedElement } from "./skipped-element.js";
 import { isVisuallyHidden } from "./sr-only.js";
 import {
+  choiceFacet,
   nameText,
   newNameRun,
   withhold,
   withholdsLentValue,
-  withholdStates,
   type NameRun,
   type RedactInputOption,
 } from "./strict-mode.js";
@@ -1043,7 +1043,7 @@ function buildNode(
           computeAccessibleDescription(element, styleCache, redactInput),
         ),
         ...(value !== undefined ? { value } : {}),
-        states: withholdStates(element, role, states, redactInput),
+        ...choiceFacet(element, role, states, { focusable, redactInput }),
         properties: {
           ...(headingLevel !== null ? { level: String(headingLevel) } : {}),
           // The walk doesn't descend into media children, so the one

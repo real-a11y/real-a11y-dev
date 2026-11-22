@@ -203,6 +203,24 @@ describe("toHaveTabSequence", () => {
     );
   });
 
+  it("reads a stop in a sensitive field's popup as [redacted], as the snapshot does", () => {
+    const root = mount(`
+      <input role="combobox" aria-label="Month" autocomplete="cc-exp-month" aria-expanded="true" aria-controls="lb">
+      <ul role="listbox" id="lb" aria-label="Months"><li role="option" tabindex="0">03</li></ul>
+    `);
+    expect(root).toHaveTabSequence(['combobox "Month"', 'option "[redacted]"']);
+    // A failure message can't say it either: its actual line has no "03".
+    let message = "";
+    try {
+      expect(root).toHaveTabSequence(['option "03"']);
+    } catch (error) {
+      message = (error as Error).message;
+    }
+    const actual = message.split("\n").find((l) => l.includes("actual:"));
+    expect(actual).toContain("[redacted]");
+    expect(actual).not.toContain("03");
+  });
+
   it("matches a straight-quote token against a rendered curly apostrophe", () => {
     // The rendered label uses a curly apostrophe (U+2019); the test author
     // types a plain one. They should still match.

@@ -1003,3 +1003,151 @@ describe("a sensitive popup's choice marked by another state", () => {
     ]);
   });
 });
+
+describe("the items a sensitive popup's choice is made among", () => {
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  /** Each focusable node's role, name and `choiceWithheld`, in order. */
+  const markedOf = (
+    html: string,
+    options: { redactInput?: boolean } = {},
+  ): Array<[string, string, boolean]> => {
+    document.body.innerHTML = html;
+    return [...extractDomTree(document.body, options).nodes.values()]
+      .filter((n) => n.interaction?.isFocusable)
+      .map((n) => [n.a11y.role, n.a11y.name, n.a11y.choiceWithheld === true]);
+  };
+
+  /** A roving-tabindex list box `field` controls: 03 is the tab stop. */
+  const months = (field: string) =>
+    `<input role="combobox" aria-label="Month" aria-expanded="true" aria-controls="lb" ${field}>` +
+    `<ul role="listbox" id="lb" aria-label="Months">` +
+    `<li role="option" tabindex="-1">01</li>` +
+    `<li role="option" tabindex="0" aria-selected="true">03</li></ul>`;
+
+  it("marks each focusable option in a sensitive field's popup", () => {
+    expect(markedOf(months('autocomplete="cc-exp-month"'))).toEqual([
+      ["combobox", "Month", false],
+      ["option", "01", true],
+      ["option", "03", true],
+    ]);
+  });
+
+  it("marks no option of an ordinary popup, except in strict mode", () => {
+    expect(markedOf(months(""))).toEqual([
+      ["combobox", "Month", false],
+      ["option", "01", false],
+      ["option", "03", false],
+    ]);
+    // Strict mode withholds any option's `selected` in a choice field.
+    expect(
+      markedOf(months(""), { redactInput: true }).map(([r, , m]) => [r, m]),
+    ).toEqual([
+      ["combobox", false],
+      ["option", true],
+      ["option", true],
+    ]);
+  });
+
+  it("marks what sits in a dialog popup's choice container, not its other controls", () => {
+    expect(
+      markedOf(
+        `<input autocomplete="cc-exp" aria-label="Expiry" aria-haspopup="dialog" aria-controls="dlg">` +
+          `<div role="dialog" id="dlg" aria-label="Pick a day">` +
+          `<button>Next month</button>` +
+          `<div role="grid" aria-label="March"><div role="row">` +
+          `<div role="gridcell"><button tabindex="-1">30</button></div>` +
+          `<div role="gridcell"><button tabindex="0" aria-pressed="true">31</button></div>` +
+          `</div></div>` +
+          `<div role="radiogroup" aria-label="Card"><input type="radio" aria-label="Visa" checked></div>` +
+          `<button>Cancel</button></div>`,
+      ),
+    ).toEqual([
+      ["textbox", "Expiry", false],
+      ["button", "Next month", false],
+      ["button", "30", true],
+      ["button", "31", true],
+      ["radio", "Visa", true],
+      ["button", "Cancel", false],
+    ]);
+  });
+
+  it("marks what carries a withheld choice state, in no choice container", () => {
+    // A toolbar of pressed buttons and a tab list: no list box or grid, but
+    // each item's choice state is withheld, so its stop would say the choice.
+    expect(
+      markedOf(
+        `<input autocomplete="cc-exp" aria-label="Expiry" aria-controls="dlg">` +
+          `<div role="dialog" id="dlg" aria-label="Pick">` +
+          `<div role="group" aria-label="Months">` +
+          `<button tabindex="-1" aria-pressed="false">01</button>` +
+          `<button tabindex="0" aria-pressed="true">03</button></div>` +
+          `<div role="tablist" aria-label="Years">` +
+          `<button role="tab" aria-selected="true">2031</button></div>` +
+          `<label><input type="checkbox" checked> Remember</label>` +
+          `<button>Cancel</button></div>`,
+      ),
+    ).toEqual([
+      ["textbox", "Expiry", false],
+      ["button", "01", true],
+      ["button", "03", true],
+      ["tab", "2031", true],
+      ["checkbox", "Remember", false],
+      ["button", "Cancel", false],
+    ]);
+  });
+
+  it("marks no popup container itself, only its items", () => {
+    expect(
+      markedOf(
+        `<input role="combobox" autocomplete="cc-exp-month" aria-label="Month" aria-activedescendant="m3" aria-controls="lb">` +
+          `<ul role="listbox" id="lb" tabindex="0" aria-label="Months">` +
+          `<li role="option" id="m3">03</li></ul>`,
+      ),
+    ).toEqual([
+      ["combobox", "Month", false],
+      ["listbox", "Months", false],
+    ]);
+  });
+
+  it("marks no choice container a sensitive field merely sits in", () => {
+    // A data grid around the field, its own rows' buttons outside the popup.
+    expect(
+      markedOf(
+        `<div role="grid" aria-label="Cards"><div role="row">` +
+          `<div role="gridcell"><button>Visa</button></div>` +
+          `<div role="gridcell"><input autocomplete="cc-exp" aria-label="Expiry"></div>` +
+          `</div></div>`,
+      ),
+    ).toEqual([
+      ["button", "Visa", false],
+      ["textbox", "Expiry", false],
+    ]);
+    // Its dialog popup in a cell: the grid around it is no container of the
+    // popup's, so the dialog's Cancel button keeps its name.
+    expect(
+      markedOf(
+        `<div role="grid" aria-label="Cards"><div role="row"><div role="gridcell">` +
+          `<input autocomplete="cc-exp" aria-label="Expiry" aria-controls="dlg">` +
+          `<div role="dialog" id="dlg" aria-label="Pick"><button>Cancel</button></div>` +
+          `</div></div></div>`,
+      ),
+    ).toEqual([
+      ["textbox", "Expiry", false],
+      ["button", "Cancel", false],
+    ]);
+  });
+
+  it("marks only what can be focused, a stop's candidates", () => {
+    document.body.innerHTML = months('autocomplete="cc-exp-month"').replace(
+      "</ul>",
+      `<li role="option">05</li></ul>`,
+    );
+    const nodes = [...extractDomTree(document.body).nodes.values()];
+    const option = nodes.find((n) => n.a11y.name === "05");
+    expect(option?.interaction?.isFocusable).toBe(false);
+    expect(option?.a11y.choiceWithheld).toBeUndefined();
+  });
+});

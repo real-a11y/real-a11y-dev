@@ -331,6 +331,51 @@ describe("getTabSequence", () => {
     expect(names).toEqual(["First", "Second", "Zero"]);
   });
 
+  it("withholds a stop that says which choice a sensitive field holds", () => {
+    // A roving-tabindex list box's one stop is its chosen option.
+    const root = createPage(`
+      <input role="combobox" aria-label="Month" autocomplete="cc-exp-month" aria-expanded="true" aria-controls="lb">
+      <ul role="listbox" id="lb" aria-label="Months">
+        <li role="option" tabindex="-1">01</li>
+        <li role="option" tabindex="0" aria-selected="true" title="March" aria-label="March 03" id="m03">03</li>
+      </ul>
+      <ul role="listbox" aria-label="Colors"><li role="option" tabindex="0">Red</li></ul>
+    `);
+    const tree = extractDomTree(root);
+    const seq = getTabSequence(tree);
+    expect(seq.map((n) => [n.a11y.role, n.a11y.name])).toEqual([
+      ["combobox", "Month"],
+      ["option", "[redacted]"],
+      ["option", "Red"],
+    ]);
+    // Nothing left to tell it by, so a search over the stops can't find it.
+    const stop = seq[1]!;
+    expect(stop.a11y.description).toBe("");
+    expect(stop.dom?.textContent).toBeNull();
+    expect(stop.dom?.descendantText).toBe("");
+    // Nor an attribute that names it: only what places it stays.
+    expect(stop.dom?.attributes).toEqual({ tabindex: "0", role: "option" });
+    // A copy, with the same id to act on: the tree keeps its name.
+    expect(tree.nodes.get(stop.id)?.a11y.name).toBe("March 03");
+    expect(stop).not.toBe(tree.nodes.get(stop.id));
+  });
+
+  it("drops a withheld stop's value, which can say the choice too", () => {
+    const root = createPage(`
+      <input autocomplete="cc-exp" aria-label="Expiry" aria-controls="dlg">
+      <div role="dialog" id="dlg" aria-label="Pick">
+        <div role="grid" aria-label="Years"><div role="row"><div role="gridcell">
+          <input type="number" aria-label="Year" value="2027">
+        </div></div></div>
+      </div>
+    `);
+    const tree = extractDomTree(root);
+    const year = getTabSequence(tree).find((n) => n.a11y.role === "spinbutton");
+    expect(year?.a11y.name).toBe("[redacted]");
+    expect(year?.a11y).not.toHaveProperty("value");
+    expect(tree.nodes.get(year!.id)?.a11y.value).toBe("2027");
+  });
+
   // The stops below were each checked with a Tab walk in Chromium 151.
 
   it("skips a link with no href, which Chromium never focuses", () => {

@@ -184,6 +184,8 @@ await flow(container).findByRole("button", { name: "Delete account" }).click();
 expect(container).toHaveTabSequence(['button "Cancel"', 'button "Delete"']);
 ```
 
+A stop in a sensitive field's popup reads `"[redacted]"` here as it does in [`tabSequenceSnapshot`](/packages/testing/snapshots#field-values): `option "[redacted]"`, never the item a roving `tabindex` makes the stop.
+
 Names are matched with **typographic punctuation normalized**, so a plain token like `button "Don't save"` matches a label the page renders with a curly apostrophe (`Don’t`). Curly quotes, the ellipsis character, en/em dashes, and non-breaking spaces all fold to their ASCII forms for the comparison — you never have to paste smart quotes to make a token match. (Roles and everything else compare exactly; only accessible-name typography is folded.)
 
 ## `toMatchA11yContract(contract, options?)`

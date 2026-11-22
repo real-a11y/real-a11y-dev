@@ -6,9 +6,9 @@ area: CLI
 type: Automated
 priority: P0
 status: Active
-validFrom: "cli ≥ 0.1.0-beta.1. Step 8 has no end date — `tabs` was expected to be removed by the native migration and was not (#258 kept it on DOM). Step 4b is from cli ≥ 0.1.0-beta.2; on an earlier release an empty category prints a bare `(none)`, which is the old behaviour, not a fail. Step 1b (the states block) and step 1c (`--no-states`) are from cli ≥ 0.1.0-beta.14."
+validFrom: "cli ≥ 0.1.0-beta.1. Step 8 has no end date — `tabs` was expected to be removed by the native migration and was not (#258 kept it on DOM). Step 4b is from cli ≥ 0.1.0-beta.2; on an earlier release an empty category prints a bare `(none)`, which is the old behaviour, not a fail. Step 1b (the states block) and step 1c (`--no-states`) are from cli ≥ 0.1.0-beta.14. Step 8b (a sensitive popup's tab stop) ships in the first release after cli 0.1.0-beta.13; against 0.1.0-beta.13 the stops print `option "03"` and `button "31"`, the old behaviour, not a fail."
 validUntil: ""
-expected: "tree shows role+name lines; outline shows h1/h2; list filters by category, and an empty category explains itself (scanned count + the roles it looked for) rather than printing a bare (none). Assert against `real-a11y --help`'s own command list, not a hardcoded set."
+expected: "tree shows role+name lines; outline shows h1/h2; list filters by category, and an empty category explains itself (scanned count + the roles it looked for) rather than printing a bare (none); tabs names no tab stop in a sensitive field's popup. Assert against `real-a11y --help`'s own command list, not a hardcoded set."
 twin: D2
 covers:
   - cli.commands.tree
@@ -48,6 +48,15 @@ real-a11y --help          # enumerate the view commands from here
 8. `real-a11y tabs <url>` in a terminal, then `--format json`. Also
    `real-a11y tabs <url> --root <selector>` — the only command that still accepts
    `--root`
+   - **(8b)** `real-a11y tabs <url>` and `real-a11y tree <url>` on
+     `<input role="combobox" aria-label="Month" aria-expanded="true"
+     aria-controls="lb" autocomplete="cc-exp-month"><ul role="listbox" id="lb"
+     aria-label="Months"><li role="option" tabindex="-1">01</li><li
+     role="option" tabindex="0" aria-selected="true">03</li></ul>`, then a
+     card-expiry field's dialog popup (`aria-controls="dlg"`) holding a
+     `role="grid"` whose one stop is `<button tabindex="0"
+     aria-pressed="true">31</button>`, beside a `Cancel` button, and an
+     ordinary roving list box whose stop is `Red`
 
 ## Expected
 
@@ -82,6 +91,11 @@ real-a11y --help          # enumerate the view commands from here
   cascade. `--root` scopes the walk; every other command rejects the flag with an
   explanation rather than the parser's "Unknown option"
 
+- **8b** — `tabs` prints `option "[redacted]"` and `button "[redacted]"` for the
+  two sensitive popups' stops, `button "Cancel"` by name, and
+  `option "Red" {selected}`: a roving tab stop is the chosen item, so a
+  sensitive popup's names none. `tree` still prints `option "01"`,
+  `option "03"` and `button "31"`, with no choice state
 ## Why this exists
 
 The "not a gate" rule in (7) is easy to break by making views share the audit's

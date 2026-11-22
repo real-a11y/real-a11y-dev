@@ -19,6 +19,15 @@
 
 ## Unreleased
 
+- **The TAB view names no tab stop that says a sensitive popup's choice.**
+  Under a roving `tabindex` a popup's one stop is its chosen item, so the TAB
+  list of a payment field's month list box read `option "03"`, and a date
+  grid's pressed day `button "31"`. Such a stop now reads `[redacted]`, search
+  doesn't find it by its text, and the feedback after activating it names
+  nothing either. The popup's other controls keep their names. The content
+  script also no longer reads the choice for typing into a field or stepping a
+  slider, which no feedback line names an item after ([#704](https://github.com/real-a11y/real-a11y-dev/pull/704)).
+
 - **The TAB view's feedback after picking an item in a sensitive popup names
   no item.** Activating an option or tree item in a payment or credential
   field's popup from the TAB view read `Click: 03`, which says what the field

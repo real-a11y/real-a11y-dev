@@ -265,7 +265,12 @@ it holds: not inside the field, and not in its popup, a listbox, menu, grid,
 tree or dialog it controls (`aria-controls`), owns (`aria-owns`) or points
 `aria-activedescendant` into, or one a combobox around it holds. No item there
 prints `selected`, nor `checked` if it is an option, menu item or radio, nor
-`pressed` or `current`. An empty field prints no value:
+`pressed` or `current`. In [`tabs`](#tabs-url), a stop that is one of those
+items (an option, a radio, a day in a date grid) keeps its role but reads
+`"[redacted]"` (`option "[redacted]"`, `button "[redacted]"`):
+under a roving `tabindex` the popup's one stop is its chosen item, so its name
+would say which it is. `tree` still names every item. An empty field prints no
+value:
 
 ```
 textbox "Email" = "jane@example.com"

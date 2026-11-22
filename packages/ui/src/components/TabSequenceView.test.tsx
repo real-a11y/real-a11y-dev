@@ -17,6 +17,7 @@ function makeFocusable(
     tagName?: string;
     tabindex?: string;
     actions?: ActionType[];
+    choiceWithheld?: true;
   },
 ): DomSemanticNode {
   return {
@@ -28,6 +29,7 @@ function makeFocusable(
       role: opts.role ?? "button",
       name: opts.name,
       description: "",
+      ...(opts.choiceWithheld ? { choiceWithheld: true as const } : {}),
       states: {},
       properties: {},
       isExposedToAT: true,
@@ -275,6 +277,26 @@ describe("TabSequenceView", () => {
     expect(filtered.list.querySelector(".sn-tab-name")?.textContent).toBe(
       "Gamma",
     );
+  });
+
+  it("names no stop that says a sensitive field's choice, and finds none by its text", () => {
+    const nodes = new Map<string, SemanticNode>([
+      ["root", makeRoot(["a", "b"])],
+      [
+        "a",
+        makeFocusable("a", {
+          name: "03",
+          role: "option",
+          tagName: "LI",
+          choiceWithheld: true,
+        }),
+      ],
+      ["b", makeFocusable("b", { name: "Red", role: "option", tagName: "LI" })],
+    ]);
+    const names = (list: HTMLElement) =>
+      [...list.querySelectorAll(".sn-tab-name")].map((n) => n.textContent);
+    expect(names(mount(nodes).list)).toEqual(["[redacted]", "Red"]);
+    expect(names(mount(nodes, { query: "03" }).list)).toEqual([]);
   });
 
   it("shows empty states and wires Activate / Move to", () => {

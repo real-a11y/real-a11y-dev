@@ -1,3 +1,4 @@
+import type { ActionRequest } from "@real-a11y-dev/core";
 import { describe, it, expect, afterEach, vi } from "vitest";
 
 import { actOnItem, choiceWithheld, computeFieldState } from "./field-state.js";
@@ -431,10 +432,16 @@ describe("actOnItem", () => {
       const { actOnItem: act } = await import("./field-state.js");
       document.body.innerHTML = `<div role="option" id="o">03</div>`;
       let acted = false;
-      const reply = act(document.getElementById("o")!, () => {
-        acted = true;
-        return { success: true };
-      });
+      const reply = act(
+        document.getElementById("o")!,
+        { nodeId: "o", action: "click" },
+        {
+          dispatch: () => {
+            acted = true;
+            return { success: true };
+          },
+        },
+      );
       expect(acted).toBe(true);
       expect(reply).toEqual({ success: true, choiceWithheld: true });
     } finally {
@@ -443,9 +450,28 @@ describe("actOnItem", () => {
     }
   });
 
+  const succeed = { dispatch: () => ({ success: true }) };
+
   it("names nothing for an element it can't find, and reports the action's own result", () => {
     expect(
-      actOnItem(undefined, () => ({ success: false, error: "gone" })),
+      actOnItem(
+        undefined,
+        { nodeId: "gone", action: "click" },
+        { dispatch: () => ({ success: false, error: "gone" }) },
+      ),
     ).toEqual({ success: false, error: "gone", choiceWithheld: true });
+  });
+
+  it("reads no choice for an action no line names an item after", () => {
+    // An ordinary option: a click reads it, and says its choice isn't
+    // withheld; a type or a step doesn't read it, and says nothing to name.
+    document.body.innerHTML = `<div role="listbox" aria-label="Colors"><div role="option" id="o">Red</div></div>`;
+    const el = document.getElementById("o")!;
+    const verdict = (action: ActionRequest["action"]) =>
+      actOnItem(el, { nodeId: "o", action }, succeed).choiceWithheld;
+    expect(verdict("click")).toBe(false);
+    for (const action of ["type", "increment", "decrement"] as const) {
+      expect(verdict(action), action).toBe(true);
+    }
   });
 });

@@ -179,6 +179,20 @@ describe("serializeTabSequence", () => {
     expect(out).not.toContain("$2.00");
   });
 
+  it("withholds a stop that says which choice a sensitive field holds", () => {
+    // The one stop of a roving-tabindex list box is its chosen option, though
+    // its `selected` is withheld; an ordinary list box's names itself.
+    document.body.innerHTML =
+      `<input role="combobox" aria-label="Month" autocomplete="cc-exp-month" aria-expanded="true" aria-controls="lb">` +
+      `<ul role="listbox" id="lb" aria-label="Months">` +
+      `<li role="option" tabindex="-1">01</li>` +
+      `<li role="option" tabindex="0" aria-selected="true">03</li></ul>` +
+      `<ul role="listbox" aria-label="Colors"><li role="option" tabindex="0" aria-selected="true">Red</li></ul>`;
+    expect(serializeTabSequence(document.body)).toBe(
+      'combobox "Month" {expanded}\noption "[redacted]"\noption "Red" {selected}',
+    );
+  });
+
   it("inserting one stop at the top changes exactly one line (no renumber churn)", () => {
     // The finding, encoded: with numbers, prepending a stop renumbered every
     // following line. Unnumbered, the old output is preserved verbatim and only

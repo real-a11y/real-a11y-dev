@@ -108,7 +108,12 @@ main
     text "has no box, so neither is listed as a stop. Focusable children of a"
     code "display: contents"
     text "element stay in the sequence. Chrome decides both; the HTML Standard leaves rendering to the browser."
-  paragraph "The TAB view reflects this computed order exactly."
+  paragraph
+    text "The TAB view reflects this computed order exactly. One stop is listed without its name: an item in the popup of a password or payment field (an option, a radio, a day in a date grid) reads"
+    code "[redacted]"
+    text ", since under a roving"
+    code "tabindex"
+    text "the popup's one stop is its chosen item, and its name would say what the field holds. Search can't find it by its text either."
   separator
   heading "What to check" (level 2)
   heading "Order matches the visual flow" (level 3)

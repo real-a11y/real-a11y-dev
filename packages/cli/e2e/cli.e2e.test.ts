@@ -881,15 +881,57 @@ describe("the states block (built bin)", () => {
     expect(lines).toContain('checkbox "Remember" {checked}');
     expect(lines).toContain('menuitemradio "Red" {checked}');
 
+    // The tab order singles each item out, so it names none of them: each
+    // one is a stop there, and one stop alone would say which is chosen.
     const tabs = await runCli(["tabs", page, "-q"]);
     expect(tabs.code).toBe(0);
-    expect(tabs.stdout).toMatch(/\d\d\. menuitemradio "03\/31"\n/);
-    expect(tabs.stdout).toMatch(/\d\d\. option "05\/33"\n/);
-    expect(tabs.stdout).toMatch(/\d\d\. radio "2041"\n/);
-    expect(leaked(tabs.stdout)).toEqual([]);
-    expect(tabs.stdout.match(/button "\[redacted\]"/g)).toHaveLength(3);
+    expect(tabs.stdout).toMatch(/\d\d\. menuitemradio "\[redacted\]"\n/);
+    expect(tabs.stdout).toMatch(/\d\d\. option "\[redacted\]"\n/);
+    expect(tabs.stdout).toMatch(/\d\d\. radio "\[redacted\]"\n/);
+    expect(tabs.stdout).not.toMatch(/"(0[1-9]\/3[0-7]|Day [78]|204[12])"/);
     expect(tabs.stdout).toMatch(/\d\d\. checkbox "Remember" \{checked\}/);
     expect(tabs.stdout).toMatch(/\d\d\. menuitemradio "Red" \{checked\}/);
+  });
+
+  it("names no tab stop that says a sensitive popup's choice, though the tree names every item", async () => {
+    // Roving tabindex: each popup's one stop is its chosen item.
+    const page = dataUrl(
+      "<!doctype html><title>Expiry</title><main>" +
+        `<input role="combobox" aria-label="Month" autocomplete="cc-exp-month" aria-expanded="true" aria-controls="lb">` +
+        `<ul role="listbox" id="lb" aria-label="Months">` +
+        `<li role="option" tabindex="-1" aria-selected="false">01</li>` +
+        `<li role="option" tabindex="0" aria-selected="true">03</li></ul>` +
+        `<input autocomplete="cc-exp" aria-label="Expiry" aria-haspopup="dialog" aria-controls="dlg">` +
+        `<div role="dialog" id="dlg" aria-label="Pick a day"><button>Next month</button>` +
+        `<div role="grid" aria-label="March"><div role="row">` +
+        `<div role="gridcell"><button tabindex="-1">30</button></div>` +
+        `<div role="gridcell"><button tabindex="0" aria-pressed="true">31</button></div>` +
+        `</div></div><button>Cancel</button></div>` +
+        // An ordinary roving list box names its stop.
+        `<ul role="listbox" aria-label="Colors"><li role="option" tabindex="0" aria-selected="true">Red</li>` +
+        `<li role="option" tabindex="-1">Blue</li></ul>` +
+        "</main>",
+    );
+    const tabs = await runCli(["tabs", page, "-q"]);
+    expect(tabs.code).toBe(0);
+    expect(
+      linesOf(tabs.stdout)
+        .filter(Boolean)
+        .map((l) => l.replace(/^\d\d\. /, "")),
+    ).toEqual([
+      'combobox "Month" {expanded}',
+      'option "[redacted]"',
+      'textbox "Expiry"',
+      'button "Next month"',
+      'button "[redacted]"',
+      'button "Cancel"',
+      'option "Red" {selected}',
+    ]);
+    // The tree still names every option, the chosen one beside the others.
+    const tree = await runCli(["tree", page, "-q"]);
+    expect(linesOf(tree.stdout)).toEqual(
+      expect.arrayContaining(['option "01"', 'option "03"', 'button "31"']),
+    );
   });
 
   it("a title that repeats a link's text describes it in neither producer", async () => {
