@@ -34,8 +34,9 @@ In real Chromium (Playwright), open a page with this `<main>`, then take
 1. Read the first two paragraphs
 2. Read the list
 3. Read the last three paragraphs and the heading
-4. Compare with the native tree: `serializeTree(await session.nativeTree())`
-   from the same page, or `real-a11y tree` against it
+4. Compare with the native tree: `treeSnapshot()` through
+   `attach(page, { tree: "native" })` on the same page, or `real-a11y tree`
+   against it
 
 ## Expected
 
