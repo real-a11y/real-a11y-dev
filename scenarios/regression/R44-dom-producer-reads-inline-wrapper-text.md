@@ -36,8 +36,9 @@ In real Chromium (Playwright), open a page with this `<main>`, then take
 1. Read the paragraphs
 2. Read the list item and the code block
 3. Take the tree with `{ includeGeneric: true }` and read the `<div>`
-4. Compare with the native tree: `serializeTree(await session.nativeTree())`
-   from the same page, or `real-a11y tree` against it
+4. Compare with the native tree: `treeSnapshot()` through
+   `attach(page, { tree: "native" })` on the same page, or `real-a11y tree`
+   against it
 
 ## Expected
 
@@ -49,8 +50,12 @@ In real Chromium (Playwright), open a page with this `<main>`, then take
 - **2** — `listitem "Item text"` and `code "import { a } from "b";"`
 - **3** — `generic "Loose"` with `generic "wrapped"` under it, as before: a
   generic does not read through its wrappers
-- **4** — every line of steps 1 and 2 is in the native tree too (native adds
-  `(level 1)` to the list item)
+- **4** — every line of steps 1 and 2 is in the native tree too. On testing
+  0.1.0-beta.21 or 0.1.0-beta.22, or through `real-a11y tree` on cli
+  0.1.0-beta.11 or 0.1.0-beta.12 (the cli of those two releases), the native
+  list item reads `listitem "Item text" (level 1)`, which is the old behaviour,
+  not a fail. An older cli is outside this scenario: before 0.1.0-beta.7 its
+  native tree cut a paragraph's text at a `<br>`
 
 ## Why this exists
 
