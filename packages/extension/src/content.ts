@@ -318,7 +318,7 @@ chrome.runtime.onMessage.addListener(
 
       case "DISPATCH_ACTION": {
         const el = elementRefs.get(message.payload.nodeId);
-        sendResponse(actOnItem(el, () => dispatcher.dispatch(message.payload)));
+        sendResponse(actOnItem(el, message.payload, dispatcher));
 
         // Re-extract tree after interaction (page may have changed)
         setTimeout(() => sendTree(undefined, { reread: true }), 100);

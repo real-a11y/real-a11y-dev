@@ -5,7 +5,9 @@ import {
   safeGetAttribute,
   withAriaOwnerIndex,
   withholdsState,
+  type ActionRequest,
   type ActionResult,
+  type ActionType,
 } from "@real-a11y-dev/core";
 
 import { pageText } from "./page-text.js";
@@ -172,6 +174,8 @@ export function computeFieldState(el: Element): FieldState {
  * the panel's feedback for a TAB row's action names no such item, as a native
  * row's `valueWithheld` keeps it from naming one. Asked before the action
  * lands, of the item a user picked, not of what the page made of it.
+ *
+ * @internal
  */
 export function choiceWithheld(el: Element): boolean {
   // `selected` is a choice state on any role (core's `isChoiceState`), and
@@ -183,21 +187,38 @@ export function choiceWithheld(el: Element): boolean {
 }
 
 /**
- * A TAB row's action on `el`, `act`, answered with whether `el` sits where the
- * tree withholds a choice ({@link choiceWithheld}): asked before the action
- * lands, of the item as the user picked it, since picking it can close the
- * popup it was picked in. Fails closed: an element gone can't say, and its
- * action fails; nor can a read the page broke, and its action still runs.
+ * The actions no feedback line names an item after: an edit box's typing,
+ * and a slider's or spinbutton's step, which shows none at all.
+ */
+const UNNAMED_ACTIONS: ReadonlySet<ActionType> = new Set([
+  "type",
+  "increment",
+  "decrement",
+]);
+
+/**
+ * A TAB row's `request` on `el`, dispatched, answered with whether `el` sits
+ * where the tree withholds a choice ({@link choiceWithheld}): asked before the
+ * action lands, of the item as the user picked it, since picking it can close
+ * the popup it was picked in. Not asked for an action no line names an item
+ * after ({@link UNNAMED_ACTIONS}). Fails closed: an element gone can't say,
+ * and its action fails; nor can a read the page broke, and its action still
+ * runs; nor one not asked.
+ *
+ * @internal
  */
 export function actOnItem(
   el: Element | undefined,
-  act: () => ActionResult,
+  request: ActionRequest,
+  dispatcher: { dispatch(request: ActionRequest): ActionResult },
 ): DispatchReply {
   let withheld = true;
   try {
-    if (el) withheld = choiceWithheld(el);
+    if (el && !UNNAMED_ACTIONS.has(request.action)) {
+      withheld = choiceWithheld(el);
+    }
   } catch {
     // A page's own getter can throw under the climb.
   }
-  return { ...act(), choiceWithheld: withheld };
+  return { ...dispatcher.dispatch(request), choiceWithheld: withheld };
 }

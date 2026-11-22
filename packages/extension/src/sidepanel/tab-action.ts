@@ -48,6 +48,8 @@ export function tabRowTarget(node: DomSemanticNode): FeedbackTarget {
  * an item from an ordinary one with no state. Only the page knows, so that
  * line waits for the content script's reply, which says
  * ({@link replyWithholdsChoice}).
+ *
+ * @internal
  */
 export function dispatchTabAction(
   request: ActionRequest,
@@ -97,6 +99,8 @@ function actionFailure(response: unknown): string | null | undefined {
  * Whether the content script's reply says the item the action landed on sits
  * where the tree withholds a choice (`DispatchReply`). Fails closed: a reply
  * that doesn't say names no item.
+ *
+ * @internal
  */
 export function replyWithholdsChoice(response: unknown): boolean {
   const reply = response as Partial<DispatchReply> | undefined;
