@@ -64,7 +64,10 @@ test("TAB view: picking an item in a sensitive popup names no item; an ordinary 
   await nav.routeToPage(["DISPATCH_ACTION"]);
   const feedback = await recordFeedback(nav);
 
-  await activate(nav, "03");
+  // The TAB list names it no more than the line does: under a roving
+  // tabindex the stop would say which month is chosen.
+  await expect(nav.tabStops()).not.toContainText("03");
+  await activate(nav, "[redacted]");
   await expect.poll(feedback).toEqual(["Selected an option in this field"]);
   // The click landed, and closed the popup it was picked in.
   await expect(page.locator("#months")).toBeHidden();
