@@ -38,7 +38,8 @@ form status, a save confirmation — as a **sibling** of the element under test:
      implicit politeness
    - `role="status announcer"` — a token list; the role that wins is the first
      token
-   - `role="MENU" aria-live="off"` — case is not folded, so this must stay off
+   - `role="MENU" aria-live="off"` — case is folded the way the tree folds
+     it, so this is a menu and widens whatever its `aria-live`
    - `aria-live="none"`, `"false"`, `"0"`, `"polit"` — the hand-written
      spellings of "switched off", which a denylist admitted
    - bare `aria-live` and `aria-live=""` — invalid, so the role's implicit
