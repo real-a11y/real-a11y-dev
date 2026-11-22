@@ -27,7 +27,7 @@
 
 - 332fe26: Add the **snapshot report**: `@real-a11y-dev/testing/reporter` for Vitest and `@real-a11y-dev/testing/reporter/jest` for Jest, reporters that draw every boxed snapshot of a run the way the Semantic Navigator panel draws a tree, in one HTML page.
 
-  A snapshot's text leaves most of the tree out, by design: no states, no description, nothing about what an element takes. The report shows the rest. Add the reporter, and after every run `a11y-snapshots/index.html` lists each `boxedTreeSnapshot()` and `a11yDiff()` snapshot by test file and test:
+  A snapshot's text leaves much of the tree out, by design: it prints a short list of states, and nothing about what an element takes. The report shows the rest. Add the reporter, and after every run `a11y-snapshots/index.html` lists each `boxedTreeSnapshot()` and `a11yDiff()` snapshot by test file and test:
 
   ```ts
   // vitest.config.ts
@@ -53,8 +53,8 @@
 
   What this changes for you:
 
-  - **Nothing, unless you add the reporter.** The `.snap` text is unchanged, and still what a test asserts. The report never fails a run.
-  - **A record carries nothing typed into the page.** It shows states, which the text leaves out, but no field value, even where the snapshot printed one with `values: true` (the text beside the tree still shows it), and nothing inside a rich-text editor. Sensitive fields stay masked, `redactInput: true` withholds every value as it does from the text, and a snapshot's `redact` patterns apply to everything in a record the page supplied (names, descriptions, text and attribute values), never to its node ids, roles, `tabindex`, heading levels or states.
+  - **Nothing, unless you add the reporter.** It changes no `.snap` text, which is still what a test asserts. The report never fails a run.
+  - **A record carries nothing typed into the page.** It shows every state, where the text prints a short list, but no field value, even where the snapshot printed one with `values: true` (the text beside the tree still shows it), and nothing inside a rich-text editor. Sensitive fields stay masked, `redactInput: true` withholds every value as it does from the text, and a snapshot's `redact` patterns apply to everything in a record the page supplied (names, descriptions, text and attribute values), never to its node ids, roles, `tabindex`, heading levels or states.
   - **Only boxed snapshots appear.** A snapshot of a plain string, such as `expect(treeSnapshot(el)).toMatchSnapshot()`, has no tree behind it; snapshot `boxedTreeSnapshot(el)` instead. A record is named after its test, which the reporter reads from the `expect` given to `registerA11yMatchers(expect)`, or the runner's own. Concurrent tests aren't recorded: their shared `expect` can't say which of them took a snapshot.
   - **The report deletes only what it wrote.** Pointed at an `outputDir` that already holds a `records/` folder or an `index.html` of its own, it leaves them alone and records nothing.
   - **`REAL_A11Y_TREES_DIR`** is the switch the reporter sets for its run: while it is set, each boxed snapshot also writes the tree behind it to that directory as JSON. Set it yourself only to keep those records without the reporter.
@@ -98,15 +98,13 @@
 
   It reads the records `@real-a11y-dev/testing/reporter` writes (`./a11y-snapshots`, or the folder you name), runs no tests itself, and serves the page on `127.0.0.1` only. `--port` picks the port and `--no-open` leaves the browser closed.
 
-  `@real-a11y-dev/testing` re-releases the bundled snapshot viewer. The page the reporters write behaves as before.
-
 - 0248468: `toMatchA11yContract` checks a `{…}` states block written on a contract line, for tree text that prints one (`checkbox "Subscribe" {checked}`).
 
   - **Containment** (the default): the received node must carry at least the block's tokens, in any order. A quoted value is compared decoded, with typography folded as in names. `checkbox "Subscribe" {checked}` fails against an unchecked box, and the failure names the missing tokens.
   - **`{ strict: true }`:** a block must hold exactly the received node's tokens, in any order, byte for byte. The failure shows each side's block as written.
   - **`{}`** asserts that the node has no states, in both modes.
   - **A line without a block** says nothing about states, in both modes, so existing contracts match as before.
-  - **Against a DOM Element**, whose tree prints no states yet, a contract that writes a block throws, with or without `.not`, rather than pass on a check it can't make.
+  - **Against a DOM Element**, the block is checked against the Element's own tree text, which prints states too. A `haspopup` or `roledescription` token throws there, with or without `.not`, rather than pass on a check it can't make: the DOM producer reads neither.
   - **Field values:** a line's `= "value"` is read as the value, not as part of the name, so `textbox "Email"` matches a received `textbox "Email" = "a@b.c"`, where it failed before; a contract that writes `= "value"` asserts it, and against a DOM Element is checked against the tree with values on. A name the serializer prints with ` = "` inside it stays the name.
 
 - 23f6e95: The in-page tree no longer gives an element a description that only repeats its own text. `<a href="#setup" title="Setup">Setup</a>` read as link "Setup" described by "Setup"; Chromium exposes no such description, so a screen reader hears none, and the native tree already printed none. It now reads as link "Setup" with no description, in `treeSnapshot`, `tabSequenceSnapshot`, `real-a11y tabs`, the MCP `get_tab_order` tool and the inspector, React and Storybook panels. A `title` that differs from the text, even only in case or spacing, still describes the element, and so does one beside a name from `aria-label` or `alt`, as in Chromium.
@@ -189,7 +187,7 @@
 
   The DOM producer marks such a node with a new optional `a11y.choiceWithheld: true`, which is what `getTabSequence` reads, so the tab order withholds the same stops wherever a tree is read, a panel's included. It appears on those nodes in JSON output.
 
-- 5957ead: Read a `{…}` states block on a tree or tab line, ahead of a release that prints one: `checkbox "Subscribe" {checked=false}`. Nothing prints a block yet; this makes sure every reader already understands it when something does.
+- 5957ead: Every reader of tree and tab text understands a line's `{…}` states block, such as `checkbox "Subscribe" {checked=false}`, which tree and tab text now print by default:
 
   - **`toMatchA11yContract`:** reads a block on a received tree line instead of failing with `cannot parse`; a contract line without a block matches it as before.
   - **`real-a11y diff` and MCP `diff_findings` / `diff_checkpoints`:** in the structural summary, a line whose only change is its block reads as one statement, `States changed: checkbox "Subscribe": checked=false → checked`, where it read as `Interactive element removed: checkbox (no accessible name)` plus the same element added. A baseline without blocks against one with them reads `(none) → checked`.

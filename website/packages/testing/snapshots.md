@@ -307,7 +307,7 @@ All three helpers return the **same string** for the same DOM — on every run, 
 
 ## The snapshot report
 
-A snapshot's text is made to be committed and diffed, so it leaves most of the tree out: [no states, no description](#what-a-line-carries), nothing about what an element takes. The snapshot report shows the rest. Add its reporter to Vitest or Jest, and after every run `a11y-snapshots/index.html` draws each snapshot's tree the way the Semantic Navigator panel does.
+A snapshot's text is made to be committed and diffed, so it leaves much of the tree out: it prints [a short list of states](#what-a-line-carries), and nothing about what an element takes. The snapshot report shows the rest. Add its reporter to Vitest or Jest, and after every run `a11y-snapshots/index.html` draws each snapshot's tree the way the Semantic Navigator panel does.
 
 ::: code-group
 
@@ -358,7 +358,7 @@ Which tests record:
 - **A retried test keeps the try that counted** under Vitest. Jest doesn't say which try is running, so there a retried test keeps its failed tries' records too.
 - **Two Vitest projects that run one file** each keep their records, and the page names the project beside the file.
 
-A record shows states, which the text leaves out, but nothing typed into the page:
+A record shows every state, where the text prints a short list, but nothing typed into the page:
 
 - **No field value**, even where the snapshot printed one with [`values: true`](#field-values): the text beside the tree shows it, and the tree holds none. No `a11y.value`, and no `value`, `aria-valuenow` or `aria-valuetext` attribute.
 - **Nothing inside an editor.** A rich-text editor's lines and runs are left out of the record, and the nodes above a field keep their own text but not a preview of the field's.

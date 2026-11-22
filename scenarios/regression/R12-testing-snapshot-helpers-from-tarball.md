@@ -55,12 +55,12 @@ Packaging faults only show from the tarball.
       aria-labelledby="pick"></button>` with `id="pick"` on the item, and the
       same with `aria-label="Color"`, `id="m2"`, `id="pick2"` and no
       `autocomplete`: `treeSnapshot(root)`
-    - **11d** — on 11b's sensitive combobox with its options given
-      `tabindex="-1"` and `tabindex="0"` (the chosen `03`), and the ordinary
-      one's the same: `tabSequenceSnapshot(root)`, and
-      `expect(root).toHaveTabSequence([...])` with each printed line's
-      `role "name"` only, without its `{…}` block (`option "[redacted]"`,
-      `option "03"`): the matcher takes no block
+    - **11d** — on 11b's two comboboxes with each one's `03` option given
+      `tabindex="0"`, a roving popup's one stop: `tabSequenceSnapshot(root)`,
+      then `expect(root).toHaveTabSequence([...])` with every printed line as
+      `role "name"`, without its `{…}` block, since the matcher compares the
+      whole sequence and takes no block: `['combobox "[redacted]"',
+      'option "[redacted]"', 'combobox "Color 03"', 'option "03"']`
 
 ## Expected
 
@@ -108,8 +108,8 @@ Packaging faults only show from the tarball.
 
 - **11d** — the sensitive popup's stop prints `option "[redacted]"`, and the
   ordinary one's `option "03" {selected}`; `toHaveTabSequence` passes with
-  those `role "name"` tokens, and `03` appears in no line for the sensitive
-  one
+  those four tokens, and `03` appears in no line for the sensitive one
+
 ## Why this exists
 
 These strings are what users commit into their repos as expectations. Two properties

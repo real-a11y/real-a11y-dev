@@ -13,8 +13,6 @@
 
   It reads the records `@real-a11y-dev/testing/reporter` writes (`./a11y-snapshots`, or the folder you name), runs no tests itself, and serves the page on `127.0.0.1` only. `--port` picks the port and `--no-open` leaves the browser closed.
 
-  `@real-a11y-dev/testing` re-releases the bundled snapshot viewer. The page the reporters write behaves as before.
-
 - 898d2db: A paragraph that mixes text with links now keeps its reading order. The tree used to fold the paragraph's own text into its name and list the links after it, so `<p>You accept our <a href="/terms">terms</a> and have read our <a href="/privacy">privacy policy</a>.</p>` printed `paragraph "You accept our and have read our ."`: no sentence, and no way to tell where a link sits. Each run of text is now a `text` row between the children, in the order a browser's accessibility tree has them:
 
   ```
@@ -154,7 +152,7 @@
 
   The DOM producer marks such a node with a new optional `a11y.choiceWithheld: true`, which is what `getTabSequence` reads, so the tab order withholds the same stops wherever a tree is read, a panel's included. It appears on those nodes in JSON output.
 
-- 5957ead: Read a `{…}` states block on a tree or tab line, ahead of a release that prints one: `checkbox "Subscribe" {checked=false}`. Nothing prints a block yet; this makes sure every reader already understands it when something does.
+- 5957ead: Every reader of tree and tab text understands a line's `{…}` states block, such as `checkbox "Subscribe" {checked=false}`, which tree and tab text now print by default:
 
   - **`toMatchA11yContract`:** reads a block on a received tree line instead of failing with `cannot parse`; a contract line without a block matches it as before.
   - **`real-a11y diff` and MCP `diff_findings` / `diff_checkpoints`:** in the structural summary, a line whose only change is its block reads as one statement, `States changed: checkbox "Subscribe": checked=false → checked`, where it read as `Interactive element removed: checkbox (no accessible name)` plus the same element added. A baseline without blocks against one with them reads `(none) → checked`.
