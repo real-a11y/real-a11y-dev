@@ -367,6 +367,25 @@ describe("a menubar is a bar the page shows, not an overlay", () => {
       document.body,
     );
   });
+
+  it("is a live region like any other when it announces", () => {
+    // `aria-live` makes an element a live region whatever its role, and a
+    // menubar is no container overlay to keep it one: beside the root in the
+    // same <main> it is the page's own, in another child of <body> nothing
+    // tells it from a portal.
+    const LIVE = MENUBAR.replace(
+      'role="menubar"',
+      'role="menubar" aria-live="polite"',
+    );
+    page(`<main><nav>${LIVE}</nav>${FORM}</main>`);
+    const host = document.getElementById("host")!;
+    expect(resolveEffectiveRoot(host)).toBe(host);
+
+    page(`<header><nav>${LIVE}</nav></header><main>${FORM}</main>`);
+    expect(resolveEffectiveRoot(document.getElementById("host")!)).toBe(
+      document.body,
+    );
+  });
 });
 
 describe("aria-live=off declares the element inert", () => {
