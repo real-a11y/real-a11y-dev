@@ -49,46 +49,51 @@ describe("describeAction", () => {
   });
 
   it("names no item whose choice the tree withholds", () => {
-    // A TAB row: a radio or menu item with no `checked`, which ARIA
-    // requires of it, had it withheld in a sensitive field's popup; one that
-    // carries its state names itself.
-    for (const role of ["radio", "menuitemradio", "menuitemcheckbox"]) {
+    // The row's verdict decides, for every choice item: a native row's own
+    // `valueWithheld`, a TAB row's from the content script's reply.
+    for (const role of [
+      "option",
+      "treeitem",
+      "radio",
+      "menuitemradio",
+      "menuitemcheckbox",
+    ]) {
       expect(
-        describeAction({ role, name: "03/31", states: {} }, "click"),
+        describeAction(
+          { role, name: "03/31", states: {}, valueWithheld: true },
+          "click",
+        ),
         role,
       ).toBe("Selected an option in this field");
     }
-    // An option or tree item often carries no state at all: an ordinary
-    // tree branch names itself.
+    // Never the missing state: an option or tree item often carries none.
     for (const role of ["treeitem", "option"]) {
       expect(
-        describeAction({ role, name: "Docs", states: {} }, "click"),
+        describeAction(
+          { role, name: "Docs", states: {}, valueWithheld: false },
+          "click",
+        ),
         role,
       ).toBe("Click: Docs");
     }
     expect(
       describeAction(
-        { role: "menuitemradio", name: "Red", states: { checked: false } },
+        {
+          role: "menuitemradio",
+          name: "Red",
+          states: {},
+          valueWithheld: false,
+        },
         "click",
       ),
     ).toBe("Click: Red");
-    // A checkbox is its own control.
+    // A checkbox is its own control, whatever the verdict.
     expect(
-      describeAction({ role: "checkbox", name: "Save", states: {} }, "click"),
+      describeAction(
+        { role: "checkbox", name: "Save", states: {}, valueWithheld: true },
+        "click",
+      ),
     ).toBe("Checked: Save");
-    // A native row's verdict decides, never the missing state.
-    expect(
-      describeAction(
-        { role: "menuitemradio", name: "03/31", valueWithheld: true },
-        "click",
-      ),
-    ).toBe("Selected an option in this field");
-    expect(
-      describeAction(
-        { role: "treeitem", name: "Docs", states: {}, valueWithheld: false },
-        "click",
-      ),
-    ).toBe("Click: Docs");
   });
 
   it("says nothing for a step", () => {

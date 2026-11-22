@@ -119,7 +119,7 @@ describe("content: the actions a TAB row dispatches", () => {
       payload: { nodeId, action: "click" },
     });
 
-    expect(result).toEqual({ success: true });
+    expect(result).toEqual({ success: true, choiceWithheld: false });
     expect(clicks).toHaveLength(1);
   });
 
@@ -131,10 +131,49 @@ describe("content: the actions a TAB row dispatches", () => {
       payload: { nodeId, action: "type", payload: { value: "hello" } },
     });
 
-    expect(result).toEqual({ success: true });
+    expect(result).toEqual({ success: true, choiceWithheld: false });
     expect((document.getElementById("field") as HTMLInputElement).value).toBe(
       "hello",
     );
+  });
+
+  it("says whether the item picked is where the tree withholds a choice", () => {
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<input role="combobox" autocomplete="cc-exp-month" aria-label="Month" aria-expanded="true" aria-controls="lb">` +
+        `<ul role="listbox" id="lb"><li role="option" id="m3" tabindex="0">03</li></ul>`,
+    );
+    // Picking a month closes the popup: the verdict is the item's as the
+    // user picked it, read before the action lands.
+    document.getElementById("m3")!.addEventListener("click", () => {
+      document
+        .querySelector("[aria-controls]")!
+        .removeAttribute("aria-controls");
+      document.getElementById("lb")!.remove();
+    });
+    h.send({ type: "REQUEST_TREE", payload: { framesOnly: false } });
+    const nodeId = nodeIdByTag(h, "li");
+
+    const result = h.send({
+      type: "DISPATCH_ACTION",
+      payload: { nodeId, action: "click" },
+    });
+
+    expect(result).toEqual({ success: true, choiceWithheld: true });
+    expect(document.getElementById("lb")).toBeNull();
+  });
+
+  it("fails closed for an item it can't find", () => {
+    const result = h.send({
+      type: "DISPATCH_ACTION",
+      payload: { nodeId: "gone", action: "click" },
+    });
+
+    expect(result).toEqual({
+      success: false,
+      error: "Element no longer in DOM",
+      choiceWithheld: true,
+    });
   });
 
   it("toggles a <details>", () => {
@@ -150,7 +189,7 @@ describe("content: the actions a TAB row dispatches", () => {
       payload: { nodeId, action: "toggle" },
     });
 
-    expect(result).toEqual({ success: true });
+    expect(result).toEqual({ success: true, choiceWithheld: false });
     expect((document.getElementById("d") as HTMLDetailsElement).open).toBe(
       true,
     );

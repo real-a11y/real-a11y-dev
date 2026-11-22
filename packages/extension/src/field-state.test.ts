@@ -1,6 +1,6 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 
-import { computeFieldState } from "./field-state.js";
+import { actOnItem, choiceWithheld, computeFieldState } from "./field-state.js";
 
 afterEach(() => {
   document.body.innerHTML = "";
@@ -381,5 +381,71 @@ describe("computeFieldState", () => {
       const el = mount(`<button>Go</button>`);
       expect(computeFieldState(el)).toEqual({ success: false });
     });
+  });
+});
+
+describe("choiceWithheld", () => {
+  const byId = (id: string) => document.getElementById(id)!;
+
+  it("is true of an item where a sensitive field's choice is made", () => {
+    document.body.innerHTML =
+      // A listbox a payment combobox controls.
+      `<input role="combobox" autocomplete="cc-exp-month" aria-controls="lb">` +
+      `<ul role="listbox" id="lb"><li role="option" id="o1" tabindex="0">03</li></ul>` +
+      // A tree reached only by `aria-activedescendant`.
+      `<input role="combobox" autocomplete="cc-exp" aria-activedescendant="t1">` +
+      `<div role="tree"><div role="treeitem" id="t1">2031</div></div>` +
+      // Radios in a dialog a card field controls.
+      `<input autocomplete="cc-number" aria-haspopup="dialog" aria-controls="dlg">` +
+      `<div role="dialog" id="dlg"><input type="radio" id="r1" aria-label="Visa"></div>` +
+      // An option of a payment select.
+      `<select autocomplete="cc-exp-year"><option id="s1">2031</option></select>`;
+    for (const id of ["o1", "t1", "r1", "s1"]) {
+      expect(choiceWithheld(byId(id)), id).toBe(true);
+    }
+  });
+
+  it("is false of an ordinary item, even beside a sensitive field", () => {
+    document.body.innerHTML =
+      `<input type="password" aria-label="Password">` +
+      `<input role="combobox" aria-label="Color" aria-controls="lb">` +
+      `<ul role="listbox" id="lb"><li role="option" id="o1" tabindex="0">Red</li></ul>` +
+      `<div role="tree"><div role="treeitem" id="t1" tabindex="0">Docs</div></div>` +
+      `<div role="menu"><div role="menuitemradio" id="m1" tabindex="0">Small</div></div>`;
+    for (const id of ["o1", "t1", "m1"]) {
+      expect(choiceWithheld(byId(id)), id).toBe(false);
+    }
+  });
+});
+
+describe("actOnItem", () => {
+  it("still acts, and names nothing, when the read throws", async () => {
+    vi.resetModules();
+    vi.doMock("@real-a11y-dev/core", async (importOriginal) => ({
+      ...(await importOriginal<typeof import("@real-a11y-dev/core")>()),
+      withholdsState: () => {
+        throw new Error("a page's own getter");
+      },
+    }));
+    try {
+      const { actOnItem: act } = await import("./field-state.js");
+      document.body.innerHTML = `<div role="option" id="o">03</div>`;
+      let acted = false;
+      const reply = act(document.getElementById("o")!, () => {
+        acted = true;
+        return { success: true };
+      });
+      expect(acted).toBe(true);
+      expect(reply).toEqual({ success: true, choiceWithheld: true });
+    } finally {
+      vi.doUnmock("@real-a11y-dev/core");
+      vi.resetModules();
+    }
+  });
+
+  it("names nothing for an element it can't find, and reports the action's own result", () => {
+    expect(
+      actOnItem(undefined, () => ({ success: false, error: "gone" })),
+    ).toEqual({ success: false, error: "gone", choiceWithheld: true });
   });
 });
