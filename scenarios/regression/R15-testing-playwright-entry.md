@@ -6,7 +6,7 @@ area: Testing
 type: Automated
 priority: P0
 status: Active
-validFrom: "testing ≥ 0.1.0-beta.11 (the ./playwright subpath export). nativeTree() through the handle: any release with the `tree: "native"` option. Step 10 is from the release that dropped `listByRole` from the bundle — on earlier releases `__realA11y__.listByRole` is still present, which is the old surface rather than a failure. `browser` is PRIVATE from this release on, so there is no browser version to pin or install — assert against `@real-a11y-dev/testing` only. Its page-bundle is now INLINED into this package as source text rather than read from disk, so step 10's direct `__realA11y__` reach is unchanged but there is no bundle file beside testing's dist to look for. Step 11 (strict mode on the DOM tree): testing ≥ 0.1.0-beta.23; before it, `attach(page, { redactInput: true })` throws, which is the old surface rather than a failure."
+validFrom: "testing ≥ 0.1.0-beta.11 (the ./playwright subpath export). Step 8, `treeSnapshot()` on a handle from `attach(page, { tree: "native" })`: any release with the `tree: "native"` option. Step 10 is from the release that dropped `listByRole` from the bundle — on earlier releases `__realA11y__.listByRole` is still present, which is the old surface rather than a failure. `browser` is PRIVATE from this release on, so there is no browser version to pin or install — assert against `@real-a11y-dev/testing` only. Its page-bundle is now INLINED into this package as source text rather than read from disk, so step 10's direct `__realA11y__` reach is unchanged but there is no bundle file beside testing's dist to look for. Step 11 (strict mode on the DOM tree): testing ≥ 0.1.0-beta.23; before it, `attach(page, { redactInput: true })` throws, which is the old surface rather than a failure."
 validUntil: ""
 expected: "attach works on a CSP-strict page; handle survives goto(); Frame attach audits iframe content; bad rootSelector throws; the bundle is also callable directly as __realA11y__ (the Trusted-Types path), and listByRole is no longer among its exports"
 twin: D5
@@ -31,7 +31,7 @@ pnpm --filter @real-a11y-dev/testing test:e2e
 5. `await page.goto(<another url>)`, then reuse the **same** handle
 6. `attach(frame)` on a `Frame` — audit the iframe's own content
 7. `attach(page, { rootSelector: '#nope' })`
-8. `nativeTree()` through the handle
+8. `treeSnapshot()` on a handle from `attach(page, { tree: "native" })`
 9. Type a sentinel into a field, then take every snapshot the handle offers
 10. Reach the bundle **directly**, the way a Trusted-Types page has to: evaluate the
     IIFE, then call `globalThis.__realA11y__.treeSnapshot(document.body)` and one
