@@ -17,7 +17,9 @@
   also touches dogfood code.
 -->
 
-## Unreleased
+## 0.1.21
+
+### Patch Changes
 
 - **The TAB view names no tab stop that says a sensitive popup's choice.**
   Under a roving `tabindex` a popup's one stop is its chosen item, so the TAB

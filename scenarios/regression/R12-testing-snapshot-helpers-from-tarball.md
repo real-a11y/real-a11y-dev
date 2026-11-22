@@ -6,7 +6,7 @@ area: Testing
 type: Automated
 priority: P0
 status: Active
-validFrom: "testing ≥ 0.1.0-beta.11 (installed from the packed tarball, not a workspace link). Step 10 (values): testing ≥ 0.1.0-beta.17. Step 10b (a sensitive textarea's text): testing ≥ 0.1.0-beta.18. Step 10b's `[redacted]` input name: testing ≥ 0.1.0-beta.23. Step 11 (the states block) ships in the FIRST release after testing 0.1.0-beta.23: against 0.1.0-beta.23 or earlier no line prints a block and `states` is ignored, which is the old behaviour, not a fail. Step 11b (a sensitive combobox's popup) ships in the same release; against 0.1.0-beta.23 the combobox reads `"Expiry month 03"`, the old behaviour, not a fail. Step 11c (a sensitive combobox's menu) ships in the same release too. Step 11d (a sensitive popup's tab stop) ships in the first release after testing 0.1.0-beta.23; against 0.1.0-beta.23 the stop reads `option "03"`, the old behaviour, not a fail"
+validFrom: "testing ≥ 0.1.0-beta.11 (installed from the packed tarball, not a workspace link). Step 10 (values): testing ≥ 0.1.0-beta.17. Step 10b (a sensitive textarea's text): testing ≥ 0.1.0-beta.18. Step 10b's `[redacted]` input name: testing ≥ 0.1.0-beta.23. Step 11 (the states block) ships in testing 0.1.0-beta.24: against 0.1.0-beta.23 or earlier no line prints a block and `states` is ignored, which is the old behaviour, not a fail. Step 11b (a sensitive combobox's popup) ships in the same release; against 0.1.0-beta.23 the combobox reads `"Expiry month 03"`, the old behaviour, not a fail. Step 11c (a sensitive combobox's menu) ships in the same release too. Step 11d (a sensitive popup's tab stop) ships in testing 0.1.0-beta.24; against 0.1.0-beta.23 the stop reads `option "03"`, the old behaviour, not a fail"
 validUntil: ""
 expected: "all three produce stable deterministic strings; redact masks EVERY occurrence; [focused] appears only when something is focused; values are absent unless asked, and a sensitive field's value never prints — a password's, or a sensitive textarea's markup text; states print in a {…} block by default and states: false prints none; a sensitive combobox's popup says neither in a state nor in a name which option is chosen, whether the page marks it selected or checked, nor by naming its tab stop"
 twin: D5
@@ -55,10 +55,12 @@ Packaging faults only show from the tarball.
       aria-labelledby="pick"></button>` with `id="pick"` on the item, and the
       same with `aria-label="Color"`, `id="m2"`, `id="pick2"` and no
       `autocomplete`: `treeSnapshot(root)`
-    - **11d** — on 11b's sensitive combobox with its options given
-      `tabindex="-1"` and `tabindex="0"` (the chosen `03`), and the ordinary
-      one's the same: `tabSequenceSnapshot(root)`, and
-      `expect(root).toHaveTabSequence([...])` with what it printed
+    - **11d** — on 11b's two comboboxes with each one's `03` option given
+      `tabindex="0"`, a roving popup's one stop: `tabSequenceSnapshot(root)`,
+      then `expect(root).toHaveTabSequence([...])` with every printed line as
+      `role "name"`, without its `{…}` block, since the matcher compares the
+      whole sequence and takes no block: `['combobox "[redacted]"',
+      'option "[redacted]"', 'combobox "Color 03"', 'option "03"']`
 
 ## Expected
 
@@ -106,7 +108,8 @@ Packaging faults only show from the tarball.
 
 - **11d** — the sensitive popup's stop prints `option "[redacted]"`, and the
   ordinary one's `option "03" {selected}`; `toHaveTabSequence` passes with
-  the printed tokens, and `03` appears in no line for the sensitive one
+  those four tokens, and `03` appears in no line for the sensitive one
+
 ## Why this exists
 
 These strings are what users commit into their repos as expectations. Two properties

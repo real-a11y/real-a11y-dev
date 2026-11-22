@@ -6,7 +6,7 @@ area: CLI
 type: Automated
 priority: P0
 status: Active
-validFrom: "cli ≥ 0.1.0-beta.1. Step 8 has no end date — `tabs` was expected to be removed by the native migration and was not (#258 kept it on DOM). Step 4b is from cli ≥ 0.1.0-beta.2; on an earlier release an empty category prints a bare `(none)`, which is the old behaviour, not a fail. Step 1b (the states block) and step 1c (`--no-states`) are from cli ≥ 0.1.0-beta.14. Step 8b (a sensitive popup's tab stop) ships in the first release after cli 0.1.0-beta.13; against 0.1.0-beta.13 the stops print `option "03"` and `button "31"`, the old behaviour, not a fail."
+validFrom: "cli ≥ 0.1.0-beta.1. Step 8 has no end date — `tabs` was expected to be removed by the native migration and was not (#258 kept it on DOM). Step 4b is from cli ≥ 0.1.0-beta.2; on an earlier release an empty category prints a bare `(none)`, which is the old behaviour, not a fail. Step 1b (the states block) and step 1c (`--no-states`) are from cli ≥ 0.1.0-beta.14. Step 8b (a sensitive popup's tab stop) ships in cli 0.1.0-beta.14; against 0.1.0-beta.13 the stops print `option "03"` and `button "31"`, the old behaviour, not a fail."
 validUntil: ""
 expected: "tree shows role+name lines; outline shows h1/h2; list filters by category, and an empty category explains itself (scanned count + the roles it looked for) rather than printing a bare (none); tabs names no tab stop in a sensitive field's popup. Assert against `real-a11y --help`'s own command list, not a hardcoded set."
 twin: D2

@@ -75,25 +75,6 @@ main
     text ". Run"
     code "real-a11y <command> --help"
     text "for a command's own flags."
-  paragraph "Not in the published release yet"
-  paragraph
-    text "Some of what this page documents is on"
-    code "main"
-    text "but not in"
-    code "@real-a11y-dev/cli"
-    text "0.1.0-beta.13, so installing from npm today will not have it:"
-  list
-    listitem
-      code "show-report"
-      text "— the whole command"
-    listitem
-      code "inspect --no-states"
-    listitem
-      code "snapshot --no-states"
-    listitem
-      code "tabs --no-states"
-    listitem
-      code "tree --no-states"
   paragraph
     text "Findings and reports go to"
     strong "stdout"

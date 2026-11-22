@@ -658,9 +658,9 @@ main
     text "."
   heading "The snapshot report" (level 2)
   paragraph
-    text "A snapshot's text is made to be committed and diffed, so it leaves most of the tree out:"
-    link "no states, no description"
-    text ", nothing about what an element takes. The snapshot report shows the rest. Add its reporter to Vitest or Jest, and after every run"
+    text "A snapshot's text is made to be committed and diffed, so it leaves much of the tree out: it prints"
+    link "a short list of states"
+    text ", and nothing about what an element takes. The snapshot report shows the rest. Add its reporter to Vitest or Jest, and after every run"
     code "a11y-snapshots/index.html"
     text "draws each snapshot's tree the way the Semantic Navigator panel does."
   radio "Vitest" {checked}
@@ -756,7 +756,7 @@ main
     listitem
       strong "Two Vitest projects that run one file"
       text "each keep their records, and the page names the project beside the file."
-  paragraph "A record shows states, which the text leaves out, but nothing typed into the page:"
+  paragraph "A record carries the tree's states, as the text does, but nothing typed into the page:"
   list
     listitem
       strong "No field value"
@@ -832,7 +832,11 @@ main
     code "records/"
     text "folder it made, and overwrites only an"
     code "index.html"
-    text "it wrote. Pointed at a folder that already holds others by those names, it leaves them alone, records nothing, and says why."
+    text "it wrote. Pointed at a folder whose"
+    code "records/"
+    text "it didn't make, it leaves that folder alone, records nothing, and says why. An"
+    code "index.html"
+    text "it didn't write stays as it is, and the run says so."
   heading "In CI and watch mode" (level 3)
   list
     listitem

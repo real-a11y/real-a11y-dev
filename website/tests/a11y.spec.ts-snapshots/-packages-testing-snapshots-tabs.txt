@@ -67,7 +67,7 @@ button "Copy Code"
 generic
 link "redact"
 link "markFocus: false"
-link "no states, no description"
+link "a short list of states"
 radio "Vitest" {checked}
 radio "Jest" {checked=false}
 button "Copy Code"

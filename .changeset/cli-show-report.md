@@ -11,5 +11,3 @@ npx real-a11y show-report   # in another
 ```
 
 It reads the records `@real-a11y-dev/testing/reporter` writes (`./a11y-snapshots`, or the folder you name), runs no tests itself, and serves the page on `127.0.0.1` only. `--port` picks the port and `--no-open` leaves the browser closed.
-
-`@real-a11y-dev/testing` re-releases the bundled snapshot viewer. The page the reporters write behaves as before.
