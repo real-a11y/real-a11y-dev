@@ -107,6 +107,7 @@ link "snapshot"
 link "--no-states"
 link "tabs"
 link "where the producers differ"
+link "tabs"
 button "Copy Code"
 generic
 link "tabs"

@@ -250,6 +250,17 @@ main
   button "Copy Code"
   code "await flow(container).findByRole("button", { name: "Delete account" }).click(); expect(container).toHaveTabSequence(['button "Cancel"', 'button "Delete"']);"
   paragraph
+    text "A stop in a sensitive field's popup reads"
+    code ""[redacted]""
+    text "here as it does in"
+    link "tabSequenceSnapshot"
+      code "tabSequenceSnapshot"
+    text ":"
+    code "option "[redacted]""
+    text ", never the item a roving"
+    code "tabindex"
+    text "makes the stop."
+  paragraph
     text "Names are matched with"
     strong "typographic punctuation normalized"
     text ", so a plain token like"
