@@ -152,11 +152,14 @@ function hasOverlayContent(element: Element): boolean {
  * modal" — so the modal path takes precedence over this one.
  *
  * Returns `null` when there's nothing portal-mounted outside `root`
- * — extraction stays scoped to `root` as before.
+ * — extraction stays scoped to `root` as before. A live region the page
+ * renders in place, in the same top-level container as `root`, is not
+ * portal-mounted ({@link isInFlowLiveRegion}).
  */
 function findPortalOverlay(doc: Document, root: Element): Element | null {
   const body = doc.body;
   if (!body || body === root || safeContains(root, body)) return null;
+  const shell = bodyChildHolding(root);
 
   // Portal-mounted overlay roles. MODAL dialogs are handled exclusively by
   // findActiveModal() (which takes precedence). A NON-modal role="dialog"
@@ -179,6 +182,10 @@ function findPortalOverlay(doc: Document, root: Element): Element | null {
       // toast was up.
       if (safeContains(root, el) || safeContains(el, root)) continue;
       if (!countsAsOverlay(el)) continue;
+      // Nor is a live region the page renders in place, beside the root: a
+      // "Loading…" status in the same `<main>` as the form under test turned
+      // a component snapshot into a page snapshot.
+      if (isInFlowLiveRegion(el, shell)) continue;
       // An overlay AT cannot reach adds nothing to the tree, so it is no
       // reason to widen: a closed drawer left mounted as `aria-hidden` (and
       // translated off-screen, so the CSS check passes) turned every component
@@ -247,6 +254,57 @@ export function countsAsOverlay(el: Element): boolean {
   if (live === "polite" || live === "assertive") return true;
   if (live === "off") return false;
   return role ? IMPLICIT_LIVE_ROLES.has(role) : false;
+}
+
+/**
+ * The child of `<body>` that holds `el` — the top-level container the page
+ * put it in — or null when `el` is not in `<body>`'s light tree (in a shadow
+ * tree, detached, or `<body>` itself).
+ *
+ * @internal Shared by the extractor and `row-scope.ts`; not a stability
+ * promise.
+ */
+export function bodyChildHolding(el: Element): Element | null {
+  const body = safeOwnerDocument(el)?.body;
+  let n: Element | null = el;
+  while (n && body) {
+    const up: Element | null = safeParentElement(n);
+    if (up === body) return n;
+    n = up;
+  }
+  return null;
+}
+
+/**
+ * Is `el` a live region rendered in place, in the root's own top-level
+ * container (`shell`, from {@link bodyChildHolding}), rather than portaled out
+ * of it?
+ *
+ * Such a region is no overlay of the root's. It is an ordinary part of the
+ * page — a result count, a "Loading…" status, a save confirmation — and
+ * widening for it turned every component snapshot on a page that had one into
+ * a page snapshot. A portal does not produce this shape: the component kits
+ * mount their portals into `<body>` by default, outside the app's container.
+ *
+ * Live regions only. A menu, a listbox or a dialog the page renders in place
+ * still widens: it is what the user is looking at, wherever it mounted. And
+ * a region that is itself a child of `<body>`, beside a root that is too,
+ * still widens: nothing in the markup tells it from a portal.
+ *
+ * @internal Shared by the extractor and `row-scope.ts`; not a stability
+ * promise.
+ */
+export function isInFlowLiveRegion(
+  el: Element,
+  shell: Element | null,
+): boolean {
+  // A live region is an overlay that is not one of the container roles.
+  return (
+    !!shell &&
+    safeContains(shell, el) &&
+    countsAsOverlay(el) &&
+    !OVERLAY_ROLES.has(getExplicitRole(el) ?? "")
+  );
 }
 
 /**

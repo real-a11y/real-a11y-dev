@@ -1,6 +1,7 @@
 import { realmSingleton } from "@real-a11y-dev/core";
 import { act, cleanup, render, waitFor } from "@testing-library/react";
 import { useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { describe, it, expect, afterEach } from "vitest";
 
 import { useTargetElement } from "./useSemanticTree.js";
@@ -499,15 +500,16 @@ describe("<SemanticNavigator />", () => {
   });
 
   it("keeps the floating panel's own chrome out of a tree widened to the body", async () => {
-    // A live region outside the root widens the tree to <body>, where the
-    // floating panel is portaled. Only the inspector's container inside the
-    // panel was marked as panel chrome, so the wrapper's landmark and its
-    // Collapse button were listed as rows of the page.
+    // A toast portaled to <body> widens the tree to <body>, where the
+    // floating panel is portaled too. Only the inspector's container inside
+    // the panel was marked as panel chrome, so the wrapper's landmark and its
+    // Collapse button were listed as rows of the page. (Portaled, because a
+    // status rendered in place beside the root does not widen.)
     function App() {
       const rootRef = useRef<HTMLDivElement>(null);
       return (
         <>
-          <p role="status">Saved</p>
+          {createPortal(<p role="status">Saved</p>, document.body)}
           <div ref={rootRef}>
             <button>Go</button>
           </div>

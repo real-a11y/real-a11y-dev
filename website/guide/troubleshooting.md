@@ -90,9 +90,29 @@ region such as a toast. That is deliberate: a menu rendered through a React
 Portal is a sibling of `<body>`, not of its trigger, and a tree that stopped at
 your root would omit the thing the user is looking at.
 
-The catch is that the check is "is it outside the root", which cannot tell a
-portal from an **ordinary in-page live region**. A `<p role="status">4 tickets</p>`
-elsewhere on the page is enough:
+An **ordinary in-page live region** — a "Loading…" status, a result count, a
+save confirmation — does not count when it sits in the same child of `<body>` as
+your root, the way everything inside an app's container does. A portal mounts
+outside that container, so this one is plainly part of the page:
+
+```html
+<main>
+  <p role="status">4 tickets</p>
+  <form aria-label="Filters">…</form>
+  <!-- treeSnapshot(form) is the form alone -->
+</main>
+```
+
+The same goes for a toaster that renders where you put it rather than through a
+portal, as react-hot-toast's and Sonner's `<Toaster />` do: inside the app's
+container, its toasts are page content, not an overlay of your component's. To
+see them in the tree, pass a root that contains the toaster.
+
+The catch is a live region in a **different** child of `<body>` from your root —
+a status in `<header>` while your root is in `<main>`, or both directly under
+`<body>`. Nothing in that markup tells it from a portal, so it still widens. A
+test renderer that mounts each component into its own container under `<body>`
+puts your root in exactly that position next to any announcer the app mounts:
 
 ```ts
 const { container } = render(<Filters />);

@@ -154,6 +154,39 @@ describe("semanticTreeRules", () => {
     }
   });
 
+  it("takes a live region the page renders beside the root for the rest of the page, as the extractor does", () => {
+    // No read widens for a status in the root's own child of <body>, so it is
+    // no overlay of the root's: a read the toast widened brings it, as it
+    // brings the header. One inside a dialog is the dialog's, which is one.
+    host.innerHTML = `
+      <p role="status" aria-label="4 results">4 results</p>
+      <div role="dialog" aria-label="Upload">
+        <p role="status" aria-label="Uploading">Uploading</p>
+      </div>
+      <main><button>Save</button></main>
+    `;
+    const main = host.querySelector("main")!;
+    const scope = rootRowScope(main);
+    const toast = document.createElement("div");
+    toast.setAttribute("role", "status");
+    toast.setAttribute("aria-label", "Saved");
+    toast.textContent = "Saved";
+    document.body.appendChild(toast);
+    try {
+      const wide = extractA11yTree(document.body);
+      const statuses = [...wide.nodes.values()].filter(
+        (n) => n.a11y.role === "status",
+      );
+      expect(statuses.map((n) => [n.a11y.name, scope.has(n.id)])).toEqual([
+        ["4 results", false],
+        ["Uploading", true],
+        ["Saved", true],
+      ]);
+    } finally {
+      toast.remove();
+    }
+  });
+
   it("places a text row where the element it is text of is", () => {
     // A `text` row has no element of its own. One outside the root is the
     // rest of the page, which a widened read brings and takes away; one

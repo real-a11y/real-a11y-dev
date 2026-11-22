@@ -13,7 +13,11 @@
 import { textRunHostId } from "../text-run.js";
 
 import { getElementRefs } from "./dom-extractor.js";
-import { isOverlaySignal } from "./overlay-scope.js";
+import {
+  bodyChildHolding,
+  isInFlowLiveRegion,
+  isOverlaySignal,
+} from "./overlay-scope.js";
 
 /** Which rows of a read are of the page a root holds. */
 export interface RowScope {
@@ -53,9 +57,19 @@ function scopeOf(root: Element, el: Element): boolean {
   for (let n: Node | null = el; n; n = composedParent(n)) {
     if (n === root) return true;
   }
+  // A live region the page renders in place, beside the root, is no overlay:
+  // no read widens for it (`isInFlowLiveRegion`). Passed over rather than
+  // ending the walk, so one inside a menu that is an overlay is the menu's.
+  const shell = bodyChildHolding(root);
   let overlay: Element | null = null;
   for (let n: Node | null = el; n && !overlay; n = composedParent(n)) {
-    if (n instanceof Element && isOverlaySignal(n)) overlay = n;
+    if (
+      n instanceof Element &&
+      isOverlaySignal(n) &&
+      !isInFlowLiveRegion(n, shell)
+    ) {
+      overlay = n;
+    }
   }
   if (!overlay) return false;
   // A live region around the whole app, as a router's announcer can be, is
@@ -69,7 +83,8 @@ function scopeOf(root: Element, el: Element): boolean {
 /**
  * The rows of the page `root` holds, by the elements this realm's reads named
  * them after: an element inside it, shadow trees included, or inside an
- * overlay outside it (`isOverlaySignal`). An element no longer on the page
+ * overlay outside it (`isOverlaySignal`) other than a live region the page
+ * renders beside the root (`isInFlowLiveRegion`). An element no longer on the page
  * answers as it did while it was; one never seen there can't tell, and is
  * one, as is a row with no element.
  */
