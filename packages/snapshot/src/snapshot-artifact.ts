@@ -302,6 +302,69 @@ export function serializeArtifact(artifact: SnapshotArtifact): string {
 }
 
 /**
+ * Validate one page of a parsed artifact and default its missing fields in
+ * place. Returns whether the page had no id of its own and was given a derived
+ * one — only those pages may fall back to `name` on a collision.
+ */
+function normalizePage(
+  page: unknown,
+  label: string,
+  measured: ReadonlySet<SnapshotView>,
+): boolean {
+  if (
+    typeof page !== "object" ||
+    page === null ||
+    typeof (page as SnapshotPage).name !== "string"
+  ) {
+    throw new SnapshotFormatError(`${label} has a page without a "name"`);
+  }
+  const p = page as SnapshotPage;
+  let backFilled = false;
+  // Back-fill identity for any page that arrived without one: a v1 artifact
+  // (written before pages had an id) or a hand-made v2 one. The `url` is on
+  // every page, so the id is derivable and the file stays readable rather
+  // than needing a re-record. When the url won't parse there is nothing
+  // honest to derive, so fall back to the name — which is exactly what that
+  // artifact was joined on when it was written.
+  if (typeof p.id !== "string" || p.id.length === 0) {
+    const derived =
+      (typeof p.url === "string" ? pageIdOf(p.url) : undefined) ?? p.name;
+    // Scope by the recorded root, exactly as `buildSnapshotPage` does, so an
+    // old artifact holding one URL at two roots back-fills to two ids instead
+    // of collapsing into one.
+    p.id = scopeId(derived, typeof p.root === "string" ? p.root : undefined);
+    backFilled = true;
+  }
+  if (!Array.isArray(p.findings)) p.findings = [];
+  if (typeof p.tree !== "string") p.tree = "";
+  if (typeof p.outline !== "string") p.outline = "";
+  if (!measured.has("tabs")) delete p.tabs;
+  else if (typeof p.tabs !== "string") p.tabs = "";
+  if (p.status !== "ok" && p.status !== "error") p.status = "ok";
+  return backFilled;
+}
+
+/**
+ * Move every page of a collision made only of back-filled ids onto its `name`,
+ * the key that artifact was joined on when it was written.
+ */
+function fallBackCollidingIds(
+  pages: SnapshotPage[],
+  backFilled: ReadonlySet<SnapshotPage>,
+): void {
+  const collided = new Map<string, SnapshotPage[]>();
+  for (const p of pages) {
+    const pool = collided.get(p.id);
+    if (pool) pool.push(p);
+    else collided.set(p.id, [p]);
+  }
+  for (const pool of collided.values()) {
+    if (pool.length < 2 || !pool.every((p) => backFilled.has(p))) continue;
+    for (const p of pool) p.id = p.name;
+  }
+}
+
+/**
  * Parse and validate an artifact from JSON. Rejects a schema-version mismatch
  * with exit 2 (a stale base can't be diffed against a newer PR), and sniffs the
  * shape enough that a garbage file fails fast rather than mid-diff. Unknown
@@ -363,35 +426,7 @@ export function parseSnapshotArtifact(
   // clashing is a malformed artifact rather than a legacy one.
   const backFilled = new Set<SnapshotPage>();
   for (const page of a.pages) {
-    if (
-      typeof page !== "object" ||
-      page === null ||
-      typeof (page as SnapshotPage).name !== "string"
-    ) {
-      throw new SnapshotFormatError(`${label} has a page without a "name"`);
-    }
-    const p = page as SnapshotPage;
-    // Back-fill identity for any page that arrived without one: a v1 artifact
-    // (written before pages had an id) or a hand-made v2 one. The `url` is on
-    // every page, so the id is derivable and the file stays readable rather
-    // than needing a re-record. When the url won't parse there is nothing
-    // honest to derive, so fall back to the name — which is exactly what that
-    // artifact was joined on when it was written.
-    if (typeof p.id !== "string" || p.id.length === 0) {
-      const derived =
-        (typeof p.url === "string" ? pageIdOf(p.url) : undefined) ?? p.name;
-      // Scope by the recorded root, exactly as `buildSnapshotPage` does, so an
-      // old artifact holding one URL at two roots back-fills to two ids instead
-      // of collapsing into one.
-      p.id = scopeId(derived, typeof p.root === "string" ? p.root : undefined);
-      backFilled.add(p);
-    }
-    if (!Array.isArray(p.findings)) p.findings = [];
-    if (typeof p.tree !== "string") p.tree = "";
-    if (typeof p.outline !== "string") p.outline = "";
-    if (!measured.has("tabs")) delete p.tabs;
-    else if (typeof p.tabs !== "string") p.tabs = "";
-    if (p.status !== "ok" && p.status !== "error") p.status = "ok";
+    if (normalizePage(page, label, measured)) backFilled.add(page);
   }
   // A back-filled id can collide where the artifact itself was coherent: two
   // sites sharing a route (`/` is the usual one) were distinct pages when this
@@ -406,16 +441,7 @@ export function parseSnapshotArtifact(
   // keeps the derived id and still joins a freshly-captured page of that route.
   // Two legacy artifacts both land on `name` and join exactly as they did
   // before ids existed.
-  const collided = new Map<string, SnapshotPage[]>();
-  for (const p of a.pages as SnapshotPage[]) {
-    const pool = collided.get(p.id);
-    if (pool) pool.push(p);
-    else collided.set(p.id, [p]);
-  }
-  for (const pool of collided.values()) {
-    if (pool.length < 2 || !pool.every((p) => backFilled.has(p))) continue;
-    for (const p of pool) p.id = p.name;
-  }
+  fallBackCollidingIds(a.pages as SnapshotPage[], backFilled);
   // The same guard `buildArtifact` applies, on the way in rather than the way
   // out. Without it an artifact written in-process could never hold colliding
   // ids while one read from disk could, and `diffArtifacts` joins pages through
