@@ -1,3 +1,5 @@
+import { HTML_INPUT_ROLES } from "./input-type-roles.js";
+
 /**
  * Roles only an author can name — by aria-label/labelledby, `title`, or a
  * host-language source (a legend, a summary) — so the last-resort direct-text
@@ -81,4 +83,5 @@ export const AUTHOR_NAMED_ROLES: ReadonlySet<string> = new Set([
   "slider",
   "spinbutton",
   "textbox",
+  ...HTML_INPUT_ROLES,
 ]);

@@ -15,6 +15,10 @@ import {
 } from "./clobber-safe.js";
 import { isEditable, isEditingHost } from "./editing.js";
 import { flatChildNodes, idScope } from "./flat-tree.js";
+import {
+  HTML_INPUT_ROLES,
+  NAMELESS_VALUE_INPUT_TYPES,
+} from "./input-type-roles.js";
 import { isTextVisible } from "./name-spacing.js";
 import {
   getCachedComputedStyle,
@@ -436,28 +440,13 @@ export const PAGE_STATE_VALUE_ROLES: ReadonlySet<string> = new Set([
  */
 export const EMBEDDED_VALUE_ROLES: ReadonlySet<string> = new Set([
   "textbox",
+  ...HTML_INPUT_ROLES,
   "searchbox",
   "combobox",
   "listbox",
   "slider",
   "spinbutton",
   ...PAGE_STATE_VALUE_ROLES,
-]);
-
-/**
- * `<input>` types whose value Chromium never reads into a name around them,
- * though the DOM producer gives them the textbox role: a colour well, and the
- * date and time inputs, which Chromium exposes as their parts. `<h2>Due <input
- * type="date" value="2030-04-01"></h2>` is "Due" in Chromium, and with
- * `aria-label="Start"` on the input "Due Start": such an input lends its name.
- */
-export const NAMELESS_VALUE_INPUT_TYPES: ReadonlySet<string> = new Set([
-  "color",
-  "date",
-  "datetime-local",
-  "month",
-  "time",
-  "week",
 ]);
 
 const VALUE_ONLY_ROLES: ReadonlySet<string> = new Set([

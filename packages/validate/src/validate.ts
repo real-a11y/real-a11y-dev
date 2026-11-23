@@ -75,6 +75,19 @@ export interface NodeIssue {
 
 type NodeMap = ReadonlyMap<string, ValidatedNode>;
 
+/**
+ * The roles an implicit date, time or color `<input>` has. Engine vocabulary,
+ * not ARIA, so they have no schema; the name rule is applied to them by hand.
+ */
+const PICKER_ROLES = [
+  "html-input-color",
+  "html-input-date",
+  "html-input-datetime-local",
+  "html-input-month",
+  "html-input-time",
+  "html-input-week",
+] as const;
+
 /** Focusable, operable widget roles — nesting one inside another is invalid. */
 const INTERACTIVE = new Set([
   "button",
@@ -88,6 +101,7 @@ const INTERACTIVE = new Set([
   "option",
   "tab",
   "textbox",
+  ...PICKER_ROLES,
   "searchbox",
   "combobox",
   "slider",
@@ -171,7 +185,18 @@ export function validateNode(
   }
   // Engine vocabulary has no ARIA schema to check against, so the remaining
   // per-node rules would all read as "missing" against an empty spec.
-  if (!isValidRole(n.role)) return issues;
+  if (!isValidRole(n.role)) {
+    if (
+      (PICKER_ROLES as readonly string[]).includes(n.role) &&
+      !n.name.trim()
+    ) {
+      issues.push({
+        severity: "error",
+        message: `role "${n.role}" requires an accessible name`,
+      });
+    }
+    return issues;
+  }
   const meta = roleMeta(n.role);
 
   if (meta.accessibleNameRequired && !n.name.trim()) {

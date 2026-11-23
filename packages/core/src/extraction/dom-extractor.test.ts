@@ -1630,6 +1630,17 @@ describe("extractDomTree", () => {
     });
   });
 
+  it("keeps readonly on date and time inputs, but not color or file", () => {
+    const types = ["date", "datetime-local", "month", "week", "time"];
+    const html = [...types, "color", "file"]
+      .map((t) => `<input id="${t}" type="${t}" readonly aria-label="${t}">`)
+      .join("");
+    const got = stateById(html, "readonly");
+    for (const t of types) expect(got[t], t).toBe(true);
+    expect(got.color).toBeUndefined();
+    expect(got.file).toBeUndefined();
+  });
+
   // The expectations from here to "skips script and style elements" were
   // each checked against Chromium 151's own tree: CDP `getFullAXTree`, and
   // chrome://accessibility for `aria-current`, which CDP doesn't expose.

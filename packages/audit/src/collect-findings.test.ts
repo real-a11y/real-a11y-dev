@@ -33,6 +33,27 @@ describe("collectFindings — no-unlabeled-interactive", () => {
     });
   });
 
+  it("flags an unlabeled date, color, time and file input, and passes labelled ones", () => {
+    const expected: Array<[string, string]> = [
+      ["date", "html-input-date"],
+      ["color", "html-input-color"],
+      ["time", "html-input-time"],
+      ["file", "button"],
+    ];
+    for (const [type, role] of expected) {
+      const bare = collectFindings(mount(`<input type="${type}">`), [
+        "no-unlabeled-interactive",
+      ]);
+      expect(bare, type).toHaveLength(1);
+      expect(bare[0], type).toMatchObject({ role, tagName: "input" });
+      const named = mount(`<input type="${type}" aria-label="Field">`);
+      expect(
+        collectFindings(named, ["no-unlabeled-interactive"]),
+        type,
+      ).toEqual([]);
+    }
+  });
+
   it("passes a labeled control", () => {
     const root = mount(`<button>Go</button>`);
     expect(collectFindings(root, ["no-unlabeled-interactive"])).toEqual([]);

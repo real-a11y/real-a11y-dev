@@ -172,6 +172,39 @@ describe("LiveTreeExtractor", () => {
     observer.stop();
   });
 
+  it("renames the heading around a file input when its external label changes", async () => {
+    document.body.innerHTML = `
+      <main>
+        <label for="f">Resume</label>
+        <h2>Upload <input id="f" type="file" /></h2>
+      </main>
+    `;
+
+    const live = new LiveTreeExtractor(document.body, { mode: "a11y" });
+    let lastChange: TreeChange | undefined;
+    const observer = new DomObserver(
+      document.body,
+      (change) => {
+        lastChange = change;
+      },
+      50,
+    );
+    observer.start();
+
+    document.querySelector("label")!.textContent = "Cover letter";
+
+    await vi.advanceTimersByTimeAsync(100);
+
+    const result = live.refresh(lastChange);
+    const expected = extractA11yTree(document.body);
+
+    expect(result.nodes).toEqual(expected.nodes);
+    const names = [...result.nodes.values()].map((n) => n.a11y.name);
+    expect(names).toContain("Upload Cover letter");
+
+    observer.stop();
+  });
+
   it("updates an input's value attribute after an input event", async () => {
     document.body.innerHTML = `<main><input type="text" /></main>`;
 

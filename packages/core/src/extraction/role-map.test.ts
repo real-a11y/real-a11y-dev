@@ -529,6 +529,42 @@ describe("getImplicitRole", () => {
     });
   });
 
+  // HTML-AAM gives these input states "No corresponding role": none is a textbox.
+  describe("<input> types with no ARIA role", () => {
+    const EXPECTED: Array<[string, string]> = [
+      ["file", "button"],
+      ["color", "html-input-color"],
+      ["date", "html-input-date"],
+      ["datetime-local", "html-input-datetime-local"],
+      ["month", "html-input-month"],
+      ["week", "html-input-week"],
+      ["time", "html-input-time"],
+    ];
+
+    it("gets the decided role, never textbox", () => {
+      for (const [type, role] of EXPECTED) {
+        const got = roleOf(`<input id="t" type="${type}">`);
+        expect(got, type).toBe(role);
+        expect(got, type).not.toBe("textbox");
+      }
+    });
+
+    it("keeps textbox for the Text state and unknown types", () => {
+      expect(roleOf(`<input id="t" type="text">`)).toBe("textbox");
+      expect(roleOf(`<input id="t">`)).toBe("textbox");
+      expect(roleOf(`<input id="t" type="foo">`)).toBe("textbox");
+    });
+
+    it("ignores an authored html-* token and keeps the implicit role", () => {
+      expect(
+        getExplicitRole(el(`<input type="date" role="html-input-date">`)),
+      ).toBeUndefined();
+      expect(roleOf(`<input id="t" type="date" role="html-input-date">`)).toBe(
+        "html-input-date",
+      );
+    });
+  });
+
   // Each row measured against Chromium 151 and 153's own tree. A `list` that
   // names a <datalist> in the input's own tree makes a text-entry input a
   // combobox: HTML-AAM names text, search, email, tel and url, and Chromium

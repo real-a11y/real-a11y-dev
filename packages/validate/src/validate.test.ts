@@ -206,6 +206,52 @@ describe("aria-schema", () => {
     expect(isValidRole("doc-endnote")).toBe(true);
   });
 
+  it("rejects an authored html-input-* token but not the implicit one", () => {
+    expect(isValidRole("html-input-date")).toBe(false);
+    for (const role of [
+      "html-input-color",
+      "html-input-date",
+      "html-input-datetime-local",
+      "html-input-month",
+      "html-input-time",
+      "html-input-week",
+    ]) {
+      const n: ValidatedNode = {
+        id: "n",
+        parentId: null,
+        role,
+        name: "x",
+        attrs: {},
+        implicitRole: true,
+      };
+      expect(
+        validateNode(n, new Map([["n", n]])).filter((i) =>
+          /role/i.test(i.message),
+        ),
+        role,
+      ).toEqual([]);
+    }
+  });
+
+  it("requires a name on an implicit date, time or color input", () => {
+    for (const role of ["html-input-date", "html-input-color"]) {
+      const bare: ValidatedNode = {
+        id: "n",
+        parentId: null,
+        role,
+        name: "",
+        attrs: {},
+        implicitRole: true,
+      };
+      expect(
+        validateNode(bare, new Map([["n", bare]])).map((i) => i.message),
+        role,
+      ).toEqual([`role "${role}" requires an accessible name`]);
+      const named = { ...bare, name: "Start" };
+      expect(validateNode(named, new Map([["n", named]])), role).toEqual([]);
+    }
+  });
+
   it("still rejects abstract roles and engine/author-invented tokens", () => {
     for (const r of ["widget", "roletype", "video", "Iframe", "doc-nope"])
       expect(isValidRole(r)).toBe(false);

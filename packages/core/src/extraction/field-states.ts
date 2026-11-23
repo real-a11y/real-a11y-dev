@@ -5,6 +5,7 @@ import {
   safeParentElement,
   safeTagName,
 } from "./clobber-safe.js";
+import { HTML_INPUT_READONLY_ROLES } from "./input-type-roles.js";
 import { isSensitiveField } from "./sensitivity.js";
 
 /** `<input>` types the `readonly` attribute applies to (HTML, 4.10.5.3). */
@@ -41,6 +42,7 @@ const KNOWN_TYPES = new Set([
 
 const READONLY_ROLES = new Set([
   "textbox",
+  ...HTML_INPUT_READONLY_ROLES,
   "searchbox",
   "combobox",
   "spinbutton",

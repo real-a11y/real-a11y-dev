@@ -9,6 +9,7 @@ import {
   safeRootNode,
   safeTagName,
 } from "./clobber-safe.js";
+import { HTML_INPUT_ROLES } from "./input-type-roles.js";
 import {
   getCachedComputedStyle,
   getImplicitRole,
@@ -232,6 +233,7 @@ export const NAME_BARRIER_ROLES = new Set<string>([
   "slider",
   "spinbutton",
   "textbox",
+  ...HTML_INPUT_ROLES,
   "searchbox",
   // Display widgets / live regions
   "dialog",

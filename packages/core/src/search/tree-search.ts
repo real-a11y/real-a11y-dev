@@ -13,6 +13,12 @@ export const ROLE_FILTER_GROUPS: Record<string, string[]> = {
   button: ["button"],
   form: [
     "textbox",
+    "html-input-color",
+    "html-input-date",
+    "html-input-datetime-local",
+    "html-input-month",
+    "html-input-time",
+    "html-input-week",
     "checkbox",
     "radio",
     "combobox",

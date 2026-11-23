@@ -40,6 +40,14 @@ function lendsValue(el: Element): boolean {
   return EMBEDDED_VALUE_ROLES.has(getImplicitRole(el));
 }
 
+/** A file input is a button, which lends its name, not its value, to a name. */
+function isFileInput(el: Element): boolean {
+  return (
+    safeTagName(el) === "input" &&
+    safeGetAttribute(el, "type")?.trim().toLowerCase() === "file"
+  );
+}
+
 /**
  * True when a name-from-content walk keeps `el`'s content out of an enclosing
  * name, so a climb for the host whose name a change reaches stops there. A
@@ -120,7 +128,9 @@ export function addLabelledControls(
   for (const control of controls) {
     if (!control) continue;
     dirty.add(control);
-    if (lendsValue(control)) addReaders(control, dirty, hostOf);
+    if (lendsValue(control) || isFileInput(control)) {
+      addReaders(control, dirty, hostOf);
+    }
   }
   return dirty.size !== before;
 }

@@ -189,6 +189,35 @@ describe("an unnamed role=region or role=form", () => {
   });
 });
 
+// HTML-AAM gives the color, date, datetime-local, month, week and time input
+// states "No corresponding role", and a file input a button. The DOM producer
+// once printed `textbox` for all seven. The native producer's raw Blink tokens
+// are a separate fix, so only the DOM side is asserted for the new roles.
+describe("input types with no ARIA role", () => {
+  it("the DOM producer prints no textbox for them, and a file input is a button in both", async () => {
+    const types = ["color", "date", "datetime-local", "month", "week", "time"];
+    await session.open(
+      dataUrl(
+        `<main>${[...types, "file"]
+          .map((t) => `<input type="${t}" aria-label="f-${t}">`)
+          .join("")}</main>`,
+      ),
+    );
+    const domTree = await session.call<string>("treeSnapshot", "body", [
+      { markFocus: false },
+    ]);
+    const nativeTree = serializeTree(await session.nativeTree(), {
+      markFocus: false,
+    });
+    expect(domTree).not.toContain("textbox");
+    for (const t of types) {
+      expect(domTree).toContain(`html-input-${t} "f-${t}"`);
+    }
+    expect(domTree).toContain('button "f-file"');
+    expect(nativeTree).toContain('button "f-file"');
+  });
+});
+
 // WAI-ARIA 1.2 §8.4 lets aria-level set an implicit heading's level, and
 // Core-AAM §3.6.3 reads 0 and negatives as 1. The DOM producer once ignored
 // aria-level on h1-h6 and printed `(level 0)`, `(level -1)` and `(level NaN)`.

@@ -24,6 +24,7 @@ import {
 } from "./flat-tree.js";
 import { isFocusable, parseHtmlInteger } from "./focusability.js";
 import { imageUsingMap } from "./image-map.js";
+import { NO_ARIA_ROLE_INPUT_TYPE_ROLES } from "./input-type-roles.js";
 import { hasLinkHref } from "./link-href.js";
 import { tablePartRole, tdRole, thHeaderRole } from "./table-roles.js";
 import { isHiddenByVisibility, isOwnVisibilityHidden } from "./visibility.js";
@@ -283,7 +284,9 @@ export function isDropDownSelect(select: Element): boolean {
   );
 }
 
+/** An `<input>` type's implicit role; see {@link NO_ARIA_ROLE_INPUT_TYPE_ROLES}. */
 const INPUT_TYPE_ROLE_MAP: Record<string, string> = {
+  ...NO_ARIA_ROLE_INPUT_TYPE_ROLES,
   button: "button",
   checkbox: "checkbox",
   email: "textbox",
