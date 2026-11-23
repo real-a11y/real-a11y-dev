@@ -17,6 +17,7 @@ link "How roles are resolved"
 table
 link "Content inside a web component is missing or stale"
 table
+table
 link "presentational roles conflict resolution"
 link "Accessible Names"
 button "Copy Code"

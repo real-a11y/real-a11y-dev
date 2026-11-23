@@ -71,7 +71,7 @@ A node's `a11y.properties` holds descriptive ARIA properties. Each key is the AR
 | `valuemin`, `valuemax` | `aria-valuemin`, `aria-valuemax` | `native` |
 | `captions` | none (a media element's `<track>`) | `dom` |
 
-The native tree's `haspopup` was spelled `hasPopup` before this release; rename it in any code that reads the JSON.
+The native tree's `haspopup` was spelled `hasPopup` before this release; rename it in any code that reads a native tree's `a11y.properties`. The printed tree text is unchanged.
 
 ---
 
