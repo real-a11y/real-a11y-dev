@@ -176,9 +176,11 @@ function jsdomWindows(): WeakSet<object> {
 }
 
 /**
- * jsdom does not implement `getComputedStyle(el, pseudoElt)`: it reports the
- * call as not implemented and returns the element's own style. Make no such
- * call there, so generated content contributes nothing, as it always has.
+ * jsdom 30 and earlier do not implement `getComputedStyle(el, pseudoElt)`: they
+ * report the call as not implemented and return the element's own style. Make
+ * no such call under any jsdom, so generated content contributes nothing there,
+ * as it always has, and a name doesn't change with the jsdom version (jsdom 31
+ * implements the call).
  *
  * Asked of the window whose `getComputedStyle` would be called. Once it says
  * jsdom, what a test does to `navigator` afterwards cannot change the answer.
