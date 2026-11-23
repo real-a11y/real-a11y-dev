@@ -6,7 +6,7 @@ area: Testing
 type: Automated
 priority: P0
 status: Active
-validFrom: "testing ≥ 0.1.0-beta.15 for the row; the detached-root guard and the aria-live=off correction ship in the FIRST release after 0.1.0-beta.15. Running steps 2–4 against 0.1.0-beta.15 or earlier reproduces the defect rather than failing the test — there a detached root is replaced outright and an inert announcer pivots the whole extraction. That is the old behaviour, not a fail. Step 7 changed in the FIRST release after 0.1.0-beta.16: before it, `aria-modal=true` alone counted as an open modal, so a sibling aria-modal dialog replaced the root instead of widening it. On those releases that is the old behaviour, not a fail. Step 11 changed in the FIRST release after 0.1.0-beta.23: before it, a live region in the root's own container widened the root like any other. On those releases that is the old behaviour, not a fail. Step 1 is a KNOWN OPEN GAP at every version so far, not a regression. The behaviour lives in `resolveEffectiveRoot` (packages/core/src/extraction/dom-extractor.ts), but `core` is PRIVATE and bundled — there is no core version to pin or install, so assert against `@real-a11y-dev/testing` only. The same pivot reaches users through `inspector` and `react`, which bundle their own copy."
+validFrom: "testing ≥ 0.1.0-beta.15 for the row; the detached-root guard and the aria-live=off correction ship in the FIRST release after 0.1.0-beta.15. Running steps 2–4 against 0.1.0-beta.15 or earlier reproduces the defect rather than failing the test — there a detached root is replaced outright and an inert announcer pivots the whole extraction. That is the old behaviour, not a fail. Step 7 changed in the FIRST release after 0.1.0-beta.16: before it, `aria-modal=true` alone counted as an open modal, so a sibling aria-modal dialog replaced the root instead of widening it. On those releases that is the old behaviour, not a fail. Step 11 changed in the FIRST release after 0.1.0-beta.24: before it, a live region in the root's own container widened the root like any other. On those releases that is the old behaviour, not a fail. Step 1 is a KNOWN OPEN GAP at every version so far, not a regression. The behaviour lives in `resolveEffectiveRoot` (packages/core/src/extraction/dom-extractor.ts), but `core` is PRIVATE and bundled — there is no core version to pin or install, so assert against `@real-a11y-dev/testing` only. The same pivot reaches users through `inspector` and `react`, which bundle their own copy."
 validUntil: ""
 expected: "a pivot never DROPS the caller's own subtree — detached, shadow-rooted and ancestor-live-region cases all return the root passed. ONE deliberate exception: an open modal, meaning a `<dialog>` opened with showModal(), scopes EXCLUSIVELY, including over a root that is merely its sibling, because the browser makes everything outside it inert and an AT user cannot reach that root at all. `aria-modal=true` alone is not modal: Chromium's own tree keeps the page behind it, so it only widens. Step 1 is a KNOWN OPEN GAP: an ordinary in-page live region in a different child of `<body>` from an attached root still widens to the whole document, and there is no scope-moved signal; it is documented rather than fixed. One in the root's own child of `<body>` does not widen (step 11)"
 covers:
@@ -128,7 +128,7 @@ form status, a save confirmation — as a **sibling** of the element under test:
   same child of `<body>` as the root is the page's own, and a portal does not
   mount there. The menu variant still widens to the whole page — only live
   regions are exempt, since a menu is what the user is looking at wherever it
-  mounted. On `testing ≤ 0.1.0-beta.23` the status widens too; that is the old
+  mounted. On `testing ≤ 0.1.0-beta.24` the status widens too; that is the old
   behaviour, not a fail
 
 ## Why this exists
@@ -143,7 +143,7 @@ What it could not do is tell a **portal-mounted overlay** from an **ordinary
 in-page live region**, because the only test was "not contained by root".
 `<p role="status">4 tickets</p>` next to a table is not a portal and not an
 overlay; it is the most ordinary markup there is, and it moved the scope of
-every audit on the page. From the first release after testing 0.1.0-beta.23 a
+every audit on the page. From the first release after testing 0.1.0-beta.24 a
 live region in the root's own child of `<body>` — where a portal never mounts —
 no longer counts (step 11, found dogfooding a "Loading…" status beside a form).
 One in another child of `<body>` still does (step 1).
