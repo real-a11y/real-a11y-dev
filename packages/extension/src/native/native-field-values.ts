@@ -14,6 +14,7 @@ import {
   REDACTED_VALUE,
 } from "@real-a11y-dev/core";
 
+// Type-only: native-core.ts re-exports this module, so keep it `import type`.
 import type { EnrichedNativeNode } from "./native-core.js";
 
 /**
@@ -189,7 +190,7 @@ export function fieldValueWithheld(read: PageFieldRead): boolean {
  * number), each classified on its own, whose values are theirs to show. A
  * listbox has no AX value of its own to give the choice away (Chromium 141,
  * measured). `controlled` holds the kept nodes those relations reach,
- * standing in for a target the tree dropped ({@link controlledRegion}).
+ * standing in for a target the tree dropped (`controlledRegion` in `native-core.ts`).
  *
  * Nor does a node inside one say which of it is chosen: core's
  * `dropChoiceStates` drops an option's choice inside the field, and in what

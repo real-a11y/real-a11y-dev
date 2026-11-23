@@ -152,7 +152,7 @@ export const NATIVE_REDACTED_VALUE = REDACTED_VALUE;
  * Playwright, no good in an MV3 worker, and core stays a pure structural
  * normalizer by design (R4) rather than growing a second enrichment path.
  */
-export interface RawAXNode extends RawAXNameNode {
+interface RawAXNode extends RawAXNameNode {
   properties?: Array<{
     name: string;
     value?: {
