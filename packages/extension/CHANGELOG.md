@@ -21,6 +21,9 @@
 
 ### Patch Changes
 
+- Internal refactor, no behaviour change: the field-value helpers moved out of
+  `native/native-core.ts` into `native/native-field-values.ts`
+  ([#716](https://github.com/real-a11y/real-a11y-dev/pull/716)).
 - **The TAB view no longer calls a date, time or color input a text box.**
   HTML-AAM gives these input types no ARIA role, so a tab stop on one now reads
   `html-input-date`, `html-input-time`, `html-input-color` and so on, and a file
