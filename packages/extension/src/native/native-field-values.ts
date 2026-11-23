@@ -23,8 +23,10 @@ import type { EnrichedNativeNode } from "./native-core.js";
  * carries `aria-valuetext` (its `valuetext` property is the number as text —
  * measured on Chromium 151), so `pageReadValue` reads the attribute in-page.
  * Mirrors core's `RANGE_VALUE_ROLES` (`dom-extractor.ts`).
+ *
+ * @internal
  */
-export const RANGE_VALUE_ROLES = new Set([
+export const RANGE_VALUE_ROLES: ReadonlySet<string> = new Set([
   "slider",
   "spinbutton",
   "progressbar",
@@ -95,6 +97,8 @@ function formatAXNumber(n: number): string {
  * Cut `text` to `max` characters with a trailing `…`, never between the two
  * halves of a surrogate pair (an emoji), which would leave a lone half.
  * Exported for the panel's own raw-value cut.
+ *
+ * @internal
  */
 export function capText(text: string, max: number): string {
   if (text.length <= max) return text;
@@ -128,6 +132,8 @@ type FieldFacets = Pick<
  *    `rawValue`, for a retype to start from.
  *
  * Pure, and exported for its tests.
+ *
+ * @internal
  */
 export function fieldFacets(
   role: string,
@@ -167,6 +173,8 @@ export function fieldFacets(
  * which option a sensitive `<select>` has chosen IS its value.
  *
  * Exported for its tests.
+ *
+ * @internal
  */
 export function fieldValueWithheld(read: PageFieldRead): boolean {
   return !(read.classified === true && read.sensitive !== true);
@@ -200,6 +208,8 @@ export function fieldValueWithheld(read: PageFieldRead): boolean {
  * option anywhere inside it shows whether it is chosen.
  *
  * Exported for its tests.
+ *
+ * @internal
  */
 export function withholdInsideSensitive(
   nodes: EnrichedNativeNode[],
