@@ -46,6 +46,11 @@
   TAB view reads each frame from `<body>`, where the rule never applies
   ([#707](https://github.com/real-a11y/real-a11y-dev/pull/707)).
 
+- **A popup indicator's badge reads `haspopup=menu`, not `hasPopup=menu`.**
+  Chrome's tree now keys the property in lowercase, like every other
+  property, and a `roledescription` that is empty or only whitespace no
+  longer shows a badge ([#713](https://github.com/real-a11y/real-a11y-dev/pull/713)).
+
 ## 0.1.21
 
 ### Patch Changes

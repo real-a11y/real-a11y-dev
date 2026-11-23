@@ -70,7 +70,9 @@ export function ariaAttributeOfProperty(key: string): string | null {
  * `valuenow` and `valuetext` are never kept.
  */
 export function nativePropertyKey(cdpName: string): string | undefined {
-  const key = CDP_PROPERTY_KEYS[cdpName] ?? cdpName;
+  const key = Object.prototype.hasOwnProperty.call(CDP_PROPERTY_KEYS, cdpName)
+    ? CDP_PROPERTY_KEYS[cdpName]!
+    : cdpName;
   const row = BY_KEY.get(key);
   return row && row.producers !== "dom" ? key : undefined;
 }
