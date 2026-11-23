@@ -411,7 +411,7 @@ export function NativeTreeView({
         id: node.id,
         role: node.role,
         controls: (node.controls ?? []).filter((t) => nodes.has(t)),
-        haspopup: node.properties?.["hasPopup"],
+        haspopup: node.properties?.["haspopup"],
         expanded: node.states?.["expanded"] === true,
         // A native tree holds only what Chromium exposes.
         hidden: false,

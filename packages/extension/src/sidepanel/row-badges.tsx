@@ -36,7 +36,7 @@ export function stateBadgeClass(key: string, value: string | boolean): string {
 
 /**
  * Chrome's tree's state badges: every state the read kept but a false one,
- * then every AX property (heading level, hasPopup, value bounds, …) as
+ * then every AX property (heading level, haspopup, value bounds, …) as
  * `key=value`. The two are separate collections on the wire
  * (`native-core.ts`'s `axFacets`); unlike a state, a property is never a
  * bare flag. A heading's level is left out: it has the `H2` badge instead.
@@ -66,7 +66,7 @@ export function nativeStateBadges(
       badges.push({ label: `${key}=${value}`, cls, keyState, field });
     }
   }
-  // A property (hasPopup, value bounds, …) is never a key state.
+  // A property (haspopup, value bounds, …) is never a key state.
   for (const [key, value] of Object.entries(properties ?? {})) {
     if (key === "level" && headingLevel) continue;
     badges.push({

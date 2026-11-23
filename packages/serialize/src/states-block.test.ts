@@ -191,10 +191,10 @@ describe("statesBlock", () => {
     expect(block({ current: false })).toBe("");
   });
 
-  it("haspopup from either key, never false", () => {
-    expect(block({}, { hasPopup: "menu" })).toBe(" {haspopup=menu}");
+  it("haspopup, never false", () => {
+    expect(block({}, { haspopup: "menu" })).toBe(" {haspopup=menu}");
     expect(block({}, { haspopup: "listbox" })).toBe(" {haspopup=listbox}");
-    expect(block({}, { hasPopup: "false" })).toBe("");
+    expect(block({}, { haspopup: "false" })).toBe("");
   });
 
   it("roledescription and description: JSON-quoted and redacted", () => {
@@ -242,7 +242,7 @@ describe("statesBlock", () => {
           pressed: true,
           checked: "mixed",
         },
-        { roledescription: "r", hasPopup: "menu" },
+        { roledescription: "r", haspopup: "menu" },
         "d",
       ),
     ).toBe(
@@ -257,7 +257,7 @@ describe("statesBlock", () => {
   it("writes only what the reader splits back off, token for token", () => {
     const written = block(
       { checked: false, current: "Some Place", required: true },
-      { hasPopup: "menu" },
+      { haspopup: "menu" },
       'A "quoted", {braced} hint',
     );
     const line = `checkbox "x"${written}`;
@@ -303,9 +303,7 @@ describe("unprintableToken", () => {
       : key === "haspopup" || key === "roledescription"
         ? {
             states: {},
-            properties: {
-              [key === "haspopup" ? "hasPopup" : key]: String(value),
-            },
+            properties: { [key]: String(value) },
             description: "",
           }
         : { states: { [key]: value }, properties: {}, description: "" };
@@ -368,5 +366,12 @@ describe("unprintableToken", () => {
     expect(tokenProducers("haspopup=menu")).toBe("native");
     expect(tokenProducers('roledescription="slide"')).toBe("native");
     expect(tokenProducers("constructor")).toBeUndefined();
+  });
+});
+
+describe("producers of a property key", () => {
+  it("come from core's one key table", () => {
+    expect(tokenProducers("haspopup")).toBe("native");
+    expect(tokenProducers("roledescription")).toBe("native");
   });
 });

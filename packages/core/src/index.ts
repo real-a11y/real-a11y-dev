@@ -169,6 +169,24 @@ export {
   nativeAXStateValue,
 } from "./native/ax-vocabulary.js";
 export { normalizeNativeAX, serializeNativeAX } from "./native/ax-normalize.js";
+// The one table of `a11y.properties` keys, and the split of a native node's
+// properties into states and properties that reads it (@internal).
+export {
+  A11Y_PROPERTIES,
+  CDP_PROPERTY_KEYS,
+  a11yPropertyInfo,
+  ariaAttributeOfProperty,
+  nativePropertyKey,
+} from "./a11y-properties.js";
+export type {
+  A11yPropertyInfo,
+  A11yPropertyProducers,
+} from "./a11y-properties.js";
+export {
+  NATIVE_AX_STATE_PROPERTIES,
+  nativeAXFacets,
+} from "./native/ax-facets.js";
+export type { RawNativeAXFacetNode } from "./native/ax-facets.js";
 // Frames in a native tree: the id scheme of a node in an out-of-process frame
 // and the graft of a frame's nodes under its row (@internal).
 export {

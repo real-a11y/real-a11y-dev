@@ -75,6 +75,16 @@ export interface A11yInfo {
    */
   choiceWithheld?: true;
   states: Record<string, string | boolean>;
+  /**
+   * Descriptive ARIA properties, keyed by the ARIA attribute name without
+   * `aria-`, lowercase (`haspopup`, `roledescription`, `level`), with string
+   * values: integers in decimal, tokens lowercase. A key that is absent was
+   * not set, or does not apply. `A11Y_PROPERTIES` (`a11y-properties.ts`) is
+   * the one table of keys and of which producer writes each; a producer
+   * carries a subset of it. `valuenow` and `valuetext` are never keys: a value
+   * has one home, {@link A11yInfo.value}. States (`checked`, `modal`) live in
+   * {@link A11yInfo.states}.
+   */
   properties: Record<string, string>;
   isExposedToAT: boolean;
 }

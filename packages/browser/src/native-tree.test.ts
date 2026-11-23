@@ -1569,6 +1569,47 @@ describe("buildNativeTree — a list item's nesting depth is not an authored lev
   });
 });
 
+describe("buildNativeTree — property keys", () => {
+  const raw = [
+    { nodeId: "1", childIds: ["2", "3"], role: { value: "RootWebArea" } },
+    {
+      nodeId: "2",
+      parentId: "1",
+      backendDOMNodeId: 20,
+      role: { value: "button" },
+      name: { value: "Menu" },
+      properties: [
+        { name: "hasPopup", value: { type: "token", value: "menu" } },
+      ],
+    },
+    {
+      nodeId: "3",
+      parentId: "1",
+      backendDOMNodeId: 30,
+      role: { value: "button" },
+      name: { value: "Blank" },
+      properties: [
+        { name: "roledescription", value: { type: "string", value: "  " } },
+      ],
+    },
+  ] as Parameters<typeof buildNativeTree>[0];
+
+  it("writes Chromium's hasPopup as haspopup, never as hasPopup", () => {
+    const props = buildNativeTree(raw).nodes.get("ax-dom-20")?.a11y.properties;
+    expect(props).toEqual({ haspopup: "menu" });
+  });
+
+  it("drops a whitespace-only roledescription", () => {
+    const props = buildNativeTree(raw).nodes.get("ax-dom-30")?.a11y.properties;
+    expect(props).toEqual({});
+  });
+
+  it("prints the popup in the states block as before", () => {
+    const printed = serializeTree(buildNativeTree(raw), { markFocus: false });
+    expect(printed).toContain('button "Menu" {haspopup=menu}');
+  });
+});
+
 describe("buildNativeTree — focusedId", () => {
   // Chromium reports focus as a per-node `focused` AX property. Every
   // focus-aware consumer instead reads the tree-level `focusedId`:
