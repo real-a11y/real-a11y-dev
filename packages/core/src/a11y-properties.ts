@@ -47,7 +47,7 @@ export const CDP_PROPERTY_KEYS: Readonly<Record<string, string>> = {
   hasPopup: "haspopup",
 };
 
-const BY_KEY: ReadonlyMap<string, A11yPropertyInfo> = new Map(
+const BY_KEY: ReadonlyMap<string, A11yPropertyInfo> = /* @__PURE__ */ new Map(
   A11Y_PROPERTIES.map((row) => [row.key, row]),
 );
 
