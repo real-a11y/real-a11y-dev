@@ -6,6 +6,8 @@
  * text, without a space, as Chromium does; a pseudo-element laid out as a box
  * is spaced like any box (see `displayNeedsSpace`).
  */
+import { realmSingleton } from "../utils/realm-singleton.js";
+
 import { displayNeedsSpace, isTextVisible } from "./name-spacing.js";
 import { getCachedComputedStyle, type StyleCache } from "./role-map.js";
 import { REDACTED_VALUE } from "./sensitivity.js";
@@ -157,12 +159,21 @@ function isJsdom(view: Window & typeof globalThis): boolean {
   }
 }
 
+const JSDOM_WINDOWS_SHAPE = "WeakSet<Window>@1";
+
 /**
  * The windows found to be jsdom's. Only that answer is kept: a "no" given
  * while a test had faked the prototype's own getter is asked again next time.
- * A memo, not shared state: every copy of this code reaches the same answer.
+ * One set for the realm, shared by every bundled copy of this code, so a copy
+ * first used after such a fake still knows what another copy found.
  */
-const jsdomWindows = new WeakSet<object>();
+function jsdomWindows(): WeakSet<object> {
+  return realmSingleton(
+    "jsdom-windows",
+    JSDOM_WINDOWS_SHAPE,
+    () => new WeakSet<object>(),
+  );
+}
 
 /**
  * jsdom does not implement `getComputedStyle(el, pseudoElt)`: it reports the
@@ -173,9 +184,10 @@ const jsdomWindows = new WeakSet<object>();
  * jsdom, what a test does to `navigator` afterwards cannot change the answer.
  */
 function pseudoReadsUnsupported(): boolean {
-  if (jsdomWindows.has(window)) return true;
+  const found = jsdomWindows();
+  if (found.has(window)) return true;
   if (!isJsdom(window)) return false;
-  jsdomWindows.add(window);
+  found.add(window);
   return true;
 }
 

@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { resetRealmSingletons } from "../utils/realm-singleton.js";
+
 import { extractDomTree } from "./dom-extractor.js";
 import {
   applyTextTransform,
@@ -100,7 +102,7 @@ describe("extraction under jsdom", () => {
 
   // A test of code that detects a phone fakes the user agent, on the instance
   // or by replacing the global. Neither may bring the pseudo-element read back.
-  // A fresh copy of the module each time, so no earlier answer is reused.
+  // The realm's earlier answer is forgotten first, so this one is asked anew.
   it.each([
     [
       "an own property on navigator",
@@ -121,16 +123,15 @@ describe("extraction under jsdom", () => {
         return () => vi.unstubAllGlobals();
       },
     ],
-  ])("still makes none when a test fakes a phone with %s", async (_, fake) => {
-    vi.resetModules();
-    const fresh = await import("./dom-extractor.js");
+  ])("still makes none when a test fakes a phone with %s", (_, fake) => {
+    resetRealmSingletons();
     document.body.innerHTML = `<main><button>Send</button></main>`;
     let restore = () => {};
     try {
       restore = fake();
       expect(navigator.userAgent).toBe(PHONE);
       const reads = pseudoReadsDuring(() => {
-        const { nodes } = fresh.extractDomTree(document.body);
+        const { nodes } = extractDomTree(document.body);
         expect([...nodes.values()].map((n) => n.a11y.name)).toContain("Send");
       });
       expect(reads).toEqual([]);
@@ -142,15 +143,14 @@ describe("extraction under jsdom", () => {
 
   // Faking the prototype's own getter is the one fake the read cannot see past.
   // What it gets then is not kept; what it gets from jsdom itself is.
-  it("keeps the jsdom answer, and not one a faked prototype gave", async () => {
-    vi.resetModules();
-    const fresh = await import("./dom-extractor.js");
+  it("keeps the jsdom answer, and not one a faked prototype gave", () => {
+    resetRealmSingletons();
     document.body.innerHTML = `<main><button>Send</button></main>`;
-    const extract = () => fresh.extractDomTree(document.body);
+    const extract = () => extractDomTree(document.body);
 
     const restore = fakePrototypeAgent();
     try {
-      pseudoReadsDuring(extract);
+      expect(pseudoReadsDuring(extract)).not.toEqual([]);
     } finally {
       restore();
     }
@@ -161,6 +161,26 @@ describe("extraction under jsdom", () => {
       expect(pseudoReadsDuring(extract)).toEqual([]);
     } finally {
       again();
+    }
+  });
+
+  // Every published package bundles its own copy of this code. A copy used
+  // for the first time after the fake still knows what another copy found.
+  it("shares the jsdom answer with a copy first used after a fake", async () => {
+    resetRealmSingletons();
+    document.body.innerHTML = `<main><button>Send</button></main>`;
+    expect(pseudoReadsDuring(() => extractDomTree(document.body))).toEqual([]);
+
+    vi.resetModules();
+    const other = await import("./dom-extractor.js");
+    expect(other.extractDomTree).not.toBe(extractDomTree);
+    const restore = fakePrototypeAgent();
+    try {
+      expect(
+        pseudoReadsDuring(() => other.extractDomTree(document.body)),
+      ).toEqual([]);
+    } finally {
+      restore();
     }
   });
 
