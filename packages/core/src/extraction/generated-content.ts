@@ -135,15 +135,48 @@ export function applyTextTransform(
 }
 
 /**
+ * Whether a window is jsdom's. Its user agent says so, read through
+ * `Navigator.prototype`'s own getter: a test of code that detects a phone
+ * fakes `navigator.userAgent` with an own property, which that read passes by.
+ * Where the test replaced `navigator` whole, the getter refuses the stand-in,
+ * and jsdom's refusal is worded as no browser's is (jsdom 26 to 31 alike;
+ * Chromium says "Illegal invocation").
+ */
+function isJsdom(view: Window & typeof globalThis): boolean {
+  try {
+    const own = Object.getOwnPropertyDescriptor(
+      view.Navigator.prototype,
+      "userAgent",
+    )?.get;
+    const agent = own ? own.call(view.navigator) : view.navigator.userAgent;
+    return /jsdom/i.test(String(agent));
+  } catch (error) {
+    return /not a valid instance of Navigator/.test(
+      String((error as { message?: unknown } | null)?.message),
+    );
+  }
+}
+
+/**
+ * The windows found to be jsdom's. Only that answer is kept: a "no" given
+ * while a test had faked the prototype's own getter is asked again next time.
+ * A memo, not shared state: every copy of this code reaches the same answer.
+ */
+const jsdomWindows = new WeakSet<object>();
+
+/**
  * jsdom does not implement `getComputedStyle(el, pseudoElt)`: it reports the
  * call as not implemented and returns the element's own style. Make no such
  * call there, so generated content contributes nothing, as it always has.
+ *
+ * Asked of the window whose `getComputedStyle` would be called. Once it says
+ * jsdom, what a test does to `navigator` afterwards cannot change the answer.
  */
 function pseudoReadsUnsupported(): boolean {
-  return (
-    typeof navigator !== "undefined" &&
-    /jsdom/i.test(String(navigator.userAgent))
-  );
+  if (jsdomWindows.has(window)) return true;
+  if (!isJsdom(window)) return false;
+  jsdomWindows.add(window);
+  return true;
 }
 
 type Sides = { before: PseudoText; after: PseudoText };
