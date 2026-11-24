@@ -784,7 +784,7 @@ export class DomObserver {
 //
 //   - Modals: `[aria-modal="true"]`, native `<dialog>`, `[role="dialog"]`,
 //     `[role="alertdialog"]`
-//   - Dropdown menus: `[role="menu"]`, `[role="menubar"]`
+//   - Dropdown menus: `[role="menu"]` (not `menubar`, a bar the page shows)
 //   - Listboxes (Select / Combobox popovers): `[role="listbox"]`
 //   - Tooltips: `[role="tooltip"]`
 //   - Live regions: `[role="status"]`, `[role="alert"]`, `[role="log"]`,

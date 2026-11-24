@@ -187,6 +187,46 @@ describe("semanticTreeRules", () => {
     }
   });
 
+  it("takes a menubar outside the root for the rest of the page, and a menu it opens for an overlay, as the extractor does", () => {
+    // A menubar is a bar the page shows, so no read widens for it. A menu it
+    // opens is an overlay wherever it is: a read widens for that, and brings
+    // the bar around it as it brings the header.
+    host.innerHTML = `
+      <header>
+        <ul role="menubar" aria-label="Site">
+          <li role="none">
+            <a role="menuitem" href="#" aria-haspopup="true">Docs</a>
+            <ul id="docs" role="menu" aria-label="Docs" hidden>
+              <li role="none"><a role="menuitem" href="#">Guide</a></li>
+            </ul>
+          </li>
+        </ul>
+      </header>
+      <main><button>Save</button></main>
+    `;
+    const main = host.querySelector("main")!;
+    const scope = rootRowScope(main);
+    const menuRows = (read: ExtractionResult) =>
+      [...read.nodes.values()].filter((n) => n.a11y.role.startsWith("menu"));
+    expect(menuRows(extractA11yTree(main))).toEqual([]);
+
+    host.querySelector("#docs")!.removeAttribute("hidden");
+    const wide = extractA11yTree(main);
+    expect(
+      Object.fromEntries(
+        menuRows(wide).map((n) => [
+          `${n.a11y.role} "${n.a11y.name}"`,
+          scope.has(n.id),
+        ]),
+      ),
+    ).toEqual({
+      'menubar "Site"': false,
+      'menuitem "Docs"': false,
+      'menu "Docs"': true,
+      'menuitem "Guide"': true,
+    });
+  });
+
   it("places a text row where the element it is text of is", () => {
     // A `text` row has no element of its own. One outside the root is the
     // rest of the page, which a widened read brings and takes away; one

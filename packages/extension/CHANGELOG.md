@@ -39,6 +39,13 @@
   from `<body>`, where the rule never applies
   ([#705](https://github.com/real-a11y/real-a11y-dev/pull/705)).
 
+- **Internal: the extractor no longer counts a menubar as an overlay.** A
+  read scoped to a root widened to the whole page whenever a
+  `role="menubar"` sat outside it, such as a site's top navigation. The
+  extension re-bundles the updated extractor. Nothing changes for users: the
+  TAB view reads each frame from `<body>`, where the rule never applies
+  ([#707](https://github.com/real-a11y/real-a11y-dev/pull/707)).
+
 ## 0.1.21
 
 ### Patch Changes

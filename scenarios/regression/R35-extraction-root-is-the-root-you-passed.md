@@ -6,9 +6,9 @@ area: Testing
 type: Automated
 priority: P0
 status: Active
-validFrom: "testing ≥ 0.1.0-beta.15 for the row; the detached-root guard and the aria-live=off correction ship in the FIRST release after 0.1.0-beta.15. Running steps 2–4 against 0.1.0-beta.15 or earlier reproduces the defect rather than failing the test — there a detached root is replaced outright and an inert announcer pivots the whole extraction. That is the old behaviour, not a fail. Step 7 changed in the FIRST release after 0.1.0-beta.16: before it, `aria-modal=true` alone counted as an open modal, so a sibling aria-modal dialog replaced the root instead of widening it. On those releases that is the old behaviour, not a fail. Step 11 changed in the FIRST release after 0.1.0-beta.24: before it, a live region in the root's own container widened the root like any other. On those releases that is the old behaviour, not a fail. Step 1 is a KNOWN OPEN GAP at every version so far, not a regression. The behaviour lives in `resolveEffectiveRoot` (packages/core/src/extraction/dom-extractor.ts), but `core` is PRIVATE and bundled — there is no core version to pin or install, so assert against `@real-a11y-dev/testing` only. The same pivot reaches users through `inspector` and `react`, which bundle their own copy."
+validFrom: "testing ≥ 0.1.0-beta.15 for the row; the detached-root guard and the aria-live=off correction ship in the FIRST release after 0.1.0-beta.15. Running steps 2–4 against 0.1.0-beta.15 or earlier reproduces the defect rather than failing the test — there a detached root is replaced outright and an inert announcer pivots the whole extraction. That is the old behaviour, not a fail. Step 7 changed in the FIRST release after 0.1.0-beta.16: before it, `aria-modal=true` alone counted as an open modal, so a sibling aria-modal dialog replaced the root instead of widening it. On those releases that is the old behaviour, not a fail. Step 11 changed in the FIRST release after 0.1.0-beta.24: before it, a live region in the root's own container widened the root like any other. On those releases that is the old behaviour, not a fail. Step 12 changed in the FIRST release after 0.1.0-beta.24 too: before it, a `role=menubar` anywhere outside the root widened the root like a menu. On those releases that is the old behaviour, not a fail. Step 1 is a KNOWN OPEN GAP at every version so far, not a regression. The behaviour lives in `resolveEffectiveRoot` (packages/core/src/extraction/dom-extractor.ts), but `core` is PRIVATE and bundled — there is no core version to pin or install, so assert against `@real-a11y-dev/testing` only. The same pivot reaches users through `inspector` and `react`, which bundle their own copy."
 validUntil: ""
-expected: "a pivot never DROPS the caller's own subtree — detached, shadow-rooted and ancestor-live-region cases all return the root passed. ONE deliberate exception: an open modal, meaning a `<dialog>` opened with showModal(), scopes EXCLUSIVELY, including over a root that is merely its sibling, because the browser makes everything outside it inert and an AT user cannot reach that root at all. `aria-modal=true` alone is not modal: Chromium's own tree keeps the page behind it, so it only widens. Step 1 is a KNOWN OPEN GAP: an ordinary in-page live region in a different child of `<body>` from an attached root still widens to the whole document, and there is no scope-moved signal; it is documented rather than fixed. One in the root's own child of `<body>` does not widen (step 11)"
+expected: "a pivot never DROPS the caller's own subtree — detached, shadow-rooted and ancestor-live-region cases all return the root passed. ONE deliberate exception: an open modal, meaning a `<dialog>` opened with showModal(), scopes EXCLUSIVELY, including over a root that is merely its sibling, because the browser makes everything outside it inert and an AT user cannot reach that root at all. `aria-modal=true` alone is not modal: Chromium's own tree keeps the page behind it, so it only widens. Step 1 is a KNOWN OPEN GAP: an ordinary in-page live region in a different child of `<body>` from an attached root still widens to the whole document, and there is no scope-moved signal; it is documented rather than fixed. One in the root's own child of `<body>` does not widen (step 11). A `role=menubar` outside the root widens nowhere, since it is a bar the page shows rather than a popup; a menu it opens still widens (step 12)"
 covers:
   - packages.@real-a11y-dev/core
   - packages.@real-a11y-dev/testing
@@ -38,7 +38,8 @@ form status, a save confirmation — as a **sibling** of the element under test:
      implicit politeness
    - `role="status announcer"` — a token list; the role that wins is the first
      token
-   - `role="MENU" aria-live="off"` — case is not folded, so this must stay off
+   - `role="MENU" aria-live="off"` — case is folded the way the tree folds
+     it, so this is a menu and widens whatever its `aria-live`
    - `aria-live="none"`, `"false"`, `"0"`, `"polit"` — the hand-written
      spellings of "switched off", which a denylist admitted
    - bare `aria-live` and `aria-live=""` — invalid, so the role's implicit
@@ -72,6 +73,24 @@ form status, a save confirmation — as a **sibling** of the element under test:
 
     `treeSnapshot` and `tabSequenceSnapshot` of `#component`. Then the same
     with the status replaced by `<div role="menu"><button>Copy</button></div>`
+12. A site's top navigation as a `role="menubar"`, first in a `<header>`
+    beside the root's `<main>`, then moved into that `<main>`:
+
+    ```html
+    <header>
+      <nav>
+        <ul role="menubar" aria-label="Site">
+          <li role="none"><a role="menuitem" href="/">Home</a></li>
+          <li role="none"><a role="menuitem" href="/docs">Docs</a></li>
+        </ul>
+      </nav>
+    </header>
+    <main><div id="component"><button>Save</button></div></main>
+    ```
+
+    `treeSnapshot` and `tabSequenceSnapshot` of `#component` in each. Then
+    open one of the bar's menus: a visible `<ul role="menu">` holding a
+    `menuitem`, inside the `<li>` of the item that opens it
 
 ## Expected
 
@@ -130,6 +149,13 @@ form status, a save confirmation — as a **sibling** of the element under test:
   regions are exempt, since a menu is what the user is looking at wherever it
   mounted. On `testing ≤ 0.1.0-beta.24` the status widens too; that is the old
   behaviour, not a fail
+- **12** — `#component` alone in the tree and `button "Save"` alone in the tab
+  sequence in BOTH placements, with no `menuitem "Home"`. A menubar is a bar
+  the page shows, not a popup, so unlike a live region (11) it is exempt
+  wherever it sits, `<header>` included. Opening a menu widens to the whole
+  page, the bar with it: the menu is an overlay wherever it mounted. On
+  `testing ≤ 0.1.0-beta.24` the menubar widens in both placements; that is
+  the old behaviour, not a fail
 
 ## Why this exists
 
@@ -147,6 +173,13 @@ every audit on the page. From the first release after testing 0.1.0-beta.24 a
 live region in the root's own child of `<body>` — where a portal never mounts —
 no longer counts (step 11, found dogfooding a "Loading…" status beside a form).
 One in another child of `<body>` still does (step 1).
+
+The same release stopped counting `role="menubar"` as an overlay at all (step
+12). It had joined the overlay roles alongside `menu` as a "dropdown menu",
+with no case of its own, but ARIA's menubar is the menu that stays visible: a
+site's top navigation, on every page. A root-scoped read anywhere on such a
+site took in the whole page. The menus the bar opens are `menu`s, and still
+widen.
 
 Two consequences, in increasing severity:
 

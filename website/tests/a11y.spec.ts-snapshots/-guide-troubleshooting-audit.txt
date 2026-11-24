@@ -169,6 +169,16 @@ main
     code "<body>"
     text ", not of its trigger, and a tree that stopped at your root would omit the thing the user is looking at."
   paragraph
+    text "A"
+    strong "menubar"
+    text "("
+    code "role="menubar""
+    text ") is not an overlay, wherever it sits: it is a bar the page keeps showing, usually the site's top navigation, so a root beside it stays your root. A menu it opens is one, and the tree widens to take it in while it is open. A menubar that carries"
+    code "aria-live="polite""
+    text "or"
+    code ""assertive""
+    text "is a live region, though, and follows the live-region rule below."
+  paragraph
     text "An"
     strong "ordinary in-page live region"
     text "— a "Loading…" status, a result count, a save confirmation — does not count when it sits in the same child of"

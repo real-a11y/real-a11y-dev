@@ -307,6 +307,87 @@ describe("an in-flow live region — in the root's own child of <body> — is no
   }
 });
 
+describe("a menubar is a bar the page shows, not an overlay", () => {
+  // A site's top navigation is often a permanently visible `role="menubar"`.
+  // Counting it as an overlay widened every root-scoped read on the page.
+  const FORM = `<form id="host" aria-label="Zone"><input aria-label="Radius"><button>Save</button></form>`;
+  const MENUBAR = `<ul role="menubar" aria-label="Site"><li role="none"><a role="menuitem" href="#">Home</a></li><li role="none"><a role="menuitem" href="#">Docs</a></li></ul>`;
+
+  it("does not widen for a menubar in the same <main>", () => {
+    page(`<main><nav>${MENUBAR}</nav>${FORM}</main>`);
+    const host = document.getElementById("host")!;
+    expect(resolveEffectiveRoot(host)).toBe(host);
+  });
+
+  // Unlike an in-flow live region, it is not exempt only in the root's own
+  // child of <body>: a server-rendered page's `<header>` sits beside its
+  // `<main>`, and a menubar is no portal wherever it is.
+  for (const [where, html] of [
+    [
+      "in a <header> beside <main>",
+      `<header><nav>${MENUBAR}</nav></header><main>${FORM}</main>`,
+    ],
+    ["as a child of <body>", `${MENUBAR}<div id="app">${FORM}</div>`],
+    [
+      "spelled MENUBAR",
+      `${MENUBAR.replace("menubar", "MENUBAR")}<main>${FORM}</main>`,
+    ],
+  ]) {
+    it(`does not widen for a menubar ${where}`, () => {
+      page(html);
+      const host = document.getElementById("host")!;
+      expect(resolveEffectiveRoot(host)).toBe(host);
+    });
+  }
+
+  it("does not widen while the menubar's menus are closed", () => {
+    // The APG menubar shape: each submenu is in the bar, hidden until opened.
+    page(
+      `<header><ul role="menubar" aria-label="Site"><li role="none"><a role="menuitem" aria-haspopup="true" aria-expanded="false" href="#">Docs</a><ul role="menu" hidden><li role="none"><a role="menuitem" href="#">Guide</a></li></ul></li></ul></header><main>${FORM}</main>`,
+    );
+    const host = document.getElementById("host")!;
+    expect(resolveEffectiveRoot(host)).toBe(host);
+  });
+
+  it("still widens for a menu the menubar opens", () => {
+    // What the user is looking at, as any open menu is.
+    page(
+      `<header><ul role="menubar" aria-label="Site"><li role="none"><a role="menuitem" aria-haspopup="true" aria-expanded="true" href="#">Docs</a><ul role="menu"><li role="none"><a role="menuitem" href="#">Guide</a></li></ul></li></ul></header><main>${FORM}</main>`,
+    );
+    expect(resolveEffectiveRoot(document.getElementById("host")!)).toBe(
+      document.body,
+    );
+  });
+
+  it("still widens for a menu the menubar opens into a portal", () => {
+    page(
+      `<header>${MENUBAR}</header><main>${FORM}</main><div><div role="menu"><a role="menuitem" href="#">Guide</a></div></div>`,
+    );
+    expect(resolveEffectiveRoot(document.getElementById("host")!)).toBe(
+      document.body,
+    );
+  });
+
+  it("is a live region like any other when it announces", () => {
+    // `aria-live` makes an element a live region whatever its role, and a
+    // menubar is no container overlay to keep it one: beside the root in the
+    // same <main> it is the page's own, in another child of <body> nothing
+    // tells it from a portal.
+    const LIVE = MENUBAR.replace(
+      'role="menubar"',
+      'role="menubar" aria-live="polite"',
+    );
+    page(`<main><nav>${LIVE}</nav>${FORM}</main>`);
+    const host = document.getElementById("host")!;
+    expect(resolveEffectiveRoot(host)).toBe(host);
+
+    page(`<header><nav>${LIVE}</nav></header><main>${FORM}</main>`);
+    expect(resolveEffectiveRoot(document.getElementById("host")!)).toBe(
+      document.body,
+    );
+  });
+});
+
 describe("aria-live=off declares the element inert", () => {
   it("an announcer shell switched off does not pivot", () => {
     // Component kits mount exactly this at body level, permanently.
