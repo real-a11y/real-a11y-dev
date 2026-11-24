@@ -52,4 +52,11 @@ describe("getActions", () => {
       "focus",
     ]);
   });
+
+  it("keeps an onclick frame's click and adds focus", () => {
+    expect(getActions(make('<iframe onclick="x()"></iframe>'))).toEqual([
+      "click",
+      "focus",
+    ]);
+  });
 });

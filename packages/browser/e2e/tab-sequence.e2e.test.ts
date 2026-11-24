@@ -81,44 +81,48 @@ async function both(html: string) {
   // `object` data: URLs load asynchronously.
   await page.waitForLoadState("load");
   await page.waitForTimeout(150);
-  return { dom: await domSequence(), real: await chromiumSequence() };
+  const dom = await domSequence();
+  const real = await chromiumSequence();
+  // The DOM sequence must be what Tab actually visits, frame entries included.
+  expect(dom).toEqual(real);
+  return { dom, real };
 }
 
 const FRAME = (attrs = "") =>
-  `<iframe srcdoc="<button>in</button>" title="f" data-t="f" ${attrs}></iframe>`;
+  `<iframe srcdoc="<button>in</button>" title="if" data-t="if" ${attrs}></iframe>`;
 
 describe("frames in the tab sequence", () => {
   it("lists an iframe, an object and media where Tab enters them", async () => {
     const { dom } = await both(
-      `<a href="/" data-t="a1">a1</a>${FRAME()}<object data="${HTML_DOC}" data-t="generic"></object><video controls data-t="v"></video><a href="/" data-t="a2">a2</a>`,
+      `<a href="/" data-t="a1">a1</a>${FRAME()}<object data="${HTML_DOC}" data-t="generic"></object><video controls data-t="video"></video><a href="/" data-t="a2">a2</a>`,
     );
-    expect(dom).toEqual(["a1", "f", "generic", "video", "a2"]);
+    expect(dom).toEqual(["a1", "if", "generic", "video", "a2"]);
   });
 
   it("lists a frame between the controls around it", async () => {
     const { dom, real } = await both(
       `<button data-t="before">before</button>${FRAME()}<button data-t="after">after</button>`,
     );
-    expect(dom).toEqual(["before", "f", "after"]);
+    expect(dom).toEqual(["before", "if", "after"]);
     expect(real[0]).toBe("before");
     expect(real).toContain("after");
   });
 
   it("lists a frame holding three buttons once", async () => {
     const { dom } = await both(
-      `<button data-t="before">before</button><iframe srcdoc="<button>1</button><button>2</button><button>3</button>" title="f" data-t="f"></iframe><button data-t="after">after</button>`,
+      `<button data-t="before">before</button><iframe srcdoc="<button>1</button><button>2</button><button>3</button>" title="if" data-t="if"></iframe><button data-t="after">after</button>`,
     );
-    expect(dom).toEqual(["before", "f", "after"]);
+    expect(dom).toEqual(["before", "if", "after"]);
   });
 
   it.each([
-    ["text only", `<iframe srcdoc="text" title="f" data-t="f"></iframe>`],
-    ["about:blank", `<iframe title="f" data-t="f"></iframe>`],
+    ["text only", `<iframe srcdoc="text" title="if" data-t="if"></iframe>`],
+    ["about:blank", `<iframe title="if" data-t="if"></iframe>`],
   ])("lists an empty frame (%s) once", async (_name, frame) => {
     const { dom } = await both(
       `<button data-t="before">before</button>${frame}<button data-t="after">after</button>`,
     );
-    expect(dom).toEqual(["before", "f", "after"]);
+    expect(dom).toEqual(["before", "if", "after"]);
   });
 
   it.each([
@@ -138,18 +142,18 @@ describe("frames in the tab sequence", () => {
     const { dom } = await both(
       `<button data-t="b1">b1</button>${FRAME(`tabindex="1"`)}<button data-t="b2">b2</button>`,
     );
-    expect(dom).toEqual(["f", "b1", "b2"]);
+    expect(dom).toEqual(["if", "b1", "b2"]);
   });
 
   it("keeps a role=presentation frame and an aria-disabled one a stop", async () => {
     const pres = await both(
       `<button data-t="before">before</button>${FRAME(`role="presentation"`)}<button data-t="after">after</button>`,
     );
-    expect(pres.dom).toEqual(["before", "f", "after"]);
+    expect(pres.dom).toEqual(["before", "if", "after"]);
     const dis = await both(
       `<button data-t="before">before</button><div aria-disabled="true">${FRAME()}</div><button data-t="after">after</button>`,
     );
-    expect(dis.dom).toEqual(["before", "f", "after"]);
+    expect(dis.dom).toEqual(["before", "if", "after"]);
   });
 
   it.each([
@@ -180,9 +184,10 @@ describe("frames in the tab sequence", () => {
   it("knows a difference: a keyboard-focusable scroller is not listed yet", async () => {
     // Chromium tabs to a scroller with no focusable child. Tracked in the
     // "DOM tab sequence skips keyboard-focusable scroll containers" ticket.
-    const { dom } = await both(
+    await page.setContent(
       `<div style="overflow:auto;height:40px" data-t="sc"><p style="height:400px">tall</p></div><button data-t="end">end</button>`,
     );
-    expect(dom).toEqual(["end"]);
+    expect(await domSequence()).toEqual(["end"]);
+    expect(await chromiumSequence()).toEqual(["sc", "end"]);
   });
 });

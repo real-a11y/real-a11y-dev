@@ -371,6 +371,22 @@ describe("getTabSequence", () => {
       ]);
     });
 
+    it("lists only the inner frame when it is the outer frame's one stop", () => {
+      const tree = merged(false);
+      const outer = [...tree.nodes.values()].find(
+        (n) => n.dom?.tagName === "iframe",
+      )!;
+      const inner = { ...outer, id: "inner", parentId: outer.id, childIds: [] };
+      inner.a11y = { ...outer.a11y, name: "inner" };
+      tree.nodes.set("inner", inner);
+      outer.childIds.push("inner");
+      expect(getTabSequence(tree).map((n) => n.a11y.name)).toEqual([
+        "before",
+        "inner",
+        "after",
+      ]);
+    });
+
     it("lists the iframe when its frame contributed no stop", () => {
       expect(getTabSequence(merged(false)).map((n) => n.a11y.name)).toEqual([
         "before",

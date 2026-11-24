@@ -72,11 +72,6 @@ function tagActions(element: Element, tag: string): ActionType[] | undefined {
   // Only "focus" is honest here: a synthetic click doesn't count as a user
   // gesture for playback, so a CLICK badge would no-op.
   if (MEDIA_TAGS.has(tag) && element.hasAttribute("controls")) return ["focus"];
-  // A frame (or an object showing a document) is a tab stop that takes
-  // scripted focus. The action also keeps an `<object>` and a
-  // `role="presentation"` iframe in the a11y view, which keeps only
-  // interactive generics and presentational elements.
-  if (hostsNestedDocument(element)) return ["focus"];
   return undefined;
 }
 
@@ -125,7 +120,16 @@ export function getActions(element: Element): ActionType[] {
   // The role the tree shows, so the actions offered agree with it: a
   // `role="foo button"` clicks, an option the browser discarded doesn't.
   const role = getExplicitRole(element);
-  const actions = tagActions(element, tag) ?? roleActions(element, role);
+  let actions = tagActions(element, tag) ?? roleActions(element, role);
+
+  // A frame (or an object showing a document) is a tab stop that takes
+  // scripted focus. The action also keeps an `<object>` and a
+  // `role="presentation"` iframe in the a11y view, which keeps only
+  // interactive generics and presentational elements. It is added to what
+  // the element's own behavior gives it (an `onclick`), never in its place.
+  if (hostsNestedDocument(element) && !actions.includes("focus")) {
+    actions = [...actions, "focus"];
+  }
 
   // An editing host is a text field whatever its role: Chromium focuses it
   // and takes typing, and the dispatcher's `type` writes into it. The role

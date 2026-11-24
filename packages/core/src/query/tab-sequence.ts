@@ -45,14 +45,14 @@ export function getTabSequence(input: QueryInput): SemanticNode[] {
   let order = 0;
   const nodes = nodesOf(input);
 
-  // Whether a stop of the sequence lies under `node`. A nested frame counts
-  // through its own stops, as a frame node is listed only when it has none.
+  // Whether a stop of the sequence lies under `node`.
   const hasStopBelow = (node: SemanticNode): boolean =>
     node.childIds.some((id) => {
       const child = nodes.get(id);
       if (!child) return false;
-      if (isStop(child) && !isFrame(child)) return true;
-      return hasStopBelow(child);
+      // A nested frame counts too: it is listed itself when it holds no stop,
+      // and its stops are listed when it does.
+      return isStop(child) || hasStopBelow(child);
     });
 
   for (const node of linearize(input)) {
