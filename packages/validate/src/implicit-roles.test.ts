@@ -322,6 +322,18 @@ describe("a role the user agent discarded", () => {
     ]);
   });
 
+  it("orders every issue, warnings included, after the discard", () => {
+    const n = node({ id: "n", role: "option", discardedRole: "listitem" });
+    expect(
+      validateNode(n, mapOf(n)).map((i) => `${i.severity}: ${i.message}`),
+    ).toEqual([
+      'error: role "listitem" is discarded outside its required context (directory / list)',
+      'error: role "option" requires an accessible name',
+      "error: missing required aria-selected",
+      "warn: should be inside group / listbox",
+    ]);
+  });
+
   it("is the discard, not the parent, that decides", () => {
     // Inside a listbox as far as the extracted tree shows — but the browser
     // found something between them that ended the climb.
