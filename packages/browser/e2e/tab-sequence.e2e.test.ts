@@ -70,7 +70,10 @@ async function chromiumSequence(): Promise<string[]> {
         (document.activeElement === document.body ? "<body>" : "?"),
     );
     if (t === "<body>") break;
-    if (seen[seen.length - 1] !== t) seen.push(t);
+    if (seen[seen.length - 1] === t) continue;
+    // Some Chromium builds wrap to the first stop instead of leaving the page.
+    if (seen.includes(t)) break;
+    seen.push(t);
     if (seen.length > 12) break;
   }
   return seen;
