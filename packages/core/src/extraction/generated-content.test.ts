@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { resetRealmSingletons } from "../utils/realm-singleton.js";
+
 import { extractDomTree } from "./dom-extractor.js";
 import {
   applyTextTransform,
@@ -48,29 +50,137 @@ describe("applyTextTransform", () => {
   });
 });
 
+const PHONE =
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1";
+
+/**
+ * The pseudo-elements `run` asks `getComputedStyle` for. jsdom's "not
+ * implemented" report goes to its virtual console, which a spy on
+ * `console.error` does not see under Vitest, so the reads are what is counted.
+ * A read gets the element's own style, as jsdom would give, without its report.
+ */
+function pseudoReadsDuring(run: () => void): string[] {
+  const real = window.getComputedStyle.bind(window);
+  const reads: string[] = [];
+  const spy = vi.spyOn(window, "getComputedStyle").mockImplementation(((
+    el: Element,
+    pseudo?: string | null,
+  ) => {
+    if (pseudo) reads.push(pseudo);
+    return real(el);
+  }) as typeof window.getComputedStyle);
+  try {
+    run();
+  } finally {
+    spy.mockRestore();
+  }
+  return reads;
+}
+
+/** Fake `navigator.userAgent` on `Navigator.prototype`'s own getter. */
+function fakePrototypeAgent(): () => void {
+  const proto = Object.getPrototypeOf(navigator) as object;
+  const original = Object.getOwnPropertyDescriptor(proto, "userAgent")!;
+  Object.defineProperty(proto, "userAgent", {
+    ...original,
+    get: () => PHONE,
+  });
+  return () => Object.defineProperty(proto, "userAgent", original);
+}
+
 describe("extraction under jsdom", () => {
-  it("makes no pseudo-element read and logs nothing", () => {
+  it("makes no pseudo-element read", () => {
     document.body.innerHTML = `<button>one</button><button>two</button>`;
-    const real = window.getComputedStyle.bind(window);
-    const calls: unknown[][] = [];
-    const spy = vi.spyOn(window, "getComputedStyle").mockImplementation(((
-      el: Element,
-      pseudo?: string | null,
-    ) => {
-      calls.push([el, pseudo]);
-      return real(el, pseudo);
-    }) as typeof window.getComputedStyle);
-    const error = vi.spyOn(console, "error").mockImplementation(() => {});
-    try {
+    const reads = pseudoReadsDuring(() => {
       const { nodes } = extractDomTree(document.body);
       const names = [...nodes.values()].map((n) => n.a11y.name);
       expect(names).toContain("one");
-      expect(calls.filter(([, pseudo]) => pseudo)).toEqual([]);
-      expect(error).not.toHaveBeenCalled();
       expect(generatedText(document.body).before.text).toBe("");
+    });
+    expect(reads).toEqual([]);
+  });
+
+  // A test of code that detects a phone fakes the user agent, on the instance
+  // or by replacing the global. Neither may bring the pseudo-element read back.
+  // The realm's earlier answer is forgotten first, so this one is asked anew.
+  it.each([
+    [
+      "an own property on navigator",
+      () => {
+        Object.defineProperty(navigator, "userAgent", {
+          configurable: true,
+          get: () => PHONE,
+        });
+        return () => {
+          delete (navigator as { userAgent?: string }).userAgent;
+        };
+      },
+    ],
+    [
+      "a replaced global navigator",
+      () => {
+        vi.stubGlobal("navigator", { userAgent: PHONE });
+        return () => vi.unstubAllGlobals();
+      },
+    ],
+  ])("still makes none when a test fakes a phone with %s", (_, fake) => {
+    resetRealmSingletons();
+    document.body.innerHTML = `<main><button>Send</button></main>`;
+    let restore = () => {};
+    try {
+      restore = fake();
+      expect(navigator.userAgent).toBe(PHONE);
+      const reads = pseudoReadsDuring(() => {
+        const { nodes } = extractDomTree(document.body);
+        expect([...nodes.values()].map((n) => n.a11y.name)).toContain("Send");
+      });
+      expect(reads).toEqual([]);
     } finally {
-      spy.mockRestore();
-      error.mockRestore();
+      restore();
+    }
+    expect(navigator.userAgent).toMatch(/jsdom/);
+  });
+
+  // Faking the prototype's own getter is the one fake the read cannot see past.
+  // What it gets then is not kept; what it gets from jsdom itself is.
+  it("keeps the jsdom answer, and not one a faked prototype gave", () => {
+    resetRealmSingletons();
+    document.body.innerHTML = `<main><button>Send</button></main>`;
+    const extract = () => extractDomTree(document.body);
+
+    const restore = fakePrototypeAgent();
+    try {
+      expect(pseudoReadsDuring(extract)).not.toEqual([]);
+    } finally {
+      restore();
+    }
+    expect(pseudoReadsDuring(extract)).toEqual([]);
+
+    const again = fakePrototypeAgent();
+    try {
+      expect(pseudoReadsDuring(extract)).toEqual([]);
+    } finally {
+      again();
+    }
+  });
+
+  // Every published package bundles its own copy of this code. A copy used
+  // for the first time after the fake still knows what another copy found.
+  it("shares the jsdom answer with a copy first used after a fake", async () => {
+    resetRealmSingletons();
+    document.body.innerHTML = `<main><button>Send</button></main>`;
+    expect(pseudoReadsDuring(() => extractDomTree(document.body))).toEqual([]);
+
+    vi.resetModules();
+    const other = await import("./dom-extractor.js");
+    expect(other.extractDomTree).not.toBe(extractDomTree);
+    const restore = fakePrototypeAgent();
+    try {
+      expect(
+        pseudoReadsDuring(() => other.extractDomTree(document.body)),
+      ).toEqual([]);
+    } finally {
+      restore();
     }
   });
 

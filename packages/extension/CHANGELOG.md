@@ -28,6 +28,10 @@
   HTML-AAM gives these input types no ARIA role, so a tab stop on one now reads
   `html-input-date`, `html-input-time`, `html-input-color` and so on, and a file
   input reads `button`, instead of `textbox`. ([#710](https://github.com/real-a11y/real-a11y-dev/pull/710))
+- The check that skips CSS generated content under jsdom now holds when a test
+  fakes `navigator.userAgent`. The extension never runs under jsdom, so nothing
+  it shows changes; the entry records the engine it ships.
+  ([#715](https://github.com/real-a11y/real-a11y-dev/pull/715))
 
 ## 0.1.21
 

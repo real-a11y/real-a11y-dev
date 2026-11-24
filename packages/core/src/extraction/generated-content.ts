@@ -6,6 +6,8 @@
  * text, without a space, as Chromium does; a pseudo-element laid out as a box
  * is spaced like any box (see `displayNeedsSpace`).
  */
+import { realmSingleton } from "../utils/realm-singleton.js";
+
 import { displayNeedsSpace, isTextVisible } from "./name-spacing.js";
 import { getCachedComputedStyle, type StyleCache } from "./role-map.js";
 import { REDACTED_VALUE } from "./sensitivity.js";
@@ -135,15 +137,60 @@ export function applyTextTransform(
 }
 
 /**
- * jsdom does not implement `getComputedStyle(el, pseudoElt)`: it reports the
- * call as not implemented and returns the element's own style. Make no such
- * call there, so generated content contributes nothing, as it always has.
+ * Whether a window is jsdom's. Its user agent says so, read through
+ * `Navigator.prototype`'s own getter: a test of code that detects a phone
+ * fakes `navigator.userAgent` with an own property, which that read passes by.
+ * Where the test replaced `navigator` whole, the getter refuses the stand-in,
+ * and jsdom's refusal is worded as no browser's is (jsdom 26 to 31 alike;
+ * Chromium says "Illegal invocation").
+ */
+function isJsdom(view: Window & typeof globalThis): boolean {
+  try {
+    const own = Object.getOwnPropertyDescriptor(
+      view.Navigator.prototype,
+      "userAgent",
+    )?.get;
+    const agent = own ? own.call(view.navigator) : view.navigator.userAgent;
+    return /jsdom/i.test(String(agent));
+  } catch (error) {
+    return /not a valid instance of Navigator/.test(
+      String((error as { message?: unknown } | null)?.message),
+    );
+  }
+}
+
+const JSDOM_WINDOWS_SHAPE = "WeakSet<Window>@1";
+
+/**
+ * The windows found to be jsdom's. Only that answer is kept: a "no" given
+ * while a test had faked the prototype's own getter is asked again next time.
+ * One set for the realm, shared by every bundled copy of this code, so a copy
+ * first used after such a fake still knows what another copy found.
+ */
+function jsdomWindows(): WeakSet<object> {
+  return realmSingleton(
+    "jsdom-windows",
+    JSDOM_WINDOWS_SHAPE,
+    () => new WeakSet<object>(),
+  );
+}
+
+/**
+ * jsdom 30 and earlier do not implement `getComputedStyle(el, pseudoElt)`: they
+ * report the call as not implemented and return the element's own style. Make
+ * no such call under any jsdom, so generated content contributes nothing there,
+ * as it always has, and a name doesn't change with the jsdom version (jsdom 31
+ * implements the call).
+ *
+ * Asked of the window whose `getComputedStyle` would be called. Once it says
+ * jsdom, what a test does to `navigator` afterwards cannot change the answer.
  */
 function pseudoReadsUnsupported(): boolean {
-  return (
-    typeof navigator !== "undefined" &&
-    /jsdom/i.test(String(navigator.userAgent))
-  );
+  const found = jsdomWindows();
+  if (found.has(window)) return true;
+  if (!isJsdom(window)) return false;
+  found.add(window);
+  return true;
 }
 
 type Sides = { before: PseudoText; after: PseudoText };
