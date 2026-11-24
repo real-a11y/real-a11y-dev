@@ -247,7 +247,9 @@ main
     code "hasPopup"
     text "before this release; rename it in any code that reads a native tree's"
     code "a11y.properties"
-    text ". The printed tree text is unchanged."
+    text ". The printed tree text is unchanged, except that a node whose"
+    code "roledescription"
+    text "is only whitespace no longer prints one."
   separator
   heading "How roles are resolved" (level 2)
   paragraph
