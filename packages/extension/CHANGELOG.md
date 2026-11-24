@@ -33,6 +33,12 @@
   it shows changes; the entry records the engine it ships.
   ([#715](https://github.com/real-a11y/real-a11y-dev/pull/715))
 
+- **Internal: the extractor no longer widens a read scoped to a root for a live
+  region the page renders beside that root.** The extension re-bundles the
+  updated extractor. Nothing changes for users: the TAB view reads each frame
+  from `<body>`, where the rule never applies
+  ([#705](https://github.com/real-a11y/real-a11y-dev/pull/705)).
+
 ## 0.1.21
 
 ### Patch Changes

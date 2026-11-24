@@ -191,16 +191,24 @@ describe("an attached root still pivots — the feature is intact", () => {
     expect(resolveEffectiveRoot(host)).toBe(host);
   });
 
-  it("KNOWN GAP (R35 step 1): a sibling live region still widens an attached root", () => {
-    // Deliberately open, and asserted so it stays visible. "Outside the root"
-    // cannot tell an ordinary in-page live region from a portal, so a result
-    // count elsewhere on the page turns a component snapshot into a page
-    // snapshot. Loss-free — the document contains the root — but silent.
+  it("KNOWN GAP (R35 step 1): a live region in another child of <body> still widens", () => {
+    // Deliberately open, and asserted so it stays visible. A live region the
+    // page renders in place, in a different child of <body> from the root, is
+    // markup nothing tells from a portal, so a result count elsewhere on the
+    // page turns a component snapshot into a page snapshot. Loss-free — the
+    // document contains the root — but silent. One in the root's OWN child of
+    // <body> no longer does: see "an in-flow live region" below.
     //
     // If this starts failing, the gap closed: narrow R35's Expected 1 and drop
     // the Troubleshooting workarounds with it.
     page(
       `<div id="host"><button>Save</button></div><p role="status">4 tickets</p>`,
+    );
+    expect(resolveEffectiveRoot(document.getElementById("host")!)).toBe(
+      document.body,
+    );
+    page(
+      `<header><p role="status">4 tickets</p></header><main><div id="host"><button>Save</button></div></main>`,
     );
     expect(resolveEffectiveRoot(document.getElementById("host")!)).toBe(
       document.body,
@@ -232,6 +240,71 @@ describe("an attached root still pivots — the feature is intact", () => {
     const host = document.getElementById("host")!;
     expect(resolveEffectiveRoot(host)).toBe(host);
   });
+});
+
+describe("an in-flow live region — in the root's own child of <body> — is not a portal", () => {
+  // A page commonly renders a "Loading…" status or a result count next to the
+  // component under test. Widening for it made every snapshot of that
+  // component a page snapshot, and its tab sequence the page's.
+  const FORM = `<form id="host" aria-label="Zone"><input aria-label="Radius"><button>Save</button></form>`;
+
+  // One `it` per shape, so a regression names the one that broke.
+  for (const region of [
+    `<p role="status">Loading…</p>`,
+    `<p role="alert">Could not save</p>`,
+    `<ul role="log"><li>Saved</li></ul>`,
+    `<p aria-live="polite">Saved</p>`,
+    `<p aria-live="assertive">Saved</p>`,
+    `<p role="toast status">Saved</p>`,
+  ]) {
+    it(`does not widen for ${region} in the same <main>`, () => {
+      page(`<main><h1>Page</h1>${region}${FORM}</main>`);
+      const host = document.getElementById("host")!;
+      expect(resolveEffectiveRoot(host)).toBe(host);
+    });
+  }
+
+  it("does not widen however deep the two sit in the app's container", () => {
+    // The SPA shape: everything is inside one app element under <body>.
+    page(
+      `<div id="app"><aside><div><p role="status">4 results</p></div></aside>
+         <main><section>${FORM}</section></main></div>`,
+    );
+    const host = document.getElementById("host")!;
+    expect(resolveEffectiveRoot(host)).toBe(host);
+  });
+
+  it("still widens for a toast portaled to <body>", () => {
+    page(
+      `<div id="app"><p role="status">Loading…</p>${FORM}</div><div><div role="status">Saved</div></div>`,
+    );
+    expect(resolveEffectiveRoot(document.getElementById("host")!)).toBe(
+      document.body,
+    );
+  });
+
+  it("still widens for a menu rendered in place: only live regions are exempt", () => {
+    // A menu, listbox or dialog is what the user is looking at, wherever it
+    // mounted, so it still joins the tree.
+    page(`<main><div role="menu"><button>Copy</button></div>${FORM}</main>`);
+    expect(resolveEffectiveRoot(document.getElementById("host")!)).toBe(
+      document.body,
+    );
+  });
+
+  // By the role the element resolves to: a native non-modal <dialog> counted
+  // only for its `aria-live`, and was taken for a live region.
+  for (const container of [
+    `<div role="dialog" aria-live="polite" aria-label="Saved"><button>OK</button></div>`,
+    `<dialog open aria-live="polite" aria-label="Uploading"><button>Cancel</button></dialog>`,
+  ]) {
+    it(`still widens for a container that also announces: ${container}`, () => {
+      page(`<main>${container}${FORM}</main>`);
+      expect(resolveEffectiveRoot(document.getElementById("host")!)).toBe(
+        document.body,
+      );
+    });
+  }
 });
 
 describe("aria-live=off declares the element inert", () => {

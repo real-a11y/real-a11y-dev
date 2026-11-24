@@ -558,6 +558,26 @@ describe("the native producer is the only producer (built bin)", () => {
     expect(stdout.trimEnd()).toBe('01. textbox "Email"');
   });
 
+  it("tabs --root stays on the root beside a status the page renders in place", async () => {
+    // A "Loading…" status in the same <main> is page content, not a portal.
+    // It used to widen the read to <body>, so the page's own link was listed.
+    const page = dataUrl(
+      "<!doctype html><title>Scoped</title><main><h1>Page</h1>" +
+        "<a href='/home'>Home</a><p role='status'>Loading…</p>" +
+        "<form aria-label='Zone'><input aria-label='Radius'>" +
+        "<button>Save</button></form></main>",
+    );
+    const { code, stdout } = await runCli([
+      "tabs",
+      page,
+      "--root",
+      "form",
+      "-q",
+    ]);
+    expect(code).toBe(0);
+    expect(stdout.trimEnd()).toBe('01. textbox "Radius"\n02. button "Save"');
+  });
+
   it("rejects --producer entirely — the axis is gone", async () => {
     const { code, stderr } = await runCli([
       "tree",

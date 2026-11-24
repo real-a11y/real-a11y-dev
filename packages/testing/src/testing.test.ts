@@ -76,6 +76,21 @@ describe("tabSequenceSnapshot", () => {
   });
 });
 
+describe("a live region beside the root, in the same <main>", () => {
+  // The page's own "Loading…" status is no portal: both snapshots stay on
+  // the element passed instead of taking in the whole page.
+  it("keeps both snapshots to the root", () => {
+    document.body.innerHTML = `<main><h1>Page</h1><a href="/home">Home</a>
+      <p role="status">Loading…</p>
+      <form aria-label="Zone"><input aria-label="Radius"><button>Save</button></form></main>`;
+    const form = document.querySelector("form")!;
+    expect(treeSnapshot(form)).toBe(
+      'form "Zone"\n  textbox "Radius"\n  button "Save"',
+    );
+    expect(tabSequenceSnapshot(form)).toBe('textbox "Radius"\nbutton "Save"');
+  });
+});
+
 describe("assertions", () => {
   it("assertNoUnlabeledInteractive passes on labeled controls", () => {
     const root = mount(`<button>Go</button>`);

@@ -6,9 +6,9 @@ area: Testing
 type: Automated
 priority: P0
 status: Active
-validFrom: "testing ≥ 0.1.0-beta.15 for the row; the detached-root guard and the aria-live=off correction ship in the FIRST release after 0.1.0-beta.15. Running steps 2–4 against 0.1.0-beta.15 or earlier reproduces the defect rather than failing the test — there a detached root is replaced outright and an inert announcer pivots the whole extraction. That is the old behaviour, not a fail. Step 7 changed in the FIRST release after 0.1.0-beta.16: before it, `aria-modal=true` alone counted as an open modal, so a sibling aria-modal dialog replaced the root instead of widening it. On those releases that is the old behaviour, not a fail. Step 1 is a KNOWN OPEN GAP at every version so far, not a regression. The behaviour lives in `resolveEffectiveRoot` (packages/core/src/extraction/dom-extractor.ts), but `core` is PRIVATE and bundled — there is no core version to pin or install, so assert against `@real-a11y-dev/testing` only. The same pivot reaches users through `inspector` and `react`, which bundle their own copy."
+validFrom: "testing ≥ 0.1.0-beta.15 for the row; the detached-root guard and the aria-live=off correction ship in the FIRST release after 0.1.0-beta.15. Running steps 2–4 against 0.1.0-beta.15 or earlier reproduces the defect rather than failing the test — there a detached root is replaced outright and an inert announcer pivots the whole extraction. That is the old behaviour, not a fail. Step 7 changed in the FIRST release after 0.1.0-beta.16: before it, `aria-modal=true` alone counted as an open modal, so a sibling aria-modal dialog replaced the root instead of widening it. On those releases that is the old behaviour, not a fail. Step 11 changed in the FIRST release after 0.1.0-beta.24: before it, a live region in the root's own container widened the root like any other. On those releases that is the old behaviour, not a fail. Step 1 is a KNOWN OPEN GAP at every version so far, not a regression. The behaviour lives in `resolveEffectiveRoot` (packages/core/src/extraction/dom-extractor.ts), but `core` is PRIVATE and bundled — there is no core version to pin or install, so assert against `@real-a11y-dev/testing` only. The same pivot reaches users through `inspector` and `react`, which bundle their own copy."
 validUntil: ""
-expected: "a pivot never DROPS the caller's own subtree — detached, shadow-rooted and ancestor-live-region cases all return the root passed. ONE deliberate exception: an open modal, meaning a `<dialog>` opened with showModal(), scopes EXCLUSIVELY, including over a root that is merely its sibling, because the browser makes everything outside it inert and an AT user cannot reach that root at all. `aria-modal=true` alone is not modal: Chromium's own tree keeps the page behind it, so it only widens. Step 1 is a KNOWN OPEN GAP: an ordinary in-page live region beside an attached root still widens to the whole document, and there is no scope-moved signal; it is documented rather than fixed"
+expected: "a pivot never DROPS the caller's own subtree — detached, shadow-rooted and ancestor-live-region cases all return the root passed. ONE deliberate exception: an open modal, meaning a `<dialog>` opened with showModal(), scopes EXCLUSIVELY, including over a root that is merely its sibling, because the browser makes everything outside it inert and an AT user cannot reach that root at all. `aria-modal=true` alone is not modal: Chromium's own tree keeps the page behind it, so it only widens. Step 1 is a KNOWN OPEN GAP: an ordinary in-page live region in a different child of `<body>` from an attached root still widens to the whole document, and there is no scope-moved signal; it is documented rather than fixed. One in the root's own child of `<body>` does not widen (step 11)"
 covers:
   - packages.@real-a11y-dev/core
   - packages.@real-a11y-dev/testing
@@ -58,15 +58,30 @@ form status, a save confirmation — as a **sibling** of the element under test:
 9. The same root, audited twice: once with the live region present, once with it
    removed
 10. `attach(page, { rootSelector: "main" })` on a page with a toast viewport
+11. The live region moved **into the root's own container** — the same child
+    of `<body>` as the root, which is where an app renders its own statuses:
+
+    ```html
+    <main>
+      <h1>Host application</h1>
+      <a href="/home">Home</a>
+      <p role="status">4 tickets</p>
+      <div id="component"><button>Save</button></div>
+    </main>
+    ```
+
+    `treeSnapshot` and `tabSequenceSnapshot` of `#component`. Then the same
+    with the status replaced by `<div role="menu"><button>Copy</button></div>`
 
 ## Expected
 
 - **1** — the snapshot still contains the whole page, and that is the **known
   remaining gap**, not a pass. Pivoting an ATTACHED root is loss-free (the
   document is a superset) but silently turns a component snapshot into a
-  page snapshot, because "outside the root" cannot tell an ordinary in-page
-  live region from a portal. Documented under Troubleshooting; narrowing the
-  trigger is a design decision that is still open
+  page snapshot, because a live region in a different child of `<body>` from
+  the root is markup nothing tells from a portal. Documented under
+  Troubleshooting. One in the root's OWN child of `<body>` no longer widens —
+  that narrowing is step 11
 - **2** — the caller's subtree must **never disappear**, and no longer does: a
   root that is not in the document is never pivoted, on either path. Check the
   MODAL path too — it ignored `root` entirely and runs first, so an open dialog
@@ -104,9 +119,17 @@ form status, a save confirmation — as a **sibling** of the element under test:
 - **8** — this is the case the feature exists for, and it must keep working
 - **9** — the same element must not produce two different snapshots because of
   markup outside it. Detached, shadow and ancestor: satisfied. Sibling live
-  region on an attached root: see 1. Sibling modal: see 7
+  region on an attached root: satisfied in the root's own container (11), still
+  open in another child of `<body>` (1). Sibling modal: see 7
 - **10** — a `rootSelector` is an explicit instruction, and should be the
   hardest thing in the system to override silently
+- **11** — `#component` alone in the tree, and `button "Save"` alone in the
+  tab sequence, with no `link "Home"` from outside it: a live region in the
+  same child of `<body>` as the root is the page's own, and a portal does not
+  mount there. The menu variant still widens to the whole page — only live
+  regions are exempt, since a menu is what the user is looking at wherever it
+  mounted. On `testing ≤ 0.1.0-beta.24` the status widens too; that is the old
+  behaviour, not a fail
 
 ## Why this exists
 
@@ -116,11 +139,14 @@ belongs in the tree with its trigger — and the code already defends against th
 obvious foot-gun, `hasOverlayContent` refusing to pivot for an empty announcer
 shell that a component kit mounts forever.
 
-What it cannot do is tell a **portal-mounted overlay** from an **ordinary
-in-page live region**, because the only test available is "not contained by
-root". `<p role="status">4 tickets</p>` next to a table is not a portal and not
-an overlay; it is the most ordinary markup there is, and it moves the scope of
-every audit on the page.
+What it could not do is tell a **portal-mounted overlay** from an **ordinary
+in-page live region**, because the only test was "not contained by root".
+`<p role="status">4 tickets</p>` next to a table is not a portal and not an
+overlay; it is the most ordinary markup there is, and it moved the scope of
+every audit on the page. From the first release after testing 0.1.0-beta.24 a
+live region in the root's own child of `<body>` — where a portal never mounts —
+no longer counts (step 11, found dogfooding a "Loading…" status beside a form).
+One in another child of `<body>` still does (step 1).
 
 Two consequences, in increasing severity:
 
