@@ -302,6 +302,25 @@ export function serializeArtifact(artifact: SnapshotArtifact): string {
 }
 
 /**
+ * Give a page that arrived without an id one, in place. Returns whether it
+ * did. Back-fills identity for a v1 artifact (written before pages had an id)
+ * or a hand-made v2 one. The `url` is on every page, so the id is derivable and
+ * the file stays readable rather than needing a re-record. When the url won't
+ * parse there is nothing honest to derive, so fall back to the name — which is
+ * exactly what that artifact was joined on when it was written.
+ */
+function backFillPageId(p: SnapshotPage): boolean {
+  if (typeof p.id === "string" && p.id.length > 0) return false;
+  const derived =
+    (typeof p.url === "string" ? pageIdOf(p.url) : undefined) ?? p.name;
+  // Scope by the recorded root, exactly as `buildSnapshotPage` does, so an
+  // old artifact holding one URL at two roots back-fills to two ids instead
+  // of collapsing into one.
+  p.id = scopeId(derived, typeof p.root === "string" ? p.root : undefined);
+  return true;
+}
+
+/**
  * Validate one page of a parsed artifact and default its missing fields in
  * place. Returns whether the page had no id of its own and was given a derived
  * one — only those pages may fall back to `name` on a collision.
@@ -319,22 +338,7 @@ function normalizePage(
     throw new SnapshotFormatError(`${label} has a page without a "name"`);
   }
   const p = page as SnapshotPage;
-  let backFilled = false;
-  // Back-fill identity for any page that arrived without one: a v1 artifact
-  // (written before pages had an id) or a hand-made v2 one. The `url` is on
-  // every page, so the id is derivable and the file stays readable rather
-  // than needing a re-record. When the url won't parse there is nothing
-  // honest to derive, so fall back to the name — which is exactly what that
-  // artifact was joined on when it was written.
-  if (typeof p.id !== "string" || p.id.length === 0) {
-    const derived =
-      (typeof p.url === "string" ? pageIdOf(p.url) : undefined) ?? p.name;
-    // Scope by the recorded root, exactly as `buildSnapshotPage` does, so an
-    // old artifact holding one URL at two roots back-fills to two ids instead
-    // of collapsing into one.
-    p.id = scopeId(derived, typeof p.root === "string" ? p.root : undefined);
-    backFilled = true;
-  }
+  const backFilled = backFillPageId(p);
   if (!Array.isArray(p.findings)) p.findings = [];
   if (typeof p.tree !== "string") p.tree = "";
   if (typeof p.outline !== "string") p.outline = "";

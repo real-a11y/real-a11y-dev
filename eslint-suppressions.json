@@ -412,11 +412,6 @@
       "count": 1
     }
   },
-  "packages/snapshot/src/snapshot-artifact.ts": {
-    "complexity": {
-      "count": 1
-    }
-  },
   "packages/storybook-addon/src/manager.tsx": {
     "max-lines-per-function": {
       "count": 1
