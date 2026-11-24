@@ -63,7 +63,7 @@ import {
   dropChoiceStates,
   isChoiceState,
   normalizeNativeAX,
-  nativeAXStateValue,
+  nativeAXFacets,
   serializeNativeAX,
   graftNativeFrame,
   isNativeIframeRole,
@@ -91,55 +91,6 @@ import { announcedValue } from "./native-value.js";
 
 export type { NativeDomInfo, NativeFramePayload, NativeTreeOptions };
 export { allowlistAttributes } from "./native-dom.js";
-
-/**
- * AX property names that map to boolean/stateful `a11y.states`.
- *
- * The shared ARIA-derived keys (`checked`, `expanded`, `pressed`, `selected`,
- * `disabled`, `required`, `invalid`) match what the DOM producer writes, so
- * those compare cleanly across producers. Native additionally exposes
- * Blink-computed state Chromium has but the in-page walk doesn't (`focusable`,
- * `focused`, `editable`, `settable`, `multiline`, `modal`, `busy`)
- * — a superset, not a conflict. Cross-producer state comparison is normalized
- * by the parity harness (RFC PR E), not relied on raw.
- */
-const STATE_PROPS = new Set([
-  "focusable",
-  "focused",
-  "editable",
-  "settable",
-  "checked",
-  "expanded",
-  "pressed",
-  "selected",
-  "disabled",
-  "readonly",
-  "required",
-  "multiline",
-  "invalid",
-  "modal",
-  "busy",
-]);
-
-/**
- * AX property names that map to descriptive `a11y.properties` (strings).
- *
- * `valuenow` / `valuetext` are deliberately NOT here. For a range widget they
- * ARE its value, and a value has one home — `a11y.value`, where the
- * sensitivity policy and `redactInput` both apply ({@link announcedValue}). A
- * copy here would route around both. `valuemin` / `valuemax` are authored
- * bounds (min/max attributes), not user data, so they stay.
- */
-const DETAIL_PROPS = new Set([
-  "level",
-  "valuemin",
-  "valuemax",
-  "hasPopup",
-  "keyshortcuts",
-  "roledescription",
-  "orientation",
-  "autocomplete",
-]);
 
 /** Derive the id core's {@link normalizeNativeAX} assigns, so we can look a
  *  normalized node back up to its raw AX node (for states/properties). Kept in
@@ -314,28 +265,6 @@ function withoutChoiceMarkup(
   return kept;
 }
 
-/** Split an AX node's `properties` into `states` (bool/stateful) and
- *  `properties` (descriptive strings). Field values are never read here. */
-function axFacets(raw: RawAXNode): Pick<A11yInfo, "states" | "properties"> {
-  const states: A11yInfo["states"] = {};
-  const properties: A11yInfo["properties"] = {};
-  for (const p of raw.properties ?? []) {
-    const v = p.value?.value;
-    if (v === undefined || v === null || typeof v === "object") continue;
-    // Chromium computes a list item's `level` from its nesting depth; no
-    // author set it, and the DOM producer never reports one (only headings,
-    // and the roles whose level Core-AAM requires computed, carry a level).
-    // Kept in lockstep with the other native transport.
-    if (p.name === "level" && raw.role?.value === "listitem") continue;
-    if (STATE_PROPS.has(p.name)) {
-      states[p.name] = nativeAXStateValue(p.value!);
-    } else if (DETAIL_PROPS.has(p.name)) {
-      properties[p.name] = String(v);
-    }
-  }
-  return { states, properties };
-}
-
 /**
  * Read Chromium's native accessibility tree for `page` and normalize it into
  * an {@link ExtractionResult} stamped `source.producer === "native"`.
@@ -488,7 +417,7 @@ export function buildNativeTree(
     const source = sourceById.get(nn.id);
     const raw = source?.raw;
     const { states, properties } = raw
-      ? axFacets(raw)
+      ? nativeAXFacets(raw)
       : { states: {}, properties: {} };
     // The node's element, as the DOM walk of its own process recorded it.
     const enriched =

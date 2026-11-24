@@ -498,7 +498,7 @@ export function registerNativeMode(): void {
               ...(value.pageKeyed ? { pageKeysReadId: readId } : {}),
               // Structural fields plus the state/property enrichment
               // `readNativeTree` attaches (`expanded`, `checked`, `level`, …).
-              // `axFacets`'s own allowlist (DETAIL_PROPS) excludes
+              // core's `nativeAXFacets` allowlist excludes
               // `valuenow`/`valuetext`, the two AX properties that would
               // carry a value-bearing control's current input straight from
               // Chromium's own (incompletely-redacted) CDP payload — `value`

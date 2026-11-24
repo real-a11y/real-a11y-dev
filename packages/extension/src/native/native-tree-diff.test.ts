@@ -145,7 +145,7 @@ describe("compareNativeNodes", () => {
     value: "Spain",
     placeholder: "Pick one",
     states: { expanded: false, required: true, invalid: "spelling" },
-    properties: { hasPopup: "listbox" },
+    properties: { haspopup: "listbox" },
     controls: ["list", "help"],
   });
 
@@ -326,7 +326,7 @@ describe("compareNativeNodes", () => {
             role: "button",
             name: "Menu",
             states: { expanded: false, focusable: true },
-            properties: { hasPopup: "menu" },
+            properties: { haspopup: "menu" },
           },
           {
             role: "combobox",
@@ -339,7 +339,7 @@ describe("compareNativeNodes", () => {
       ),
     ).toStrictEqual([
       { field: "controls", after: "list" },
-      { field: "properties.hasPopup", before: "menu" },
+      { field: "properties.haspopup", before: "menu" },
       { field: "role", before: "button", after: "combobox" },
       { field: "states.expanded", before: false, after: true },
       { field: "value", after: "File" },

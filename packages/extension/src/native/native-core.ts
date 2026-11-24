@@ -17,10 +17,9 @@
  * The **structural** read (which nodes survive, sibling order, role map, name
  * promotion) is genuinely shared through that core module. The **states /
  * properties** enrichment on top of it (`expanded`, `checked`, `level`, …) is
- * not, for the same reason the **action** path isn't: `normalizeNativeAX`
- * stays a pure structural normalizer by design (R4), so this mirrors
- * `browser`'s `axFacets` rather than growing a second enrichment path in
- * core — see the block comment above {@link EnrichedNativeNode}. The action
+ * shared too, as core's `nativeAXFacets`, which both native transports call;
+ * `normalizeNativeAX` itself stays a pure structural normalizer by design
+ * (R4). See the block comment above {@link EnrichedNativeNode}. The action
  * functions cross into the page as source text, so they are a deliberate,
  * tested mirror of `browser`'s `page-actions.ts` rather than an import — see
  * the block comment above `pageClick` for why, and the tests that pin the
@@ -57,7 +56,7 @@ import {
   holdsUnclassifiedValue,
   indexNativeAX,
   isNativePasswordMask,
-  nativeAXStateValue,
+  nativeAXFacets,
   normalizeNativeAX,
   REDACTED_VALUE,
   serializeNativeAX,
@@ -71,8 +70,6 @@ import {
   type RawAXNameNode,
   type NativeAXIndex,
 } from "@real-a11y-dev/core";
-
-import { DETAIL_PROPS, STATE_PROPS } from "./ax-prop-sets.js";
 
 import { isConnectionLost } from "./connection-lost.js";
 import { fieldsWithin, fieldWalks, type FieldInternals } from "./dom-fields.js";
@@ -144,8 +141,9 @@ export const NATIVE_REDACTED_VALUE = REDACTED_VALUE;
  * but Chromium always sends `properties` (`expanded`, `checked`, `level`, …)
  * on the wire regardless of which subset a caller's type asks for.
  *
- * **Deliberate mirror** of `@real-a11y-dev/browser`'s `RawAXNode`/`axFacets`
- * (`native-tree.ts`). The structural read stays genuinely shared through
+ * **Deliberate mirror** of `@real-a11y-dev/browser`'s `RawAXNode`
+ * (`native-tree.ts`); the states and properties split is shared, core's
+ * `nativeAXFacets`. The structural read stays genuinely shared through
  * `normalizeNativeAX` — this is the same "richer AX→a11y mapping" `browser`
  * layers on top of that shared base, duplicated here for the reason the file
  * header already gives for the action functions: `browser` carries
@@ -183,35 +181,19 @@ export function nativeIdForBackendNode(backendNodeId: number): string {
   return nativeNodeId(backendNodeId);
 }
 
-/** Split an AX node's `properties` into `states` (bool/stateful) and
- *  `properties` (descriptive strings), plus the accessible description —
- *  Chromium's own `aria-describedby`/`aria-description` resolution, a
- *  top-level AX field alongside `name`/`value`, not one of `properties`.
- *  Field VALUES are never read here (R1) — a description is page-authored
- *  help/error text, not user input, the same distinction `browser`'s own
- *  producer already draws (`native-tree.ts` surfaces it with no redaction
- *  gate at all). */
+/** An AX node's states and properties (core's `nativeAXFacets`, one copy for
+ *  every native transport), plus the accessible description: Chromium's own
+ *  `aria-describedby`/`aria-description` resolution, a top-level AX field
+ *  alongside `name`/`value`, not one of `properties`. Field VALUES are never
+ *  read here (R1). A description is page-authored help/error text, not user
+ *  input, the same distinction `browser`'s own producer draws. */
 function axFacets(
   raw: RawAXNode,
 ): Pick<A11yInfo, "states" | "properties" | "description"> {
-  const states: A11yInfo["states"] = {};
-  const properties: A11yInfo["properties"] = {};
-  for (const p of raw.properties ?? []) {
-    const v = p.value?.value;
-    if (v === undefined || v === null || typeof v === "object") continue;
-    // Chromium's computed nesting depth on a list item is no authored level,
-    // and the DOM producer reports none. Lockstep with `browser`'s axFacets.
-    if (p.name === "level" && raw.role?.value === "listitem") continue;
-    if (STATE_PROPS.has(p.name)) {
-      states[p.name] = nativeAXStateValue(p.value!);
-    } else if (DETAIL_PROPS.has(p.name)) {
-      properties[p.name] = String(v);
-    }
-  }
   const description = raw.description?.value
     ? cleanAXText(String(raw.description.value))
     : "";
-  return { states, properties, description };
+  return { ...nativeAXFacets(raw), description };
 }
 
 /**
@@ -1875,7 +1857,7 @@ export function pageType(this: Element, text: string): Marker {
  * anticipated exactly this case: "When live field values are genuinely
  * needed later, capture MUST classify sensitivity in-page" — this is that
  * classification, not a reversal of R1. Chromium's own CDP payload cannot be
- * trusted to have already redacted the field for us (see `DETAIL_PROPS`'s
+ * trusted to have already redacted the field for us (see core's `ax-facets.ts`
  * comment above), so classification happens here, against the live element,
  * before anything crosses back out.
  *

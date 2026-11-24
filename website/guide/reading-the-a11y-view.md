@@ -56,6 +56,23 @@ Two different engines can build this tree, and every tree records which one buil
 
 They agree on most of a page, but never byte for byte, by design. Chromium names some controls differently (a file input is a `button`, `<details>` is a disclosure), places names differently, and sees content the in-page walk can't reach: the built-in media controls inside `<video>`, and anything inside a closed shadow root (`attachShadow({ mode: "closed" })`), which page script can't read, so the DOM tree shows its host empty (see [Content inside a web component is missing or stale](/guide/troubleshooting#content-inside-a-web-component-is-missing-or-stale)). So compare a tree only with one from the same producer. Tab order is the exception that only `dom` can answer: Chromium's tree knows whether a node can take focus, but not the order Tab visits them in.
 
+### Property keys
+
+A node's `a11y.properties` holds descriptive ARIA properties. Each key is the ARIA attribute name without `aria-`, in lowercase, and each value is a string. A key that is missing was not set or does not apply. `valuenow` and `valuetext` are never keys: a value is in `a11y.value`. States such as `checked` and `modal` are in `a11y.states`. The two producers carry these keys today:
+
+| Key | ARIA attribute | Carried by |
+|---|---|---|
+| `level` | `aria-level` | both (headings) |
+| `haspopup` | `aria-haspopup` | `native` |
+| `roledescription` | `aria-roledescription` | `native` |
+| `orientation` | `aria-orientation` | `native` |
+| `autocomplete` | `aria-autocomplete` | `native` |
+| `keyshortcuts` | `aria-keyshortcuts` | `native` |
+| `valuemin`, `valuemax` | `aria-valuemin`, `aria-valuemax` | `native` |
+| `captions` | none (a media element's `<track>`) | `dom` |
+
+The native tree's `haspopup` was spelled `hasPopup` before this release; rename it in any code that reads a native tree's `a11y.properties`. The printed tree text is unchanged, except that a node whose `roledescription` is only whitespace no longer prints one.
+
 ---
 
 ## How roles are resolved

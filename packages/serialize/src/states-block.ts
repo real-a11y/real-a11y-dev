@@ -19,7 +19,7 @@
  * diff's line parser, the DOM↔native parity harness) agree on one definition.
  */
 
-import type { A11yInfo } from "@real-a11y-dev/core";
+import { a11yPropertyInfo, type A11yInfo } from "@real-a11y-dev/core";
 
 /** One token: `key`, `key=word` or `key="JSON string"`. Kept permissive
  * (any case, digits, `.`, `_`, `-`) so a value the writer adds later, a
@@ -241,6 +241,11 @@ type Facets = Pick<A11yInfo, "states" | "properties" | "description">;
  *  never match its tree. */
 export type KeyProducers = "both" | "dom" | "native";
 
+/** The producers that write a property key, from core's one key table. */
+function propertyProducers(key: string): KeyProducers {
+  return a11yPropertyInfo(key)?.producers ?? "native";
+}
+
 interface KeyRule {
   kind: Kind;
   read(a: Facets): StateValue;
@@ -289,9 +294,8 @@ const KEYS = new Map<string, KeyRule>([
     "haspopup",
     {
       kind: POPUP,
-      // The native producer's key, or the DOM one's should it read it.
-      read: (a) => a.properties["hasPopup"] ?? a.properties["haspopup"],
-      producers: "native",
+      read: (a) => a.properties["haspopup"],
+      producers: propertyProducers("haspopup"),
     },
   ],
   [
@@ -299,7 +303,7 @@ const KEYS = new Map<string, KeyRule>([
     {
       kind: TEXT,
       read: (a) => a.properties["roledescription"],
-      producers: "native",
+      producers: propertyProducers("roledescription"),
     },
   ],
   [

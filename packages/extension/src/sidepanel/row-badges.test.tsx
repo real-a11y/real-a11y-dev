@@ -48,7 +48,7 @@ describe("nativeStateBadges", () => {
           invalid: "spelling",
           selected: false,
         },
-        { hasPopup: "menu", level: "2" },
+        { haspopup: "menu", level: "2" },
       ),
     ).toEqual([
       {
@@ -82,10 +82,10 @@ describe("nativeStateBadges", () => {
         field: "states.invalid",
       },
       {
-        label: "hasPopup=menu",
+        label: "haspopup=menu",
         cls: "sn-state--info",
         keyState: false,
-        field: "properties.hasPopup",
+        field: "properties.haspopup",
       },
       {
         label: "level=2",

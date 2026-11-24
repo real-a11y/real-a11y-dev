@@ -20,7 +20,7 @@ test("a native select normalizes to combobox → option", async ({ nav }) => {
   const tree = await nav.readNodes(tabId);
 
   const department = node(tree, "combobox", "Department");
-  expect(department.properties).toMatchObject({ hasPopup: "menu" });
+  expect(department.properties).toMatchObject({ haspopup: "menu" });
   // Not editable — so `isTypableRole` gives it a click, matching round 4/13.
   expect(department.states?.editable).toBeUndefined();
 

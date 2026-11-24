@@ -59,7 +59,7 @@ const NATIVE_TREE: NativeNode[] = [
     depth: 1,
     childIds: [],
     states: { focusable: true, disabled: true, expanded: false },
-    properties: { hasPopup: "menu" },
+    properties: { haspopup: "menu" },
   },
   {
     id: "t1",
@@ -310,7 +310,7 @@ describe("Show full names", () => {
     await showPage();
     expect(badges(container.querySelector('[data-node-id="b1"]'))).toEqual({
       key: ["disabled", "collapsed"],
-      rest: ["focusable", "hasPopup=menu"],
+      rest: ["focusable", "haspopup=menu"],
       heard: "disabled, collapsed",
     });
   });

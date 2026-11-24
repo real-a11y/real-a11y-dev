@@ -382,11 +382,45 @@ describe("readNativeTree", () => {
 
     const button = findNative(res.nodes, "button", "Billing Address");
     expect(button?.states).toEqual({ expanded: true });
-    expect(button?.properties).toEqual({ hasPopup: "listbox" });
+    expect(button?.properties).toEqual({ haspopup: "listbox" });
 
     const heading = findNative(res.nodes, "heading", "Personal Information");
     expect(heading?.states).toEqual({});
     expect(heading?.properties).toEqual({ level: "2" });
+  });
+
+  it("writes hasPopup as haspopup and drops a whitespace roledescription", async () => {
+    const raw = [
+      {
+        nodeId: "1",
+        backendDOMNodeId: 10,
+        role: { value: "RootWebArea" },
+        childIds: ["2", "3"],
+      },
+      {
+        nodeId: "2",
+        backendDOMNodeId: 20,
+        role: { value: "button" },
+        name: { value: "Menu" },
+        properties: [{ name: "hasPopup", value: { value: "menu" } }],
+      },
+      {
+        nodeId: "3",
+        backendDOMNodeId: 30,
+        role: { value: "button" },
+        name: { value: "Blank" },
+        properties: [{ name: "roledescription", value: { value: "  " } }],
+      },
+    ];
+    const t = new FakeTransport((method) =>
+      method === "Accessibility.getFullAXTree" ? { nodes: raw } : {},
+    );
+    const res = await readNativeTree(t);
+
+    expect(findNative(res.nodes, "button", "Menu")?.properties).toEqual({
+      haspopup: "menu",
+    });
+    expect(findNative(res.nodes, "button", "Blank")?.properties).toEqual({});
   });
 
   it("drops Chromium's computed level on a listitem, keeping heading and treeitem levels", async () => {

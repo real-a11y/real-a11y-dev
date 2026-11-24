@@ -95,7 +95,7 @@ export function formatValue(n: NativeNode): string {
  * button — this is the fix.
  *
  * That parity claim covers only the states `App.tsx` badges at all —
- * `native-core.ts`'s `STATE_PROPS` carries several more (`focusable`,
+ * core's `NATIVE_AX_STATE_PROPERTIES` carries several more (`focusable`,
  * `focused`, `editable`, `settable`, `multiline`, `invalid`, `modal`) that
  * production's renderer never shows a badge for, at any value. Those still
  * fall through to the generic bare-key-for-true rule below, same as
@@ -105,7 +105,7 @@ export function formatValue(n: NativeNode): string {
  *
  * `properties` is deliberately NOT held to the same parity: the production
  * view surfaces only `level` (`renderA11yLabel`); this shows all of them
- * (`hasPopup`, `orientation`, `roledescription`, …). That is by design for a
+ * (`haspopup`, `orientation`, `roledescription`, …). That is by design for a
  * debug surface whose purpose is finding out what native fidelity actually
  * contains — an AX property the DOM producer never computes at all is signal
  * for this exercise, not noise to hide for symmetry with a panel built for a

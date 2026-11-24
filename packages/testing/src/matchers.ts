@@ -59,6 +59,7 @@ import {
   type A11ySnapshotBox,
 } from "./snapshot-box.js";
 import { bindSnapshotRecorder, isRecording } from "./snapshot-record.js";
+import { computedAriaAttributes } from "./validated-attrs.js";
 
 // A pre-extracted tree carries its producer provenance (`source`).
 type Tree = ExtractionResult;
@@ -309,17 +310,14 @@ function toValidatedNode(
   n: SemanticNode,
   parentId: string | null,
 ): ValidatedNode {
-  const attrs: Record<string, string | boolean> = {};
-  for (const [k, v] of Object.entries(n.a11y.states)) attrs[`aria-${k}`] = v;
-  for (const [k, v] of Object.entries(n.a11y.properties))
-    attrs[`aria-${k}`] = v;
+  const attrs = computedAriaAttributes(n.a11y);
 
   const domAttrs = n.dom?.attributes ?? {};
-  // `states` is a small fixed set and `properties` is `{level, captions}`,
-  // so required props like `aria-controls` and `aria-valuenow` could NEVER
-  // appear — an authored combobox or slider was unsatisfiable no matter what
-  // the author wrote. Fill from the recorded attributes, without letting them
-  // override a computed state.
+  // `states` is a small fixed set and `properties` holds only the keys in
+  // core's `A11Y_PROPERTIES` table, so required props like `aria-controls`
+  // and `aria-valuenow` could NEVER appear — an authored combobox or slider
+  // was unsatisfiable no matter what the author wrote. Fill from the recorded
+  // attributes, without letting them override a computed state.
   const element = getElementRefs().get(n.id);
   for (const [k, v] of Object.entries(domAttrs)) {
     if (k.startsWith("aria-") && attrs[k] === undefined) attrs[k] = v;
