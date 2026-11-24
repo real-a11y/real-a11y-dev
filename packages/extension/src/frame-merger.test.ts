@@ -1,4 +1,4 @@
-import type { SemanticNode } from "@real-a11y-dev/core";
+import { getTabSequence, type SemanticNode } from "@real-a11y-dev/core";
 import { describe, it, expect } from "vitest";
 
 import {
@@ -1279,5 +1279,59 @@ describe("frameVisibility", () => {
     expect(frameVisibility(nodes, { frameId: 5, rootId: "a" }, "root")).toBe(
       "unplaced",
     );
+  });
+});
+
+describe("mergeFrameTrees and the tab sequence", () => {
+  function stopNode(id: string, partial: Parameters<typeof makeNode>[1] = {}) {
+    const node = makeNode(id, partial);
+    node.interaction!.isFocusable = true;
+    node.a11y.name = id;
+    return node;
+  }
+
+  function merged(withInnerButton: boolean) {
+    const top = makeFrame(0, "https://top.test", [
+      ["root", makeNode("root", { childIds: ["ifr"] })],
+      [
+        "ifr",
+        stopNode("ifr", {
+          tagName: "iframe",
+          attrs: { src: "https://child.test/" },
+          parentId: "root",
+          depth: 1,
+        }),
+      ],
+    ]);
+    const child = makeFrame(
+      5,
+      "https://child.test/",
+      withInnerButton
+        ? [
+            ["c-root", makeNode("c-root", { childIds: ["c-btn"] })],
+            ["c-btn", stopNode("c-btn", { parentId: "c-root", depth: 1 })],
+          ]
+        : [["c-root", makeNode("c-root")]],
+    );
+    const result = mergeFrameTrees({
+      frames: new Map([
+        [0, top],
+        [5, child],
+      ]),
+      frameInfoMap: new Map<number, FrameInfo>([
+        [5, { parentFrameId: 0, url: "https://child.test/" }],
+      ]),
+    })!;
+    return getTabSequence({ nodes: result.nodes, rootId: "root" }).map(
+      (n) => n.id,
+    );
+  }
+
+  it("lists a frame's own stop and not the <iframe> holding it", () => {
+    expect(merged(true)).toEqual(["f5-c-btn"]);
+  });
+
+  it("lists the <iframe> when its frame contributed no stop", () => {
+    expect(merged(false)).toEqual(["ifr"]);
   });
 });

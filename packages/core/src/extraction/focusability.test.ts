@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { shadow } from "../test-support/clobber.js";
 
 import {
+  hostsNestedDocument,
   isActuallyDisabled,
   isFocusable,
   parseTabindex,
@@ -164,5 +165,31 @@ describe("isFocusable with a computed style", () => {
     expect(isFocusable(div, { display: "contents" })).toBe(false);
     expect(isFocusable(div, { display: "block" })).toBe(true);
     expect(isFocusable(div, null)).toBe(true);
+  });
+});
+
+describe("hostsNestedDocument", () => {
+  it("is true for an iframe, and still not a focusable per isFocusable", () => {
+    const frame = document.createElement("iframe");
+    expect(hostsNestedDocument(frame)).toBe(true);
+    // Decision: the frame stop reaches the tab sequence only.
+    expect(isFocusable(frame)).toBe(false);
+  });
+
+  it("is false for an iframe with display:contents", () => {
+    const frame = document.createElement("iframe");
+    expect(hostsNestedDocument(frame, { display: "contents" })).toBe(false);
+    expect(hostsNestedDocument(frame, { display: "block" })).toBe(true);
+  });
+
+  it("is false for an object in jsdom, which has no nested document", () => {
+    const object = document.createElement("object");
+    expect(hostsNestedDocument(object)).toBe(false);
+    expect(isFocusable(object)).toBe(false);
+  });
+
+  it("is false for an embed and other elements", () => {
+    expect(hostsNestedDocument(document.createElement("embed"))).toBe(false);
+    expect(hostsNestedDocument(document.createElement("div"))).toBe(false);
   });
 });

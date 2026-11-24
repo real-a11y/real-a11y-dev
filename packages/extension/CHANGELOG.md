@@ -21,6 +21,11 @@
 
 ### Patch Changes
 
+- **The TAB view lists a frame as a tab stop.** An `<iframe>` now appears once,
+  where Tab enters it, unless the frame's own stops are listed in its place; the
+  key bar's Tab can move focus onto the frame's document. Keyboard-focusable
+  scrollers are still not listed.
+  ([#PR](https://github.com/real-a11y/real-a11y-dev/pull/PR))
 - Internal refactor, no behaviour change: the field-value helpers moved out of
   `native/native-core.ts` into `native/native-field-values.ts`
   ([#716](https://github.com/real-a11y/real-a11y-dev/pull/716)).

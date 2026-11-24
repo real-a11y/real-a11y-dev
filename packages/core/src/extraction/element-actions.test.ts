@@ -45,4 +45,11 @@ describe("getActions", () => {
     ]);
     expect(getActions(make('<div tabindex="0"></div>'))).toEqual(["click"]);
   });
+
+  it("gives a frame a focus action, with or without a tabindex", () => {
+    expect(getActions(make("<iframe></iframe>"))).toEqual(["focus"]);
+    expect(getActions(make('<iframe tabindex="0"></iframe>'))).toEqual([
+      "focus",
+    ]);
+  });
 });

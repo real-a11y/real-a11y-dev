@@ -41,7 +41,7 @@ import {
   TEXT_INPUT_TYPES,
 } from "./field-text.js";
 import { flatChildNodes, flatChildren } from "./flat-tree.js";
-import { isFocusable } from "./focusability.js";
+import { hostsNestedDocument, isFocusable } from "./focusability.js";
 import { readGeneratedText } from "./generated-content.js";
 import * as host from "./host-names.js";
 import { getKeyAttributes } from "./key-attributes.js";
@@ -717,7 +717,8 @@ function buildNode(
       interaction: {
         isInteractive: actions.length > 0,
         actions,
-        isFocusable: focusable,
+        // A frame is a tab stop, but not `focusable` for states and roles.
+        isFocusable: focusable || hostsNestedDocument(element, style),
         isEditable:
           (tag === "input" &&
             TEXT_INPUT_TYPES.has(

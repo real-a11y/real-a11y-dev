@@ -3,6 +3,7 @@ import type { ActionType } from "../types.js";
 import { safeGetAttribute, safeTagName } from "./clobber-safe.js";
 import { isEditingHost, isLiveLink } from "./editing.js";
 import { MEDIA_TAGS } from "./field-text.js";
+import { hostsNestedDocument } from "./focusability.js";
 import { getExplicitRole } from "./role-map.js";
 
 /** Roles whose widget is operated by a plain click. */
@@ -71,6 +72,11 @@ function tagActions(element: Element, tag: string): ActionType[] | undefined {
   // Only "focus" is honest here: a synthetic click doesn't count as a user
   // gesture for playback, so a CLICK badge would no-op.
   if (MEDIA_TAGS.has(tag) && element.hasAttribute("controls")) return ["focus"];
+  // A frame (or an object showing a document) is a tab stop that takes
+  // scripted focus. The action also keeps an `<object>` and a
+  // `role="presentation"` iframe in the a11y view, which keeps only
+  // interactive generics and presentational elements.
+  if (hostsNestedDocument(element)) return ["focus"];
   return undefined;
 }
 
