@@ -143,6 +143,72 @@ function isNativeStructuralNesting(
   );
 }
 
+/** The issue a role the user agent discarded raises: invalid as written, or
+ *  valid but outside its required context. */
+function discardedRoleIssue(discarded: string): NodeIssue {
+  if (!isValidRole(discarded)) {
+    return {
+      severity: "error",
+      message: `"${discarded}" is not a valid ARIA role`,
+    };
+  }
+  const context = roleMeta(discarded).requiredContextRole;
+  return {
+    severity: "error",
+    message: `role "${discarded}" is discarded outside its required context${
+      context.length > 0 ? ` (${context.join(" / ")})` : ""
+    }`,
+  };
+}
+
+/** Required ARIA attributes the author left out of `n`. */
+function missingRequiredAttrIssues(n: ValidatedNode): NodeIssue[] {
+  // Required ARIA attributes are the AUTHOR's obligation — but only for the
+  // ones no user agent supplies. `<input type="checkbox">` has checkedness
+  // whether or not anyone wrote `aria-checked`, and a `<select>` has its popup
+  // whether or not anyone wrote `aria-controls`, so demanding them reported
+  // correct HTML as broken. See `uaSuppliedAttrs`, which is per-attribute
+  // precisely because an element can supply one state and still owe another.
+  const required = attributesForRole(n.role).filter(
+    (a) => a.required || (a.requiredWhenFocusable && n.focusable === true),
+  );
+  const issues: NodeIssue[] = [];
+  for (const a of required) {
+    if (n.uaSuppliedAttrs?.includes(a.name)) continue;
+    const v = n.attrs[a.name];
+    // `false` is a PRESENT value, not an absent one. `aria-expanded="false"`
+    // is a collapsed combobox and `aria-checked="false"` an unchecked box —
+    // the ordinary states. Counting them as missing made the most common
+    // shape of correct authored markup unsatisfiable.
+    if (v === undefined || v === "") {
+      issues.push({ severity: "error", message: `missing required ${a.name}` });
+    }
+  }
+  return issues;
+}
+
+/** The warning for a node whose parent is not one of its required context
+ *  roles, if it needs one. */
+function requiredContextIssue(
+  n: ValidatedNode,
+  requiredContextRole: readonly string[],
+  nodesById: NodeMap,
+): NodeIssue | undefined {
+  if (requiredContextRole.length === 0) return undefined;
+  const parent = n.parentId ? nodesById.get(n.parentId) : null;
+  // An element's own semantics fulfil the context (WAI-ARIA 1.2 §5.2.7): a
+  // `<select>`'s options sit directly in its combobox.
+  const ok =
+    parent &&
+    (requiredContextRole.includes(parent.role) ||
+      isNativeStructuralNesting(parent, n));
+  if (ok) return undefined;
+  return {
+    severity: "warn",
+    message: `should be inside ${requiredContextRole.join(" / ")}`,
+  };
+}
+
 /** Per-node spec issues — drives the red/green dot and the inspector list. */
 export function validateNode(
   n: ValidatedNode,
@@ -154,22 +220,9 @@ export function validateNode(
   // context, and an extracted tree can't show what ended its climb (a
   // `<section>` between an option and its listbox folds out of the view).
   if (n.discardedRole !== undefined) {
-    const discarded = n.discardedRole;
-    if (!isValidRole(discarded)) {
-      // As for an invalid role kept as written: nothing else is judged.
-      issues.push({
-        severity: "error",
-        message: `"${discarded}" is not a valid ARIA role`,
-      });
-      return issues;
-    }
-    const context = roleMeta(discarded).requiredContextRole;
-    issues.push({
-      severity: "error",
-      message: `role "${discarded}" is discarded outside its required context${
-        context.length > 0 ? ` (${context.join(" / ")})` : ""
-      }`,
-    });
+    issues.push(discardedRoleIssue(n.discardedRole));
+    // As for an invalid role kept as written: nothing else is judged.
+    if (!isValidRole(n.discardedRole)) return issues;
   }
   // Only an AUTHORED role can be an invalid ARIA role. An implicit one is
   // engine vocabulary — `<video controls>` extracts as `video`, which is not
@@ -206,42 +259,14 @@ export function validateNode(
     });
   }
 
-  // Required ARIA attributes are the AUTHOR's obligation — but only for the
-  // ones no user agent supplies. `<input type="checkbox">` has checkedness
-  // whether or not anyone wrote `aria-checked`, and a `<select>` has its popup
-  // whether or not anyone wrote `aria-controls`, so demanding them reported
-  // correct HTML as broken. See `uaSuppliedAttrs`, which is per-attribute
-  // precisely because an element can supply one state and still owe another.
-  const required = attributesForRole(n.role).filter(
-    (a) => a.required || (a.requiredWhenFocusable && n.focusable === true),
-  );
-  for (const a of required) {
-    if (n.uaSuppliedAttrs?.includes(a.name)) continue;
-    const v = n.attrs[a.name];
-    // `false` is a PRESENT value, not an absent one. `aria-expanded="false"`
-    // is a collapsed combobox and `aria-checked="false"` an unchecked box —
-    // the ordinary states. Counting them as missing made the most common
-    // shape of correct authored markup unsatisfiable.
-    if (v === undefined || v === "") {
-      issues.push({ severity: "error", message: `missing required ${a.name}` });
-    }
-  }
+  issues.push(...missingRequiredAttrIssues(n));
 
-  if (meta.requiredContextRole.length > 0) {
-    const parent = n.parentId ? nodesById.get(n.parentId) : null;
-    // An element's own semantics fulfil the context (WAI-ARIA 1.2 §5.2.7): a
-    // `<select>`'s options sit directly in its combobox.
-    const ok =
-      parent &&
-      (meta.requiredContextRole.includes(parent.role) ||
-        isNativeStructuralNesting(parent, n));
-    if (!ok) {
-      issues.push({
-        severity: "warn",
-        message: `should be inside ${meta.requiredContextRole.join(" / ")}`,
-      });
-    }
-  }
+  const contextIssue = requiredContextIssue(
+    n,
+    meta.requiredContextRole,
+    nodesById,
+  );
+  if (contextIssue) issues.push(contextIssue);
   return issues;
 }
 
