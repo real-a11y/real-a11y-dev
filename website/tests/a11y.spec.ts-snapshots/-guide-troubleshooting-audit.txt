@@ -173,7 +173,11 @@ main
     strong "menubar"
     text "("
     code "role="menubar""
-    text ") is not an overlay, wherever it sits: it is a bar the page keeps showing, usually the site's top navigation, so a root beside it stays your root. A menu it opens is one, and the tree widens to take it in while it is open."
+    text ") is not an overlay, wherever it sits: it is a bar the page keeps showing, usually the site's top navigation, so a root beside it stays your root. A menu it opens is one, and the tree widens to take it in while it is open. A menubar that carries"
+    code "aria-live="polite""
+    text "or"
+    code ""assertive""
+    text "is a live region, though, and follows the live-region rule below."
   paragraph
     text "An"
     strong "ordinary in-page live region"
