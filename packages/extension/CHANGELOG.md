@@ -24,6 +24,10 @@
 - **Internal refactor, no behaviour change.** The raw accessibility-tree
   withholding helpers moved out of `native-core.ts` into their own module
   ([#730](https://github.com/real-a11y/real-a11y-dev/pull/730)).
+- **An unlabeled file input reads `button ""` in the A11Y view.** The view
+  showed Chromium's own button text, "Choose File", as the input's name, which
+  hid it from the audit. A name the page gives it is unchanged.
+  ([#727](https://github.com/real-a11y/real-a11y-dev/pull/727))
 - **The TAB view lists a frame as a tab stop.** An `<iframe>` now appears once,
   where Tab enters it, unless the frame's own stops are listed in its place; the
   key bar's Tab can move focus onto the frame's document. Keyboard-focusable
