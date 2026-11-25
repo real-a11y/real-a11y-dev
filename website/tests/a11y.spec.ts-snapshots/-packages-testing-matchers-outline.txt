@@ -11,6 +11,7 @@ h1 Matchers
   h2 boxedTreeSnapshot(root, options?) — snapshot serializer
     h3 boxedTreeSnapshot vs treeSnapshot
     h3 Modal scoping in snapshots
+  h2 boxedTabSequenceSnapshot(root, options?) and boxedOutlineSnapshot(root, options?)
   h2 Rules, contracts, and snapshots — which to reach for
     h3 Rules and contracts catch disjoint bugs
     h3 In practice

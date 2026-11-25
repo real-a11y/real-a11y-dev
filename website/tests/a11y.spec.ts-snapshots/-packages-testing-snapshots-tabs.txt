@@ -50,6 +50,8 @@ generic
 button "Copy Code"
 generic
 link "Focus marker"
+link "snapshot report"
+link "boxedOutlineSnapshot(root)"
 link "toHaveTabSequence"
 link "treeSnapshot"
 link "outlineSnapshot"
@@ -59,6 +61,8 @@ generic
 button "Copy Code"
 generic
 link "Focus marker"
+link "snapshot report"
+link "boxedTabSequenceSnapshot(root)"
 button "Copy Code"
 generic
 button "Copy Code"
@@ -75,6 +79,7 @@ generic
 button "Copy Code"
 generic
 link "boxedTreeSnapshot()"
+link "boxedTabSequenceSnapshot() and boxedOutlineSnapshot()"
 link "a11yDiff()"
 link "registerA11yMatchers(expect)"
 link "values: true"
