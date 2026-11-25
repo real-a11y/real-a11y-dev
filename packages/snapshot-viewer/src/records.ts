@@ -3,7 +3,12 @@
  * them. The shape mirrors `SnapshotRecord` in
  * `packages/testing/src/snapshot-record.ts`; `version` says which one.
  */
-import type { ExtractionResult, SemanticNode } from "@real-a11y-dev/core";
+import type {
+  ExtractionResult,
+  RoleFilter,
+  SemanticNode,
+  TreeViewMode,
+} from "@real-a11y-dev/core";
 
 export const RECORD_VERSION = 2;
 
@@ -29,10 +34,34 @@ export interface SnapshotRecord {
   text: string;
   recordedAt: string;
   tree?: RecordedTree;
+  /** A tree's view, for a snapshot of its tab sequence or its outline. A
+   *  record written before there was one has none. */
+  view?: "tab" | "headings";
   before?: RecordedTree;
   after?: RecordedTree;
   focusBefore?: string | null;
   focusAfter?: string | null;
+}
+
+/** Where the panel opens on a record: what its snapshot printed. */
+export function openingView(record: SnapshotRecord): {
+  viewMode: TreeViewMode;
+  roleFilter: RoleFilter;
+} {
+  if (record.kind === "tree" && record.view === "tab") {
+    return { viewMode: "tab", roleFilter: null };
+  }
+  if (record.kind === "tree" && record.view === "headings") {
+    return { viewMode: "a11y", roleFilter: "heading" };
+  }
+  return { viewMode: "a11y", roleFilter: null };
+}
+
+/** The word a record's badge says: what its snapshot printed. */
+export function kindLabel(record: SnapshotRecord): string {
+  if (record.kind === "tree" && record.view === "tab") return "tabs";
+  if (record.kind === "tree" && record.view === "headings") return "outline";
+  return record.kind;
 }
 
 /**

@@ -188,6 +188,8 @@
           "values": [
             "a11yMatchers",
             "a11ySnapshotSerializer",
+            "boxedOutlineSnapshot",
+            "boxedTabSequenceSnapshot",
             "boxedTreeSnapshot",
             "registerA11yMatchers"
           ]

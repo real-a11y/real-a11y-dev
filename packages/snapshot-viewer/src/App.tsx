@@ -11,7 +11,9 @@ import {
   countLines,
   fillHint,
   groupByFile,
+  kindLabel,
   lineKind,
+  openingView,
   readableRecords,
   splitTestName,
   toExtraction,
@@ -217,7 +219,7 @@ function RecordButton({
       onClick={onSelect}
     >
       <span class="sv-record-top">
-        <KindBadge kind={record.kind} />
+        <KindBadge record={record} />
         <span class="sv-record-name">
           {name}
           {record.index > 1 ? (
@@ -234,10 +236,12 @@ function RecordButton({
   );
 }
 
-/** `ui`'s badge: a tree's in the interactive blue, a diff's in changed amber. */
-function KindBadge({ kind }: { kind: SnapshotRecord["kind"] }) {
-  const tone = kind === "tree" ? "sn-badge--interactive" : "sv-kind-diff";
-  return <span class={`sn-badge sv-kind ${tone}`}>{kind}</span>;
+/** `ui`'s badge: a tree's in the interactive blue, its tab sequence's and its
+ *  outline's too, and a diff's in changed amber. */
+function KindBadge({ record }: { record: SnapshotRecord }) {
+  const tone =
+    record.kind === "tree" ? "sn-badge--interactive" : "sv-kind-diff";
+  return <span class={`sn-badge sv-kind ${tone}`}>{kindLabel(record)}</span>;
 }
 
 function Counts({ counts }: { counts: ReturnType<typeof countLines> }) {
@@ -317,8 +321,11 @@ function RecordView({
   /** It is still open, but the latest records no longer hold it. */
   gone: boolean;
 }) {
+  // A snapshot of the tab sequence opens on the TAB view, one of the outline
+  // on the headings: the part of the tree its text printed.
+  const opening = openingView(record);
   const [side, setSide] = useState<Side>("after");
-  const [viewMode, setViewMode] = useState<TreeViewMode>("a11y");
+  const [viewMode, setViewMode] = useState<TreeViewMode>(opening.viewMode);
   const [marksOn, setMarksOn] = useState(true);
   const trees = useTrees(record);
   const changes = useChangeMarks(
@@ -351,6 +358,7 @@ function RecordView({
             treeData={shown}
             viewMode={viewMode}
             onViewModeChange={setViewMode}
+            defaultRoleFilter={opening.roleFilter}
             changes={changes}
             theme="auto"
           />
@@ -382,7 +390,7 @@ function RecordHeader({
         <span class="sv-title-index"> · snapshot {record.index}</span>
       </h2>
       <p class="sv-meta">
-        <KindBadge kind={record.kind} />
+        <KindBadge record={record} />
         <span>
           {record.project ? `${record.project} · ` : ""}
           {record.file}
@@ -465,10 +473,11 @@ function Empty({
     <div class="sv-empty">
       <h2>No snapshots recorded</h2>
       <p>
-        Only snapshots of <code>boxedTreeSnapshot()</code> and{" "}
-        <code>a11yDiff()</code> show up here, from tests that called{" "}
-        <code>registerA11yMatchers(expect)</code>. A snapshot of a plain string
-        has no tree behind it.
+        Only boxed snapshots show up here: <code>boxedTreeSnapshot()</code>,{" "}
+        <code>boxedTabSequenceSnapshot()</code>,{" "}
+        <code>boxedOutlineSnapshot()</code> and <code>a11yDiff()</code>, from
+        tests that called <code>registerA11yMatchers(expect)</code>. A snapshot
+        of a plain string has no tree behind it.
       </p>
       {dir === undefined ? null : (
         <>

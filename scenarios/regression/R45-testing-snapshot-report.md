@@ -8,7 +8,7 @@ priority: P1
 status: Active
 validFrom: "testing ≥ 0.1.0-beta.24 (installed from the packed tarball, not a workspace link)"
 validUntil: ""
-expected: "after a run, a11y-snapshots/index.html opens from disk and lists every boxedTreeSnapshot and a11yDiff snapshot, a tree with its states and a diff with its changes marked; Jest loads the reporter through require; a rerun replaces only the files it ran; no field value the text didn't print reaches a record, a password never does; the library entries still bundle for the browser"
+expected: "after a run, a11y-snapshots/index.html opens from disk and lists every boxed snapshot and a11yDiff snapshot, a tree with its states, a tab sequence on the TAB view, an outline on its headings, and a diff with its changes marked; Jest loads the reporter through require; a rerun replaces only the files it ran; no field value the text didn't print reaches a record, a password never does; the library entries still bundle for the browser"
 covers:
   - packages.@real-a11y-dev/testing
   - env.REAL_A11Y_TREES_DIR
@@ -34,12 +34,17 @@ Tests:
 - **plain** — `expect(treeSnapshot(root)).toMatchSnapshot()`
 - **redacted** — a button named `Order 4821-7730`, snapshotted with
   `boxedTreeSnapshot(root, { redact: [/\d{4}-\d{4}/] })`
+- **tabs** _(testing ≥ the first release after 0.1.0-beta.24)_ —
+  `expect(boxedTabSequenceSnapshot(root)).toMatchSnapshot()`
+- **outline** _(same)_ — `expect(boxedOutlineSnapshot(root)).toMatchSnapshot()`
 
 1. Vitest: add `reporters: ["default", "@real-a11y-dev/testing/reporter"]` and
    run `vitest run` with `REAL_A11Y_TREES_DIR` unset
 2. Open the printed `file://` link in Chrome, straight from disk
 3. Select the **diff** record, then **Before**, then the TAB view
 4. `grep -r "VALUE-SENTINEL\|PW-SENTINEL\|4821-7730" a11y-snapshots/`
+   - _(testing ≥ the first release after 0.1.0-beta.24)_ Then select the
+     **tabs** record, then the **outline** record, then the A11Y view on it
 5. In watch mode (`vitest`), edit the **tree** test's file so it reruns alone
 6. Jest: add `reporters: ["default", "@real-a11y-dev/testing/reporter/jest"]`
    and run `jest`, then again with two test files and `--maxWorkers=2`, then
@@ -53,8 +58,11 @@ Tests:
 ## Expected
 
 - **1** — the run passes as before and ends with
-  `a11y snapshots  4 recorded → file:///…/a11y-snapshots/index.html`. The
-  **plain** test isn't among them: a string snapshot has no tree behind it
+  `a11y snapshots  4 recorded → file:///…/a11y-snapshots/index.html` (`6
+  recorded` with the **tabs** and **outline** tests). The **plain** test isn't
+  among them: a string snapshot has no tree behind it. The **tabs** and
+  **outline** `.snap` entries hold the lines `tabSequenceSnapshot` and
+  `outlineSnapshot` print, unquoted
 - **2** — the page renders with no console error and no server: a list by test
   file and test, TREE and DIFF badges, and the selected record's tree with
   `interactive` / `focusable` badges on the controls
@@ -65,7 +73,10 @@ Tests:
 - **4** — `VALUE-SENTINEL` appears **only** in the **values** record's
   snapshot text (its `text`), never in a tree; `PW-SENTINEL` appears nowhere,
   the password reading `[redacted]` even there; `4821-7730` appears nowhere, the button reading
-  `Order [REDACTED]`
+  `Order [REDACTED]`. The **tabs** record, badged TABS, opens on the TAB view
+  with the tab stops in order; the **outline** record, badged OUTLINE, opens
+  on the A11Y view with the Headings filter pressed and only the heading
+  listed; switching the filter off shows its whole tree
 - **5** — the page is written again; the rerun file's records are replaced and
   the other files' are still listed
 - **6** — Jest loads the reporter through `require`, prints the same line, and

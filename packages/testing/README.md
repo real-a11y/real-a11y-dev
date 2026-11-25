@@ -134,7 +134,7 @@ registerA11yMatchers(expect, { diff: { childIds: false, redact: [/\d{2}:\d{2}/] 
 
 ## See snapshots as a tree
 
-A snapshot's text leaves out states, descriptions and what each element takes. Add the snapshot reporter to Vitest or Jest, and after every run `a11y-snapshots/index.html` draws each `boxedTreeSnapshot()` and `a11yDiff()` snapshot the way the Semantic Navigator panel does, with a diff's changes marked on its tree:
+A snapshot's text leaves out states, descriptions and what each element takes. Add the snapshot reporter to Vitest or Jest, and after every run `a11y-snapshots/index.html` draws each boxed snapshot the way the Semantic Navigator panel does: a `boxedTreeSnapshot()` as its tree, a `boxedTabSequenceSnapshot()` on the TAB view, a `boxedOutlineSnapshot()` on the headings, and an `a11yDiff()` with its changes marked on its tree. Those three print what `treeSnapshot`, `tabSequenceSnapshot` and `outlineSnapshot` print; only the boxed ones, from `@real-a11y-dev/testing/matchers`, reach the report:
 
 ```ts
 // vitest.config.ts

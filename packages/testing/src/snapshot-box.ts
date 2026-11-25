@@ -4,8 +4,9 @@
  * it verbatim through the registered pretty-format plugin, instead of the
  * framework's default object dump.
  *
- * Lives on its own (not in `matchers.ts`) so `a11yDiff` and `boxedTreeSnapshot` can
- * both produce boxes the SAME serializer renders, without the diff/capture API
+ * Lives on its own (not in `matchers.ts`) so `a11yDiff` and the boxed snapshots
+ * (`boxedTreeSnapshot` and its tab-sequence and outline twins) all produce
+ * boxes the SAME serializer renders, without the diff/capture API
  * pulling in the jest matcher augmentation or `@real-a11y-dev/validate`.
  *
  * Without the serializer registered, a box still snapshots as its text: its
@@ -33,11 +34,19 @@ interface SnapshotPrinting {
   redact?: RegExp[];
 }
 
+/**
+ * Which of the panel's views a tree's record opens on, for a snapshot that
+ * printed only part of the tree: `"tab"`, the TAB view, for a tab sequence,
+ * and `"headings"`, the headings filter, for an outline. Left out, the tree.
+ */
+export type SnapshotView = "tab" | "headings";
+
 /** The trees a box's text was printed from, as the snapshot viewer draws them. */
 export type SnapshotTrees =
   | ({
       kind: "tree";
       tree: ExtractionResult;
+      view?: SnapshotView;
     } & SnapshotPrinting)
   | ({
       kind: "diff";
@@ -96,7 +105,8 @@ export function snapshotTreesOf(
  * pretty-format plugin recognised by both Jest and Vitest. Registered via
  * `registerA11yMatchers` (from `@real-a11y-dev/testing/matchers`) or each
  * framework's `snapshotSerializers` config. Renders any {@link boxSnapshot} —
- * whether it came from `boxedTreeSnapshot` (a tree) or `a11yDiff` (a change list).
+ * whether it came from a boxed snapshot (a tree, its tab sequence or its
+ * outline) or `a11yDiff` (a change list).
  */
 export const a11ySnapshotSerializer = {
   test(val: unknown): val is A11ySnapshotBox {

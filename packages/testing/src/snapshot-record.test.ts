@@ -12,7 +12,11 @@ import {
   vi,
 } from "vitest";
 
-import { boxedTreeSnapshot } from "./matchers.js";
+import {
+  boxedOutlineSnapshot,
+  boxedTabSequenceSnapshot,
+  boxedTreeSnapshot,
+} from "./matchers.js";
 import { a11ySnapshotSerializer } from "./snapshot-box.js";
 import {
   bindSnapshotRecorder,
@@ -21,7 +25,12 @@ import {
   type SnapshotRecord,
 } from "./snapshot-record.js";
 
-import { a11yDiff, capture } from "./index.js";
+import {
+  a11yDiff,
+  capture,
+  outlineSnapshot,
+  tabSequenceSnapshot,
+} from "./index.js";
 
 let dir: string;
 
@@ -88,6 +97,56 @@ describe("snapshot recorder", () => {
     expect(roles(record!, "tree")).toEqual(
       expect.arrayContaining(["heading", "button"]),
     );
+  });
+
+  it("writes the whole tree behind a tab sequence, to open on the TAB view", () => {
+    const root = mount(
+      `<h1>Hi</h1><a href="/a">Home</a><p>Text</p><button>Go</button>`,
+    );
+    const box = boxedTabSequenceSnapshot(root);
+    expect(box.text).toBe(tabSequenceSnapshot(root));
+    a11ySnapshotSerializer.serialize(box);
+
+    const [record] = records();
+    expect(record).toMatchObject({ kind: "tree", view: "tab", text: box.text });
+    // The tree, not only its tab stops: the TAB view is one view of it.
+    expect(roles(record!, "tree")).toEqual(
+      expect.arrayContaining(["heading", "link", "paragraph", "button"]),
+    );
+  });
+
+  it("writes the whole tree behind an outline, to open on the headings", () => {
+    const root = mount(`<h1>Hi</h1><h2>More</h2><button>Go</button>`);
+    const box = boxedOutlineSnapshot(root);
+    expect(box.text).toBe(outlineSnapshot(root));
+    a11ySnapshotSerializer.serialize(box);
+
+    const [record] = records();
+    expect(record).toMatchObject({
+      kind: "tree",
+      view: "headings",
+      text: box.text,
+    });
+    expect(roles(record!, "tree")).toEqual(
+      expect.arrayContaining(["heading", "button"]),
+    );
+  });
+
+  it("names no view for a snapshot of the whole tree", () => {
+    a11ySnapshotSerializer.serialize(
+      boxedTreeSnapshot(mount(`<button>Go</button>`)),
+    );
+    expect(records()[0]).not.toHaveProperty("view");
+  });
+
+  it("redacts a tab sequence's record as its text", () => {
+    const box = boxedTabSequenceSnapshot(
+      mount(`<button>Order 4821-7730</button>`),
+      { redact: [/\d{4}-\d{4}/] },
+    );
+    expect(box.text).toBe(`button "Order [REDACTED]"`);
+    a11ySnapshotSerializer.serialize(box);
+    expect(rawRecords().join("")).not.toContain("4821-7730");
   });
 
   it("writes both sides of a diff and where focus went", () => {

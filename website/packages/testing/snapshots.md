@@ -225,6 +225,8 @@ h1 Introduction
 
 Honors `markFocus` (default `true`) — a focused heading is shown with a trailing `[focused]`. See [Focus marker](#focus-marker).
 
+An `outlineSnapshot` string doesn't reach the [snapshot report](#the-snapshot-report). Snapshot [`boxedOutlineSnapshot(root)`](/packages/testing/matchers#boxedtabsequencesnapshot-root-options-and-boxedoutlinesnapshot-root-options) instead: the same text, and the report opens the tree behind it on its headings.
+
 ## `tabSequenceSnapshot(root, options?)`
 
 Returns the tab sequence, one stop per line in Tab order.
@@ -252,6 +254,8 @@ A rich-text editor counts the way Chromium counts it. Each `contenteditable` reg
 Lines carry **no** `NN.` position number: line order already conveys the sequence, and a hard-coded number renumbers every following line the moment one stop is inserted near the top — churning the whole snapshot's diff for one real change. For a human-read listing where an explicit "stop 7" helps, add the numbers at render time with `numberTabStops` from `@real-a11y-dev/testing` (`numberTabStops(tabSequenceSnapshot(root))`); never store the numbered form.
 
 Honors `markFocus` (default `true`) — the currently-focused stop is shown with a trailing `[focused]`. See [Focus marker](#focus-marker).
+
+A `tabSequenceSnapshot` string doesn't reach the [snapshot report](#the-snapshot-report). Snapshot [`boxedTabSequenceSnapshot(root)`](/packages/testing/matchers#boxedtabsequencesnapshot-root-options-and-boxedoutlinesnapshot-root-options) instead: the same text, and the report opens the tree behind it on the TAB view.
 
 ## Focus marker
 
@@ -341,8 +345,9 @@ The page is one self-contained file. It opens from disk, needs no server, and wo
 
 ### What it shows
 
-- **Every boxed snapshot of the run**, by test file and test: each [`boxedTreeSnapshot()`](/packages/testing/matchers#boxedtreesnapshot-root-options-—-snapshot-serializer) and each [`a11yDiff()`](/packages/testing/flow#asserting-what-an-interaction-changed).
+- **Every boxed snapshot of the run**, by test file and test: each [`boxedTreeSnapshot()`](/packages/testing/matchers#boxedtreesnapshot-root-options-—-snapshot-serializer), [`boxedTabSequenceSnapshot()` and `boxedOutlineSnapshot()`](/packages/testing/matchers#boxedtabsequencesnapshot-root-options-and-boxedoutlinesnapshot-root-options), and each [`a11yDiff()`](/packages/testing/flow#asserting-what-an-interaction-changed).
 - **A tree snapshot as a tree** you can open and close, with each row's states and what it takes (`interactive`, `focusable`, `selected`, `invalid`, …), filters for headings, links, buttons, forms and landmarks, and the TAB view: the tab stops in order.
+- **A tab sequence or an outline on its view.** A `boxedTabSequenceSnapshot()` opens its tree on the TAB view, and a `boxedOutlineSnapshot()` on the headings filter, each badged `tabs` or `outline` in the list. The rest of the tree is a click away.
 - **A diff on the tree it describes.** The after tree opens with what changed marked: new rows, changed rows with the field that changed (a description, the order of a row's children and where focus went among them), and a count of rows removed. The before tree is one click away.
 - **The snapshot's text** beside it, as the `.snap` holds it, its `+` added, `-` removed and `~` changed lines coloured.
 
@@ -350,7 +355,7 @@ Its `.snap` text is still what a test asserts. The report only shows a snapshot,
 
 ### What it records
 
-Only a boxed snapshot has a tree behind it. A snapshot of a plain string, such as `expect(treeSnapshot(el)).toMatchSnapshot()`, has none, so it doesn't appear. Snapshot `boxedTreeSnapshot(el)` instead to see it in the report. Each record is named after its test, which the recorder reads from the `expect` you pass to [`registerA11yMatchers(expect)`](/packages/testing/matchers), or from the runner's own `expect` (Vitest's too with `globals` off). Vitest names a test `describe > test`, which the page splits into its describe path and its own name; Jest joins the two with a space, so the page shows the whole name.
+Only a boxed snapshot has a tree behind it. A snapshot of a plain string, such as `expect(treeSnapshot(el)).toMatchSnapshot()`, has none, so it doesn't appear. Snapshot its boxed twin instead to see it in the report: `boxedTreeSnapshot(el)` for `treeSnapshot(el)`, `boxedTabSequenceSnapshot(el)` for `tabSequenceSnapshot(el)`, and `boxedOutlineSnapshot(el)` for `outlineSnapshot(el)`. Each prints the same text. A committed snapshot changes once, when you switch: it loses the quotes a string snapshots inside, and every line stays as it was. Each record is named after its test, which the recorder reads from the `expect` you pass to [`registerA11yMatchers(expect)`](/packages/testing/matchers), or from the runner's own `expect` (Vitest's too with `globals` off). Vitest names a test `describe > test`, which the page splits into its describe path and its own name; Jest joins the two with a space, so the page shows the whole name.
 
 Which tests record:
 
