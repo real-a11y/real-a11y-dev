@@ -84,7 +84,6 @@ describe("dropBuiltInFileInputNames", () => {
       },
     ] satisfies RawAXNameNode[];
     const out = dropBuiltInFileInputNames(kept);
-    expect(out).toBe(kept);
     expect(out.map((n) => n.name?.value)).toEqual(
       kept.map((n) => n.name?.value),
     );

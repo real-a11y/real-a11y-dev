@@ -29,17 +29,14 @@ import {
 export function dropBuiltInFileInputNames<T extends RawAXNameNode>(
   rawNodes: T[],
 ): T[] {
-  let changed = false;
-  const out = rawNodes.map((raw) => {
+  return rawNodes.map((raw) => {
     const winner = winningNameSource(raw);
     if (winner?.type !== "contents" || winner.attribute !== "value") return raw;
-    changed = true;
     const sources = raw.name?.sources?.map((step) =>
       step === winner ? { ...step, value: { ...step.value, value: "" } } : step,
     );
     return { ...raw, name: { ...raw.name, value: "", sources } };
   });
-  return changed ? out : rawNodes;
 }
 
 /**
