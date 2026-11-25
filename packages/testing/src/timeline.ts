@@ -3,6 +3,7 @@
 // `capture()` + `a11yDiff()` see the page at two moments; this records what
 // happens between them.
 
+import type { ExtractionResult } from "@real-a11y-dev/core";
 import {
   buildA11yTree,
   extractDomTree,
@@ -12,6 +13,7 @@ import {
   renderingParent,
   resolveFocusedElement,
   safeContains,
+  safeGetAttribute,
   safeNodeType,
   safeOwnerDocument,
   safeParentElement,
@@ -64,18 +66,61 @@ const ROLE_LEVELS: ReadonlyMap<string, "polite" | "assertive"> = new Map([
   ["log", "polite"],
 ]);
 
+type Level = "polite" | "assertive";
+
+/**
+ * How `el` announces: a politeness, `"off"` when its `aria-live` switches
+ * announcing off for everything inside it, or null when it is no region.
+ * Core's rule, which reads authored roles only (its overlay pivot keys on
+ * them), plus `<output>`: a `status` by its tag, which Chromium announces.
+ */
+function regionLevel(el: Element): Level | "off" | null {
+  const live = safeGetAttribute(el, "aria-live")?.trim().toLowerCase();
+  if (live === "off") return "off";
+  const level = liveRegionLevel(el);
+  if (level) return level;
+  return el.localName === "output" && getImplicitRole(el) === "status"
+    ? "polite"
+    : null;
+}
+
+/** Is `element` inside `node`, across shadow roots and slots? */
+function holds(node: Node, element: Element): boolean {
+  if (safeContains(node, element)) return true;
+  for (let el: Element | null = element; el; el = renderingParent(el)) {
+    if (el === node) return true;
+  }
+  return false;
+}
+
+/** Is the node `id`, and everything above it, exposed to assistive tech? */
+function exposed(tree: ExtractionResult, id: string): boolean {
+  for (let n = tree.nodes.get(id); n;) {
+    if (!n.a11y.isExposedToAT) return false;
+    n = n.parentId === null ? undefined : tree.nodes.get(n.parentId);
+  }
+  return true;
+}
+
 /** One recorded line, `focus     …` or `announce  …`. */
 function line(kind: "focus" | "announce", text: string): string {
   return `${kind.padEnd(10)}${text}`;
 }
 
-/** What a flush was run for, which decides where a focus change goes. */
-type Trigger = "focusin" | "focusout" | "mutation";
-
-/** A line, and the index of the first mutation record that caused it. */
+/**
+ * A line, and where in its block it happened: record `i` is at `2i + 1`, and
+ * a focus event before record `k` at `2k`, so the two sort together.
+ */
 interface Pending {
   at: number;
   text: string;
+}
+
+/** A focus event: before which record it happened, and where focus went
+ *  (null while it is leaving). */
+interface Move {
+  at: number;
+  to: Element | null;
 }
 
 class TimelineRecorder {
@@ -91,12 +136,16 @@ class TimelineRecorder {
   private readonly lastText = new WeakMap<Element, string>();
   private readonly doc: Document;
   private readonly observer: MutationObserver;
+  /** What the page changed since the block last settled, in order. */
+  private records: MutationRecord[] = [];
+  /** The focus events among those changes. */
+  private moves: Move[] = [];
+  /** A settle is queued for the end of this synchronous block. */
+  private scheduled = false;
   /** The focused element as last read, inside the root or not. */
   private seen: Element | null = null;
   /** The element the last focus line named, or null for `(none)`. */
   private focused: Element | null = null;
-  /** Focus left an element and nothing has read where it went yet. */
-  private blurred = false;
   private box: A11ySnapshotBox | null = null;
 
   constructor(
@@ -108,8 +157,12 @@ class TimelineRecorder {
   ) {
     this.doc = safeOwnerDocument(root);
     if (options.announcements) this.readBaseline();
+    // Delivered once the page's synchronous block has run, which is when
+    // the block settles.
     this.observer = new MutationObserver((records) => {
-      if (!this.box) this.handle(records, "mutation");
+      if (this.box) return;
+      for (const record of records) this.records.push(record);
+      this.settle();
     });
     // The whole document, not just the root: removing an ancestor of the
     // root drops focus too, and no event says so.
@@ -136,7 +189,7 @@ class TimelineRecorder {
 
   stop(): A11ySnapshotBox {
     if (this.box) return this.box;
-    this.flush("mutation");
+    this.settle();
     this.observer.disconnect();
     if (this.options.focus) {
       this.removeListener.call(this.doc, "focusin", this.onFocusIn, true);
@@ -148,52 +201,45 @@ class TimelineRecorder {
     return this.box;
   }
 
-  // Focus has arrived: everything the page changed before it comes first.
-  private readonly onFocusIn = (): void => this.flush("focusin");
+  private readonly onFocusIn = (): void =>
+    this.moved(resolveFocusedElement(this.doc));
 
-  // Focus is leaving. The page's changes so far come before that, but where
-  // focus went is read only once this step settles: a move fires `focusin`
-  // straight after, a `blur()` nothing at all.
-  private readonly onFocusOut = (): void => {
-    this.flush("focusout");
-    this.blurred = true;
-    queueMicrotask(() => this.flush("mutation"));
-  };
+  private readonly onFocusOut = (): void => this.moved(null);
 
-  /** Take the records the observer holds and handle them now. */
-  private flush(trigger: Trigger): void {
+  /** Note a focus event at this point among the page's changes. */
+  private moved(to: Element | null): void {
     if (this.box) return;
-    this.handle(this.observer.takeRecords(), trigger);
+    for (const record of this.observer.takeRecords()) this.records.push(record);
+    this.moves.push({ at: this.records.length, to });
+    this.schedule();
   }
 
   /**
-   * Turn one batch of mutation records, plus where focus is now, into lines,
-   * each at the first record that caused it. Text is read once per batch:
-   * set and cleared within one synchronous block, it was never there.
+   * Read the block once the page's synchronous code has run. It renders as a
+   * whole, so text set and cleared within it, or focus passing through an
+   * element, never reached a screen reader.
    */
-  private handle(records: MutationRecord[], trigger: Trigger): void {
-    const regions = new Map<Element, number>();
-    let dropAt = records.length;
-    records.forEach((record, at) => {
-      if (this.options.announcements) this.collect(record, at, regions);
-      if (dropAt === records.length && this.removesFocused(record)) {
-        dropAt = at;
-      }
-    });
-    const pending: Pending[] = [];
-    for (const [region, at] of regions) {
-      const text = this.announcement(region);
-      if (text) pending.push({ at, text });
-    }
-    if (this.options.focus && trigger !== "focusout") {
-      // A focus that arrives (`focusin`) came after every record before it;
-      // one lost to a blur came before every record since, the first one
-      // included; one lost to a removal came with that record.
-      let at = dropAt;
-      if (trigger === "focusin") at = records.length;
-      else if (this.blurred) at = -1;
-      this.blurred = false;
-      const change = this.focusChange(at);
+  private schedule(): void {
+    if (this.scheduled) return;
+    this.scheduled = true;
+    queueMicrotask(() => this.settle());
+  }
+
+  /** Turn the block into lines: what it left in each region, and where it
+   *  left focus, each where in the block it happened. */
+  private settle(): void {
+    this.scheduled = false;
+    if (this.box) return;
+    const records = this.records;
+    for (const record of this.observer.takeRecords()) records.push(record);
+    const moves = this.moves;
+    this.records = [];
+    this.moves = [];
+    const pending = this.options.announcements
+      ? this.announcements(records)
+      : [];
+    if (this.options.focus) {
+      const change = this.focusChange(this.focusSettled(records, moves));
       if (change) pending.push(change);
     }
     // Stable, so lines from one record keep the order they were read in.
@@ -203,12 +249,29 @@ class TimelineRecorder {
 
   // ─── focus ─────────────────────────────────────────────────────────────────
 
-  /** Did this record take the element the last focus line named with it? */
-  private removesFocused(record: MutationRecord): boolean {
-    const focused = this.focused;
-    if (!focused || record.type !== "childList") return false;
+  /**
+   * Where in the block focus came to rest: its last move, or the last record
+   * that removed the element it was on (jsdom fires no event for that),
+   * whichever came later. With neither, the end of the block.
+   */
+  private focusSettled(records: MutationRecord[], moves: Move[]): number {
+    let at = moves.length ? 2 * moves[moves.length - 1]!.at : -1;
+    let current = this.seen;
+    let next = 0;
+    records.forEach((record, i) => {
+      while (next < moves.length && moves[next]!.at <= i) {
+        current = moves[next++]!.to;
+      }
+      if (current && this.removes(record, current)) at = 2 * i + 1;
+    });
+    return at < 0 ? 2 * records.length : at;
+  }
+
+  /** Did this record take `element` out of the document with it? */
+  private removes(record: MutationRecord, element: Element): boolean {
+    if (record.type !== "childList") return false;
     for (const node of record.removedNodes) {
-      if (safeContains(node, focused)) return true;
+      if (holds(node, element)) return true;
     }
     return false;
   }
@@ -219,7 +282,7 @@ class TimelineRecorder {
     // Same element as last read: no move, and no extraction to find that out.
     if (element === this.seen) return null;
     this.seen = element;
-    const label = element ? this.focusLabel() : null;
+    const label = element ? this.focusLabel(element) : null;
     const target = label === null ? null : element;
     if (target === this.focused) return null;
     this.focused = target;
@@ -227,43 +290,67 @@ class TimelineRecorder {
   }
 
   /**
-   * The focused node as a tab stop prints it, or null when the root's tree
-   * doesn't hold it. A focused node the a11y view folds away (a `<div
-   * tabindex="-1">` with no name) is still where the user is, so it falls
-   * back to the DOM view's node.
+   * `element` as a tab stop prints it, or null when the root doesn't hold it.
+   * A focused node the a11y view folds away (a `<div tabindex="-1">` with no
+   * name) is still where the user is, so it falls back to the DOM view's
+   * node; one hidden from assistive tech gets a trailing `[hidden]`, since a
+   * screen reader meets nothing there.
    */
-  private focusLabel(): string | null {
-    const dom = extractDomTree(this.root);
+  private focusLabel(element: Element): string | null {
+    if (!this.inRoot(element)) return null;
+    // Partial, so the root is read as it is: never widened to a portaled
+    // overlay or narrowed to a modal, which would make what counts as inside
+    // it hang on the rest of the page.
+    const dom = extractDomTree(this.root, {
+      nodes: new Map(),
+      includeFocused: true,
+    });
     const id = dom.focusedId;
     if (!id) return null;
-    const a11y = buildA11yTree(dom.nodes, dom.rootId, id, dom.source);
-    const node = a11y.nodes.get(id) ?? dom.nodes.get(id);
-    return node
-      ? serializeTabStop(node, { redact: this.options.redact })
-      : null;
+    const kept = buildA11yTree(dom.nodes, dom.rootId, id, dom.source).nodes.get(
+      id,
+    );
+    const node = kept ?? dom.nodes.get(id);
+    if (!node) return null;
+    const text = serializeTabStop(node, { redact: this.options.redact });
+    return kept || exposed(dom, id) ? text : `${text} [hidden]`;
   }
 
   // ─── live regions ──────────────────────────────────────────────────────────
 
-  /** Note every region in the root this record may have changed the text of. */
-  private collect(
-    record: MutationRecord,
-    at: number,
-    regions: Map<Element, number>,
-  ): void {
-    const touch = (region: Element | null) => {
+  /** An announce line for each region the block left holding new text. */
+  private announcements(records: MutationRecord[]): Pending[] {
+    const regions = new Map<Element, number>();
+    const restyled = new Map<Element, number>();
+    const touch = (region: Element | null, at: number) => {
       if (region && !regions.has(region)) regions.set(region, at);
     };
-    touch(this.regionHolding(record.target));
-    if (record.type === "attributes") {
-      this.regionsWithin(record.target as Element).forEach(touch);
-      return;
-    }
-    record.addedNodes.forEach((node) => {
-      if (safeNodeType(node) === Node.ELEMENT_NODE) {
-        this.regionsWithin(node as Element).forEach(touch);
+    for (const [i, record] of records.entries()) {
+      const at = 2 * i + 1;
+      touch(this.regionHolding(record.target), at);
+      if (record.type === "attributes") {
+        // Walked once per block, however often the page restyled it.
+        const target = record.target as Element;
+        if (!restyled.has(target)) restyled.set(target, at);
+        continue;
       }
-    });
+      for (const node of record.removedNodes) this.forget(node);
+      for (const node of record.addedNodes) {
+        if (safeNodeType(node) !== Node.ELEMENT_NODE) continue;
+        for (const region of this.regionsWithin(node as Element)) {
+          touch(region, at);
+        }
+      }
+    }
+    for (const [element, at] of restyled) {
+      for (const region of this.regionsWithin(element)) touch(region, at);
+    }
+    const pending: Pending[] = [];
+    for (const [region, at] of regions) {
+      const text = this.announcement(region);
+      if (text) pending.push({ at, text });
+    }
+    return pending;
   }
 
   /** The nearest live region rendering `node`, if the root holds it. */
@@ -275,7 +362,10 @@ class TimelineRecorder {
       element = (node as Partial<Text>).assignedSlot ?? safeParentElement(node);
     }
     for (let el = element; el; el = renderingParent(el)) {
-      if (liveRegionLevel(el)) return this.inRoot(el) ? el : null;
+      const level = regionLevel(el);
+      // The nearest `aria-live` decides: `off` inside a region silences it.
+      if (level === "off") return null;
+      if (level) return this.inRoot(el) ? el : null;
       if (el === this.root) return null;
     }
     return null;
@@ -294,9 +384,26 @@ class TimelineRecorder {
       NodeFilter.SHOW_ELEMENT,
     );
     for (let n: Node | null = scope; n; n = walker.nextNode()) {
-      if (liveRegionLevel(n as Element)) found.push(n as Element);
+      const level = regionLevel(n as Element);
+      if (level && level !== "off") found.push(n as Element);
     }
     return found;
+  }
+
+  /**
+   * Forget the regions a removal took with it, as emptying one does: put
+   * back holding the same text, a region is announced again.
+   */
+  private forget(node: Node): void {
+    if (safeNodeType(node) !== Node.ELEMENT_NODE) return;
+    const walker = this.createTreeWalker.call(
+      this.doc,
+      node,
+      NodeFilter.SHOW_ELEMENT,
+    );
+    for (let n: Node | null = node; n; n = walker.nextNode()) {
+      this.lastText.delete(n as Element);
+    }
   }
 
   /** Is `element` the root, or rendered inside it? */
@@ -321,9 +428,9 @@ class TimelineRecorder {
    * is news again.
    */
   private announcement(region: Element): string | null {
-    const level = this.inRoot(region) ? liveRegionLevel(region) : null;
-    const text = level ? announcedText(region) : "";
-    if (!level || !text) {
+    const level = this.inRoot(region) ? regionLevel(region) : null;
+    const text = level && level !== "off" ? announcedText(region) : "";
+    if (!level || level === "off" || !text) {
       this.lastText.delete(region);
       return null;
     }
@@ -362,26 +469,30 @@ function announcedText(region: Element): string {
  *   focus     button "Delete draft"
  *   announce  status "Deleting…"
  *   focus     (none)
- *   announce  status "Draft deleted."
  *   focus     button "New draft"
+ *   announce  status "Draft deleted."
  * `);
  * ```
  *
  * - A **focus** line names the focused node as a tab stop prints it,
- *   `role "name" {states}`. `(none)` means focus rests on `<body>` or
- *   `<html>`, or on something the root's tree doesn't hold. The first line is
- *   where focus starts, unless it starts on nothing.
+ *   `role "name" {states}`, with `[hidden]` when assistive tech can't reach
+ *   it. `(none)` means focus rests on `<body>` or `<html>`, or outside the
+ *   root. The first line is where focus starts, unless it starts on nothing.
  * - An **announce** line is the text a live region gains: an element with
- *   `aria-live="polite"` or `"assertive"`, or a `status`, `alert` or `log`.
- *   It names the region's role, and `{live=…}` when `aria-live` sets a
- *   politeness the role doesn't imply. A region emptied prints nothing, and so
- *   does the same text set again; emptied first, it prints again.
- * - Lines follow the order the page made its changes. Text set and cleared
- *   within one synchronous block was never rendered, and prints nothing.
+ *   `aria-live="polite"` or `"assertive"`, or a `status` (an `<output>` too),
+ *   `alert` or `log`. It names the region's role, and `{live=…}` when
+ *   `aria-live` sets a politeness the role doesn't imply. A region emptied
+ *   prints nothing, and so does the same text set again; emptied or removed
+ *   first, it prints again.
+ * - Lines follow the order the page made its changes. What one synchronous
+ *   block of the page's code does renders together, so it is read once: text
+ *   set and cleared in it, or focus passing through an element, prints
+ *   nothing. Changes across tasks (an `await` between them) are all recorded.
  *
  * Only what the root holds is recorded, so pass `document.body` to hear the
  * whole page. Changes inside a shadow root aren't seen: a `MutationObserver`
- * doesn't reach them.
+ * doesn't reach them. Call `stop()` even when a test fails first (in a
+ * `finally` or `afterEach`), or the recorder keeps listening.
  */
 export function recordTimeline(
   root: Element,

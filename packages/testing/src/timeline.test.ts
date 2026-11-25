@@ -86,15 +86,26 @@ describe("recordTimeline", () => {
     );
   });
 
-  it("records a move between two elements as one line", () => {
+  it("records a line for each move made in its own task", async () => {
     const main = draftPage();
     const timeline = recordTimeline(main);
     byId("d").focus();
+    await tick();
     byId("n").focus();
     expect(timeline.stop()).toMatchInlineSnapshot(`
       focus     button "Delete draft"
       focus     button "New draft"
     `);
+  });
+
+  it("records only where focus lands when it passes through within one block", () => {
+    const main = draftPage();
+    const timeline = recordTimeline(main);
+    byId("d").focus();
+    byId("n").focus();
+    expect(timeline.stop()).toMatchInlineSnapshot(
+      `focus     button "New draft"`,
+    );
   });
 
   it("records a blur as focus resting on nothing", async () => {
@@ -138,10 +149,14 @@ describe("recordTimeline", () => {
     `);
   });
 
-  it("names focus outside the root (none)", () => {
-    document.body.innerHTML = `<main><button id="a">In</button></main><button id="b">Out</button>`;
+  it("names focus outside the root (none) even while an overlay is showing", async () => {
+    // A filled status outside the root is what makes a tree extraction widen
+    // to <body>; what counts as inside the root mustn't hang on it.
+    document.body.innerHTML = `<main><button id="a">In</button></main>
+      <div role="status">Saved</div><button id="b">Out</button>`;
     const timeline = recordTimeline(document.querySelector("main")!);
     byId("a").focus();
+    await tick();
     byId("b").focus();
     expect(timeline.stop()).toMatchInlineSnapshot(`
       focus     button "In"
@@ -149,13 +164,53 @@ describe("recordTimeline", () => {
     `);
   });
 
-  it("prints a focused node's states, as a tab stop does", () => {
+  it("orders a drop from a removed shadow host as the page made it", async () => {
+    document.body.innerHTML = `<main>
+      <p role="status" id="s"></p><div id="wrap"><div id="host"></div></div>
+    </main>`;
+    const shadow = byId("host").attachShadow({ mode: "open" });
+    shadow.innerHTML = `<button>Inside</button>`;
+    shadow.querySelector("button")!.focus();
+    const timeline = recordTimeline(document.querySelector("main")!);
+    byId("wrap").remove();
+    byId("s").textContent = "Removed.";
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`
+      focus     button "Inside"
+      focus     (none)
+      announce  status "Removed."
+    `);
+  });
+
+  it("marks focus that lands where assistive tech can't reach", () => {
+    document.body.innerHTML = `<main><div aria-hidden="true"><button id="h">Hidden</button></div></main>`;
+    const timeline = recordTimeline(document.querySelector("main")!);
+    byId("h").focus();
+    expect(timeline.stop()).toMatchInlineSnapshot(
+      `focus     button "Hidden" [hidden]`,
+    );
+  });
+
+  it("names focus outside the root (none)", async () => {
+    document.body.innerHTML = `<main><button id="a">In</button></main><button id="b">Out</button>`;
+    const timeline = recordTimeline(document.querySelector("main")!);
+    byId("a").focus();
+    await tick();
+    byId("b").focus();
+    expect(timeline.stop()).toMatchInlineSnapshot(`
+      focus     button "In"
+      focus     (none)
+    `);
+  });
+
+  it("prints a focused node's states, as a tab stop does", async () => {
     document.body.innerHTML = `<main>
       <label for="day">Day</label><input id="day" required aria-invalid="true">
       <button id="m" aria-expanded="false">Menu</button>
     </main>`;
     const timeline = recordTimeline(document.querySelector("main")!);
     byId("day").focus();
+    await tick();
     byId("m").focus();
     expect(timeline.stop()).toMatchInlineSnapshot(`
       focus     textbox "Day" {required, invalid}
@@ -216,6 +271,52 @@ describe("recordTimeline announcements", () => {
       announce  status "Saved."
       announce  status "Saved."
     `);
+  });
+
+  it("reads text a focus move interrupts only as the block left it", async () => {
+    const main = draftPage();
+    const timeline = recordTimeline(main);
+    byId("s").textContent = "Saving…";
+    byId("n").focus();
+    byId("s").textContent = "";
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(
+      `focus     button "New draft"`,
+    );
+  });
+
+  it("announces a region put back with the text it had when removed", async () => {
+    document.body.innerHTML = `<main><p role="alert" id="a">Session expired.</p></main>`;
+    const main = document.querySelector("main")!;
+    const alert = byId("a");
+    alert.remove();
+    const timeline = recordTimeline(main);
+    main.append(alert);
+    await tick();
+    alert.remove();
+    await tick();
+    main.append(alert);
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`
+      announce  alert "Session expired."
+      announce  alert "Session expired."
+    `);
+  });
+
+  it("hears an <output>, a status by its tag", async () => {
+    document.body.innerHTML = `<main><output id="o"></output></main>`;
+    const timeline = recordTimeline(document.querySelector("main")!);
+    byId("o").textContent = "42";
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`announce  status "42"`);
+  });
+
+  it("stays silent for a change under aria-live=off inside a region", async () => {
+    document.body.innerHTML = `<main><div role="status">Total: <span aria-live="off" id="c">1</span></div></main>`;
+    const timeline = recordTimeline(document.querySelector("main")!);
+    byId("c").textContent = "2";
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`(nothing recorded)`);
   });
 
   it("treats the text a region holds at the start as already said", async () => {

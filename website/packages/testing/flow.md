@@ -251,27 +251,20 @@ test("deleting a draft", async () => {
     focus     button "Delete draft"
     announce  status "Deleting…"
     focus     (none)
-    announce  status "Draft deleted."
     focus     button "New draft"
+    announce  status "Draft deleted."
   `);
 });
 ```
 
-The diff of the same interaction shows only `focus: button "Delete draft" → button "New draft"` and the final status. The timeline also shows that focus fell to the page when the row was removed, where a screen reader announces the document and the user's reading position resets, and that "Deleting…" was announced before it was cleared.
+The diff of the same interaction shows only `focus: button "Delete draft" → button "New draft"` and the final status. The timeline also shows that focus fell to the page when the row was removed, where a screen reader announces the document and the user's reading position resets, that "Deleting…" was announced before it was cleared, and which came first at the end: the focus move or the message.
 
-- **A `focus` line** names the focused node the way [`tabSequenceSnapshot`](/packages/testing/snapshots#tabsequencesnapshot-root-options) prints a stop: `role "name" {states}`. `(none)` means focus rests on `<body>` or `<html>`, or on something outside the root's tree. The first line is where focus starts, unless it starts on nothing. A focused node the tree folds away, such as a `<div tabindex="-1">` with no name, still gets a line, as `generic`.
-- **An `announce` line** is the text a live region gains: an element with `aria-live="polite"` or `"assertive"`, or a `status`, `alert` or `log`. It names the region's role, and adds `{live=polite}` or `{live=assertive}` when `aria-live` sets a politeness the role doesn't imply (`<div aria-live="polite">` prints `announce  generic "Saved." {live=polite}`). The text is the region's whole text as a screen reader could read it, on one line: nothing `aria-hidden` or hidden, never a `<textarea>`'s markup, and blocks kept apart by a space.
-- **A region emptied prints nothing**, because nothing is announced. The same text set again prints nothing either; emptied first, it prints again. Text a region holds when recording starts counts as already said.
-- **Lines follow the order the page made its changes**, even within one step. Text set and cleared within one synchronous block was never rendered, and prints nothing; changes across tasks (an `await` between them) are all recorded.
+- **A `focus` line** names the focused node the way [`tabSequenceSnapshot`](/packages/testing/snapshots#tabsequencesnapshot-root-options) prints a stop: `role "name" {states}`. `(none)` means focus rests on `<body>` or `<html>`, or outside the root, whatever else the page is showing. The first line is where focus starts, unless it starts on nothing. A focused node the tree folds away, such as a `<div tabindex="-1">` with no name, still gets a line, as `generic`. One that assistive tech can't reach, inside `aria-hidden` content, ends in `[hidden]`: a screen reader meets nothing there.
+- **An `announce` line** is the text a live region gains: an element with `aria-live="polite"` or `"assertive"`, or a `status` (an `<output>` included), `alert` or `log`. It names the region's role, and adds `{live=polite}` or `{live=assertive}` when `aria-live` sets a politeness the role doesn't imply (`<div aria-live="polite">` prints `announce  generic "Saved." {live=polite}`). The text is the region's whole text as a screen reader could read it, on one line: nothing `aria-hidden` or hidden, never a `<textarea>`'s markup, and blocks kept apart by a space. A change under `aria-live="off"` inside a region prints nothing: the nearest `aria-live` decides.
+- **A region emptied prints nothing**, because nothing is announced. The same text set again prints nothing either; emptied or removed first, it prints again. Text a region holds when recording starts counts as already said.
+- **Lines follow the order the page made its changes**, even within one step. What one synchronous block of the page's code does renders together, so it is read once: text set and cleared in it, or focus passing through an element on the way to another, prints nothing. Changes across tasks (an `await` between them) are all recorded.
 
-The order is the point. In React, `setStatus("Draft deleted.")` renders later while `newDraft.focus()` runs at once, so a handler that does both in that order still moves focus first:
-
-```
-focus     button "New draft"
-announce  status "Draft deleted."
-```
-
-Whether the user hears the message or has it cut off by the focus move can depend on exactly that.
+The order is the point. In the example, React renders `setStatus("Draft deleted.")` later, while `newDraft.focus()` runs at once, so focus lands before the message arrives even though the handler sets the status first. A page that announces first and then moves focus prints the two lines the other way round. Which one a screen reader user hears first, and whether one cuts the other off, can depend on exactly that.
 
 `stop()` returns a box like `a11yDiff`'s, so with the serializer registered ([`registerA11yMatchers`](/packages/testing/matchers)) it snapshots as the plain text above. A timeline that heard nothing prints `(nothing recorded)`. Calling `stop()` again returns the same box; nothing is recorded after the first call.
 
@@ -289,7 +282,10 @@ Pass `{ announcements: false }` for a focus-only timeline, so a copy change in a
 - **Changes inside a shadow root** aren't heard: a `MutationObserver` doesn't reach them. Focus inside an open shadow root is.
 - **`aria-atomic`, `aria-relevant` and `aria-busy`** aren't read: an announce line is always the region's whole text.
 - **A region inserted already holding its text** prints like any other. Most screen readers don't announce one, `role="alert"` being the usual exception, so a line for a `status` that arrived with its message may be a message nobody hears.
+- **No strict mode.** There is no `redactInput` here yet, so a timeline can't promise what [strict mode](/packages/testing/snapshots#strict-mode) does for the other snapshots: a focused name built from typed text, or an editor inside a live region, prints as it is.
 - **jsdom only.** The [Playwright adapter](/packages/testing/playwright) has no timeline yet, and the [snapshot report](/packages/testing/snapshots#the-snapshot-report) doesn't draw one.
+
+Call `stop()` even when the test fails before it, in a `finally` or an `afterEach`: until then, the recorder keeps listening to the document, and reads the root's tree on every later focus move.
 
 ## `flow(root, options?)`
 

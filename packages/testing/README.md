@@ -147,12 +147,12 @@ expect(timeline.stop()).toMatchInlineSnapshot(`
   focus     button "Delete draft"
   announce  status "Deleting…"
   focus     (none)
-  announce  status "Draft deleted."
   focus     button "New draft"
+  announce  status "Draft deleted."
 `);
 ```
 
-`focus     (none)` is focus falling to the page when the row was removed, which a diff of the two ends can't show. Pass `{ announcements: false }` or `{ focus: false }` for one half alone, and `redact` as in the other snapshots. See [Recording what happened in between](https://real-a11y.dev/packages/testing/flow#recording-what-happened-in-between).
+`focus     (none)` is focus falling to the page when the row was removed, and the last two lines say focus landed before the message arrived: neither shows in a diff of the two ends. Pass `{ announcements: false }` or `{ focus: false }` for one half alone, and `redact` as in the other snapshots. See [Recording what happened in between](https://real-a11y.dev/packages/testing/flow#recording-what-happened-in-between).
 
 ## See snapshots as a tree
 
