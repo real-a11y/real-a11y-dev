@@ -25,6 +25,9 @@ import {
  *
  * Run it before the strict-mode passes, which overwrite the name and drop
  * the trace, and before the raw index is built.
+ *
+ * @internal Shared between `core` and the native transports; no published
+ * surface re-exports it.
  */
 export function dropBuiltInFileInputNames<T extends RawAXNameNode>(
   rawNodes: T[],
@@ -45,6 +48,9 @@ export function dropBuiltInFileInputNames<T extends RawAXNameNode>(
  * ({@link withholdFieldInternals}) and a file input's built-in name
  * ({@link dropBuiltInFileInputNames}). For a transport that has no earlier
  * step of its own to hang the second on.
+ *
+ * @internal Shared between `core` and the native transports; no published
+ * surface re-exports it.
  */
 export function withholdBrowserText<T extends RawAXNameNode>(
   rawNodes: T[],

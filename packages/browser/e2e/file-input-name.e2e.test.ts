@@ -197,7 +197,9 @@ describe("the audit of the D-1 page", () => {
     const native = collectFindings(await session.nativeTree()).map(
       (f) => f.rule,
     );
+    // Native: the name is gone, and the title is its description.
     expect(native).toContain("no-unlabeled-interactive");
+    expect(native).toContain("label-title-only");
     expect(dom).toContain("label-title-only");
     expect(dom).not.toContain("no-unlabeled-interactive");
   });
