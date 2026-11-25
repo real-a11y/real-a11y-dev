@@ -75,7 +75,9 @@ export function App() {
           <p class="sv-empty">Loading…</p>
         ) : selected ? (
           <RecordView
-            key={selected.id}
+            // A rerun can change what a record printed: a tab sequence where
+            // there was a tree opens again, on its own view.
+            key={`${selected.id}:${selected.view ?? ""}`}
             record={selected}
             gone={selected.id === goneId}
           />

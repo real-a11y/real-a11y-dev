@@ -380,6 +380,37 @@ describe("snapshot recorder", () => {
       expect(tree).not.toMatch(/"(value|aria-valuenow|aria-valuetext)":/);
     });
 
+    it("keeps none behind a tab sequence or an outline that printed them", () => {
+      const root = mount(
+        `<h1>Order</h1>${form}<div role="textbox" contenteditable="true" aria-label="Note">EDITOR-SENTINEL</div>`,
+      );
+      const tabs = boxedTabSequenceSnapshot(root, { values: true });
+      const strict = boxedTabSequenceSnapshot(root, {
+        values: true,
+        redactInput: true,
+      });
+      a11ySnapshotSerializer.serialize(tabs);
+      a11ySnapshotSerializer.serialize(strict);
+      a11ySnapshotSerializer.serialize(boxedOutlineSnapshot(root));
+
+      const [plain, masked, outline] = records();
+      // Each text holds what the string would print…
+      expect(plain!.text).toBe(tabSequenceSnapshot(root, { values: true }));
+      expect(plain!.text).toContain('"jane@x.com"');
+      expect(masked!.text).toBe(
+        tabSequenceSnapshot(root, { values: true, redactInput: true }),
+      );
+      expect(masked!.text).not.toContain("jane@x.com");
+      // …and no tree beside it holds a value or an editor's text.
+      for (const record of [plain, masked, outline]) {
+        const tree = JSON.stringify(record!.tree);
+        expect(tree).not.toContain("jane@x.com");
+        expect(tree).not.toContain("EDITOR-SENTINEL");
+        expect(tree).not.toMatch(/"(value|aria-valuenow|aria-valuetext)":/);
+      }
+      expect(masked!.tree!.source).toMatchObject({ redactInput: true });
+    });
+
     it("keeps none on either side of a diff that didn't print them", () => {
       const root = mount(form);
       const before = capture(root);
