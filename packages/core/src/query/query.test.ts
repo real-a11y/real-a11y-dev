@@ -320,6 +320,82 @@ describe("screen-reader-only content", () => {
 });
 
 describe("getTabSequence", () => {
+  it("lists an iframe once, where Tab enters it", () => {
+    const root = createPage(`
+      <a href="/" data-t="a1">a1</a><iframe srcdoc="<button>in</button>" title="f"></iframe><video controls></video><a href="/">a2</a>
+    `);
+    const tree = extractA11yTree(root);
+    const seq = getTabSequence(tree).map(
+      (n) => `${n.a11y.role} ${n.a11y.name}`,
+    );
+    expect(seq).toEqual(["link a1", "group f", "video ", "link a2"]);
+  });
+
+  it("drops a frame with a negative tabindex from the sequence", () => {
+    const root = createPage(
+      `<button>before</button><iframe tabindex="-1" title="f"></iframe><button>after</button>`,
+    );
+    const tree = extractA11yTree(root);
+    expect(getTabSequence(tree).map((n) => n.a11y.name)).toEqual([
+      "before",
+      "after",
+    ]);
+  });
+
+  describe("in a merged tree, where a frame's own stops hang under its iframe", () => {
+    function merged(withStop: boolean) {
+      const tree = extractDomTree(
+        createPage(
+          `<button>before</button><iframe title="f"></iframe><button>after</button>`,
+        ),
+      );
+      const frame = [...tree.nodes.values()].find(
+        (n) => n.dom?.tagName === "iframe",
+      )!;
+      if (withStop) {
+        const inner = extractDomTree(createPage(`<button>in</button>`));
+        const button = [...inner.nodes.values()].find(
+          (n) => n.a11y.role === "button",
+        )!;
+        tree.nodes.set(button.id, { ...button, parentId: frame.id });
+        frame.childIds.push(button.id);
+      }
+      return tree;
+    }
+
+    it("lists the frame's stop and not the iframe", () => {
+      expect(getTabSequence(merged(true)).map((n) => n.a11y.name)).toEqual([
+        "before",
+        "in",
+        "after",
+      ]);
+    });
+
+    it("lists only the inner frame when it is the outer frame's one stop", () => {
+      const tree = merged(false);
+      const outer = [...tree.nodes.values()].find(
+        (n) => n.dom?.tagName === "iframe",
+      )!;
+      const inner = { ...outer, id: "inner", parentId: outer.id, childIds: [] };
+      inner.a11y = { ...outer.a11y, name: "inner" };
+      tree.nodes.set("inner", inner);
+      outer.childIds.push("inner");
+      expect(getTabSequence(tree).map((n) => n.a11y.name)).toEqual([
+        "before",
+        "inner",
+        "after",
+      ]);
+    });
+
+    it("lists the iframe when its frame contributed no stop", () => {
+      expect(getTabSequence(merged(false)).map((n) => n.a11y.name)).toEqual([
+        "before",
+        "f",
+        "after",
+      ]);
+    });
+  });
+
   it("places positive tabindexes first, in ascending order", () => {
     const root = createPage(`
       <button>Zero</button>

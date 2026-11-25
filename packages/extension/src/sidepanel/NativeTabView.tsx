@@ -3,8 +3,8 @@
  * no tab order (`tabindex` never reaches one), so the view shows the page's
  * own walk's (`TabSequenceView`), as the CLI's `tabs` does, and its selection
  * and activation go through the content script. The order is
- * `getTabSequence`'s, which doesn't model shadow roots, iframes or focus
- * traps. App holds which view shows.
+ * `getTabSequence`'s: a frame is one stop where Tab enters it, and shadow
+ * roots, focus traps and keyboard-focusable scrollers are not modelled. App holds which view shows.
  */
 
 import type { ComponentProps } from "preact";

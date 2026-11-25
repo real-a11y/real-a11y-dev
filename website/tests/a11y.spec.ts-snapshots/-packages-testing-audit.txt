@@ -333,9 +333,12 @@ main
       row
         cell "getTabSequence(tree)"
           code "getTabSequence(tree)"
-        cell "Focusable nodes in Tab order: positive tabindex ascending, then the rest in document order, leaving out tabindex="-1". It doesn't model shadow roots, iframes or focus traps."
+        cell "Focusable nodes in Tab order: positive tabindex ascending, then the rest in document order, leaving out tabindex="-1". An iframe, or an object showing a document, is one stop where Tab enters it. It doesn't model shadow roots, focus traps, embed or keyboard-focusable scrollers."
           code "tabindex"
           code "tabindex="-1""
+          code "iframe"
+          code "object"
+          code "embed"
       row
         cell "linearize(tree, options?)"
           code "linearize(tree, options?)"

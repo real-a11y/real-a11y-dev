@@ -21,9 +21,13 @@
  * read off the element itself. It follows the image using its map, so the
  * walk emits an area only while that image is rendered (see image-map.ts).
  *
- * One stop Chromium has is not listed yet: the default summary Chromium gives
+ * A frame is a stop too, but only for the tab sequence: see
+ * `hostsNestedDocument`, which `isFocusable` deliberately does not fold in.
+ *
+ * Two stops Chromium has are not listed yet: the default summary Chromium gives
  * a `<details>` that has none of its own, which lives in a UA shadow root the
- * walk has no element for.
+ * walk has no element for, and a scroller Chromium makes keyboard-focusable.
+ * An `<embed>` is not modelled either.
  */
 
 import { safeGetAttribute, safeTagName } from "./clobber-safe.js";
@@ -132,6 +136,34 @@ export function isFocusable(
     return false;
   }
   return focusableByMarkup(element);
+}
+
+/**
+ * True when Tab can enter `element`'s nested document: an `<iframe>`, or an
+ * `<object>` currently showing a document (HTML or SVG), whose `contentWindow`
+ * is non-null (an image, a failed load and a missing `data` leave it null).
+ * The tab sequence lists such an element once, where Tab enters it. An
+ * `<embed>` is out of scope, and `display: contents` leaves a frame with no
+ * box, so no stop.
+ *
+ * Kept apart from `isFocusable` on purpose: that answer also feeds
+ * presentational-role resolution and the inherited `disabled` rule, and
+ * Chromium keeps `<iframe role="presentation">` presentational and never marks
+ * a frame disabled.
+ */
+export function hostsNestedDocument(
+  element: Element,
+  style?: Pick<CSSStyleDeclaration, "display"> | null,
+): boolean {
+  if (style?.display === "contents") return false;
+  const tag = safeTagName(element);
+  if (tag === "iframe") return true;
+  if (tag !== "object") return false;
+  try {
+    return (element as HTMLObjectElement).contentWindow != null;
+  } catch {
+    return false;
+  }
 }
 
 function focusableByMarkup(element: Element): boolean {

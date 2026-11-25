@@ -3,6 +3,7 @@ import type { ActionType } from "../types.js";
 import { safeGetAttribute, safeTagName } from "./clobber-safe.js";
 import { isEditingHost, isLiveLink } from "./editing.js";
 import { MEDIA_TAGS } from "./field-text.js";
+import { hostsNestedDocument } from "./focusability.js";
 import { getExplicitRole } from "./role-map.js";
 
 /** Roles whose widget is operated by a plain click. */
@@ -119,7 +120,16 @@ export function getActions(element: Element): ActionType[] {
   // The role the tree shows, so the actions offered agree with it: a
   // `role="foo button"` clicks, an option the browser discarded doesn't.
   const role = getExplicitRole(element);
-  const actions = tagActions(element, tag) ?? roleActions(element, role);
+  let actions = tagActions(element, tag) ?? roleActions(element, role);
+
+  // A frame (or an object showing a document) is a tab stop that takes
+  // scripted focus. The action also keeps an `<object>` and a
+  // `role="presentation"` iframe in the a11y view, which keeps only
+  // interactive generics and presentational elements. It is added to what
+  // the element's own behavior gives it (an `onclick`), never in its place.
+  if (hostsNestedDocument(element) && !actions.includes("focus")) {
+    actions = [...actions, "focus"];
+  }
 
   // An editing host is a text field whatever its role: Chromium focuses it
   // and takes typing, and the dispatcher's `type` writes into it. The role

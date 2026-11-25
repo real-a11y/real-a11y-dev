@@ -71,7 +71,7 @@ main
     link "the TAB view"
     text "of the other panels does: a positive"
     code "tabindex"
-    text "first, then document order. Neither models shadow roots, iframes or focus traps. Showing it reads nothing through Chrome, so the bar doesn't come up for it, and it works on a page Chrome's tree can't read. It takes a moment to read the page as it comes up. Chrome's tree and the other panels' trees never match exactly, by design: see"
+    text "first, then document order. A frame is one stop where Tab enters it. Neither models shadow roots, focus traps or keyboard-focusable scrollers. Showing it reads nothing through Chrome, so the bar doesn't come up for it, and it works on a page Chrome's tree can't read. It takes a moment to read the page as it comes up. Chrome's tree and the other panels' trees never match exactly, by design: see"
     link "Two producers"
     text "."
   paragraph

@@ -731,7 +731,11 @@ main
     code "tabindex"
     text "never reaches a native node — so tab order is DOM work by nature, not a fallback."
   paragraph
-    text "The stops are the ones Chromium tabs to. An"
+    text "The stops are the ones Chromium tabs to. A frame (an"
+    code "<iframe>"
+    text ", or an"
+    code "<object>"
+    text "showing a document) is one stop where Tab enters it, whatever it holds. Keyboard-focusable scrollers are not modelled yet. An"
     code "<a>"
     text "without an"
     code "href"

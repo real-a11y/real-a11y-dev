@@ -1260,6 +1260,30 @@ describe("extractDomTree", () => {
     return byId;
   }
 
+  it("gives an iframe or object no disabled state inside aria-disabled", () => {
+    // Chromium 157 does not mark either disabled; a frame stop reaches the tab
+    // sequence only, not the inherited-disabled rule.
+    expect(
+      disabledById(`
+        <div aria-disabled="true">
+          <iframe id="f" title="f"></iframe><object id="o"></object>
+        </div>
+      `),
+    ).toEqual({ f: undefined });
+  });
+
+  it("keeps an iframe with role=presentation presentational yet a stop", () => {
+    const tree = extractDomTree(
+      createPage(`<iframe role="presentation" id="p"></iframe>`),
+    );
+    const frame = [...tree.nodes.values()].find(
+      (n) => n.dom?.tagName === "iframe",
+    )!;
+    expect(frame.a11y.role).toBe("presentation");
+    expect(frame.interaction?.isFocusable).toBe(true);
+    expect(frame.interaction?.actions).toEqual(["focus"]);
+  });
+
   it("reports a control disabled by its <fieldset> as disabled", () => {
     expect(
       disabledById(`

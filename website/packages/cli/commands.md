@@ -323,7 +323,7 @@ takes [`--root`](#root-selector). Chromium's accessibility tree knows whether a
 node is focusable, but not the *sequence* — `tabindex` never reaches a native
 node — so tab order is DOM work by nature, not a fallback.
 
-The stops are the ones Chromium tabs to. An `<a>` without an `href` is not one,
+The stops are the ones Chromium tabs to. A frame (an `<iframe>`, or an `<object>` showing a document) is one stop where Tab enters it, whatever it holds. Keyboard-focusable scrollers are not modelled yet. An `<a>` without an `href` is not one,
 not even with `role="button"`, which is the keyboard bug worth catching. Nor is
 a control disabled directly or by its `<fieldset>`, or an element whose
 `tabindex` is not an integer, such as `""`. An `aria-disabled` control is a

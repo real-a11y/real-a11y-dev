@@ -36,6 +36,19 @@ describe("elementsFromTabSequence", () => {
     expect(resolveFromLive().map((el) => el.id)).toEqual(["d", "b", "a", "c"]);
   });
 
+  it("returns an iframe element at its position, as one stop", () => {
+    mount(`
+      <button id="before">Before</button>
+      <iframe id="frame" title="f"></iframe>
+      <button id="after">After</button>
+    `);
+    expect(resolveFromLive().map((el) => el.id)).toEqual([
+      "before",
+      "frame",
+      "after",
+    ]);
+  });
+
   it("excludes tabindex=-1 and disabled nodes (core policy)", () => {
     mount(`
       <button id="ok">OK</button>

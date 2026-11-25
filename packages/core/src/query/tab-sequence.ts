@@ -3,7 +3,7 @@ import { REDACTED_VALUE } from "../extraction/sensitivity.js";
 import type { SemanticNode } from "../types.js";
 
 import { linearize } from "./linearize.js";
-import type { QueryInput } from "./types.js";
+import { nodesOf, type QueryInput } from "./types.js";
 
 /**
  * Return the tab sequence of the tree — every focusable node in the order a
@@ -23,9 +23,18 @@ import type { QueryInput } from "./types.js";
  * says which choice is made, since the one tab stop of a roving-tabindex list
  * box is its chosen option. The tree keeps its name, beside the others'.
  *
+ * A frame is listed once, where Tab enters it: an `<iframe>`, or an `<object>`
+ * showing a document. The walk does not read frame content, so one entry
+ * stands for however many stops the frame holds. In a tree merged from
+ * several frames (the extension's), the frame's own stops are already in place
+ * under its `<iframe>` node, so the `<iframe>` is listed only when none lies
+ * inside it. An approximation there: the inner stops do not follow the
+ * frame's own `tabindex`.
+ *
  * This is an approximation: it does not replicate the browser's sequential
- * focus navigation precisely (shadow roots, iframes, dialog focus traps), but
- * it is good enough for snapshot-based tab-order audits on a document tree.
+ * focus navigation precisely (shadow roots, dialog focus traps, `<embed>`,
+ * keyboard-focusable scrollers), but it is good enough for snapshot-based
+ * tab-order audits on a document tree.
  */
 export function getTabSequence(input: QueryInput): SemanticNode[] {
   const focusable: Array<{
@@ -34,19 +43,24 @@ export function getTabSequence(input: QueryInput): SemanticNode[] {
     order: number;
   }> = [];
   let order = 0;
+  const nodes = nodesOf(input);
+
+  // Whether a stop of the sequence lies under `node`.
+  const hasStopBelow = (node: SemanticNode): boolean =>
+    node.childIds.some((id) => {
+      const child = nodes.get(id);
+      if (!child) return false;
+      // A nested frame counts too: it is listed itself when it holds no stop,
+      // and its stops are listed when it does.
+      return isStop(child) || hasStopBelow(child);
+    });
 
   for (const node of linearize(input)) {
-    // A node with no `interaction` facet (native read-only) is not known
-    // focusable, so it doesn't enter the tab sequence.
-    if (!node.interaction?.isFocusable) {
+    if (!isStop(node) || (isFrame(node) && hasStopBelow(node))) {
       order++;
       continue;
     }
     const ti = parseTabindex(node.dom?.attributes?.tabindex);
-    if (ti !== null && ti < 0) {
-      order++;
-      continue;
-    }
     focusable.push({ node, tabindex: ti ?? 0, order: order++ });
   }
 
@@ -60,6 +74,22 @@ export function getTabSequence(input: QueryInput): SemanticNode[] {
     .sort((a, b) => a.order - b.order);
 
   return [...positives, ...zeros].map((f) => asStop(f.node));
+}
+
+/** An `<iframe>` node: the one a merged tree hangs a frame's content under. */
+function isFrame(node: SemanticNode): boolean {
+  return node.dom?.tagName === "iframe";
+}
+
+/**
+ * Whether `node` is a tab stop of its own. A node with no `interaction` facet
+ * (native read-only) is not known focusable, and a negative tabindex takes a
+ * focusable node out of the sequence.
+ */
+function isStop(node: SemanticNode): boolean {
+  if (!node.interaction?.isFocusable) return false;
+  const ti = parseTabindex(node.dom?.attributes?.tabindex);
+  return ti === null || ti >= 0;
 }
 
 /** `a11y` without its `value`, which can say the choice as its name does. */
