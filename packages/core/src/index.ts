@@ -221,6 +221,10 @@ export {
   withholdRegionNames,
 } from "./native/value-regions.js";
 export {
+  dropBuiltInFileInputNames,
+  withholdBrowserText,
+} from "./native/file-input-name.js";
+export {
   withholdPopupChoiceNames,
   withholdSensitiveFieldNames,
 } from "./native/sensitive-names.js";
