@@ -273,7 +273,9 @@ export function prepareRawNodes(
   sensitivity: FieldSensitivity;
   insideEditor: Set<RawAXNode>;
 } {
-  // First: it needs the name trace, which strict mode's passes drop.
+  // First: it needs the name trace, which strict mode's passes drop. It
+  // copies the nodes it changes, so `nodes` below, not the input, is what
+  // `sensitivity` and `insideEditor` are keyed by.
   const rawNodes = dropBuiltInFileInputNames(rawNodesAsRead);
   const index = indexNativeAX(rawNodes);
   // A node the DOM walk never saw is `undefined`: see core's FieldHostOf.

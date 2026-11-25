@@ -34,7 +34,7 @@ afterAll(async () => {
   await browser.close();
 });
 
-/** id, markup, DOM name, DOM description, native name, native description. */
+/** id, markup, and the name both producers read. */
 const BARE: [string, string, string][] = [
   ["plain", `<input id="plain" type="file">`, ""],
   ["multiple", `<input id="multiple" type="file" multiple>`, ""],
