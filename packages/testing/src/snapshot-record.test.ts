@@ -223,6 +223,39 @@ describe("snapshot recorder", () => {
       }
     });
 
+    it("keeps the stops of an editor the tab order lists, and no other", () => {
+      // A DOM-view read keeps a hidden button, which the tab order skips; a
+      // tabindex out of range reads as none, so that button is a stop.
+      const root = mount(
+        `<div contenteditable="true" role="textbox" aria-label="Notes"><p><span contenteditable="false">` +
+          `<button style="visibility: hidden">Hidden</button>` +
+          `<button tabindex="-2147483649">Shown</button>` +
+          `</span></p></div>`,
+      );
+      const box = boxedTabSequenceSnapshot(extract(root, "dom"));
+      expect(box.text).toBe('textbox "Notes"\nbutton "Shown"');
+      a11ySnapshotSerializer.serialize(box);
+
+      const [record] = records();
+      expect(record).toMatchObject({ view: "tab" });
+      const buttons = record!.tree!.nodes.filter(
+        ([, n]) => n.a11y.role === "button",
+      );
+      expect(buttons).toHaveLength(1);
+    });
+
+    it("opens an outline on the tree when a heading inside an editor is a stop", () => {
+      // The record keeps the heading as a nameless stop, with no level.
+      const root = mount(
+        `<h1>Notes</h1><div contenteditable="true" role="textbox" aria-label="Notes">` +
+          `<div contenteditable="false"><h3 tabindex="0">Plan</h3></div></div>`,
+      );
+      const box = boxedOutlineSnapshot(root);
+      expect(box.text).toContain("h3 Plan");
+      a11ySnapshotSerializer.serialize(box);
+      expect(records()[0]).not.toHaveProperty("view");
+    });
+
     it("keeps no state of a stop inside an editor", () => {
       a11ySnapshotSerializer.serialize(
         boxedTabSequenceSnapshot(

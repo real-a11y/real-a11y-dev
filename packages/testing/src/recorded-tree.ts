@@ -116,34 +116,27 @@ function insideEditors(tree: ExtractionResult): Map<string, string> {
 }
 
 /**
- * Whether `node` is a tab stop of its own, as `getTabSequence` reads one: a
- * focusable node whose `tabindex`, if it has one HTML reads as an integer,
- * isn't negative.
- */
-function isTabStop(node: SemanticNode): boolean {
-  if (!node.interaction?.isFocusable) return false;
-  const raw = node.dom?.attributes.tabindex?.trim();
-  if (!raw || !/^[+-]?\d+/.test(raw)) return true;
-  return Number.parseInt(raw, 10) >= 0;
-}
-
-/**
  * Each outermost editor's tab stops, in document order: what of an editor a
- * record keeps (`nameless`). Not an option of a sensitive choice, which no
- * record singles out.
+ * record keeps (`nameless`). The stops are the ones `getTabSequence` lists,
+ * so the record can't count one it wouldn't (a hidden button) or miss one
+ * it would. Not an option of a sensitive choice, which no record singles
+ * out. Document order, not the sequence's: a positive `tabindex` keeps its
+ * place in the tree, and the TAB view sorts it as before.
  */
 function editorStops(
   tree: ExtractionResult,
   inside: ReadonlyMap<string, string>,
 ): Map<string, string[]> {
   const stops = new Map<string, string[]>();
+  if (inside.size === 0) return stops;
+  const listed = new Set(getTabSequence(tree).map((n) => n.id));
   for (const node of tree.nodes.values()) {
     if (inside.has(node.id) || !isEditor(node)) continue;
     const found: string[] = [];
     const walk = (id: string) => {
       const child = tree.nodes.get(id);
       if (!child) return;
-      if (isTabStop(child) && !child.a11y.choiceWithheld) found.push(id);
+      if (listed.has(id) && !child.a11y.choiceWithheld) found.push(id);
       for (const next of child.childIds) walk(next);
     };
     for (const id of node.childIds) walk(id);
@@ -201,9 +194,10 @@ const STOP_ATTRIBUTES = ["tabindex", "role", "type"];
  * listed of `tree`, in the same order: the same tab stops, or the same
  * headings. The panel's headings filter lists every heading it is given,
  * where the outline leaves out those AT can't reach (a DOM-view tree keeps
- * them), and the record leaves out a heading inside an editor and the stop
- * a sensitive choice's option makes. A record opens on its view only where
- * the view shows what the text printed.
+ * them), and the record leaves out the stop a sensitive choice's option
+ * makes. Nor can it list a heading inside an editor as printed: the record
+ * drops it, or keeps it as a nameless stop with no level. A record opens on
+ * its view only where the view shows what the text printed.
  */
 export function listsAsPrinted(
   view: SnapshotView,
@@ -218,6 +212,10 @@ export function listsAsPrinted(
     view === "tab"
       ? getTabSequence(tree).map((n) => n.id)
       : getOutline(tree).map((e) => e.id);
+  if (view === "headings") {
+    const inside = insideEditors(tree);
+    if (printed.some((id) => inside.has(id))) return false;
+  }
   const listed =
     view === "tab"
       ? getTabSequence(kept).map((n) => n.id)
