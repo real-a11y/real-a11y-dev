@@ -823,7 +823,7 @@ main
       strong "Nothing inside an editor."
       text "A rich-text editor's lines and runs are left out of the record, and the nodes above a field keep their own text but not a preview of the field's. A tab stop inside an editor, such as a mention chip's link, stays in its place in the TAB view, named"
       code "[redacted]"
-      text "."
+      text "and with no states."
     listitem
       strong "No sensitive field's choice."
       text "The tree already withholds which option of a sensitive field's popup is chosen, and the tab order names its one stop"

@@ -154,8 +154,8 @@ function editorStops(
 
 /**
  * A tab stop inside `editor` as a record keeps it: a child of the editor,
- * named `[redacted]`, with no description, value, text or attribute but the
- * ones that place it as a stop. What it is a stop for is the editor's
+ * named `[redacted]`, with no description, value, state, text or attribute
+ * but the ones that place it as a stop. What it is a stop for is the editor's
  * content, which no record keeps.
  */
 function nameless(node: SemanticNode, editor: SemanticNode): SemanticNode {
@@ -165,7 +165,15 @@ function nameless(node: SemanticNode, editor: SemanticNode): SemanticNode {
     parentId: editor.id,
     childIds: [],
     depth: editor.depth + 1,
-    a11y: { ...a11y, name: REDACTED_VALUE, description: "", properties: {} },
+    // No states either: a task list's checkbox in an island says, checked,
+    // what the editor's content is.
+    a11y: {
+      ...a11y,
+      name: REDACTED_VALUE,
+      description: "",
+      states: {},
+      properties: {},
+    },
   };
   if (node.interaction) out.interaction = node.interaction;
   if (node.dom) {

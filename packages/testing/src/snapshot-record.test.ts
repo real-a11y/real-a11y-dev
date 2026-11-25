@@ -206,6 +206,40 @@ describe("snapshot recorder", () => {
       </div>
       <article><div contenteditable="true">my password is hunter2</div></article>`;
 
+    it("moves a diff's focus off a sensitive choice's option, on both sides", () => {
+      const root = mount(months('tabindex="-1"'));
+      root.querySelector<HTMLElement>("#o1")!.focus();
+      const before = capture(root);
+      root.querySelector<HTMLElement>("#o3")!.focus();
+      a11ySnapshotSerializer.serialize(a11yDiff(before, root));
+
+      const [record] = records();
+      for (const side of ["before", "after"] as const) {
+        const focus =
+          side === "before" ? record!.focusBefore : record!.focusAfter;
+        expect(new Map(record![side]!.nodes).get(focus!)?.a11y.role).toBe(
+          "listbox",
+        );
+      }
+    });
+
+    it("keeps no state of a stop inside an editor", () => {
+      a11ySnapshotSerializer.serialize(
+        boxedTabSequenceSnapshot(
+          mount(
+            `<div contenteditable="true" role="textbox" aria-label="Notes"><p><span contenteditable="false"><input type="checkbox" checked aria-label="Pay rent"></span></p></div>`,
+          ),
+        ),
+      );
+      const [record] = records();
+      const stop = record!.tree!.nodes.find(
+        ([, n]) => n.a11y.role === "checkbox",
+      )![1];
+      expect(stop.a11y.name).toBe("[redacted]");
+      expect(stop.a11y.states).toEqual({});
+      expect(JSON.stringify(record!.tree)).not.toContain("Pay rent");
+    });
+
     it("keeps an editor's tab stops in place, without their names", () => {
       const root = mount(COMPOSER);
       const box = boxedTabSequenceSnapshot(root);
