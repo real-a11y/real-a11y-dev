@@ -733,7 +733,11 @@ main
       code "tabs"
       text "or"
       code "outline"
-      text "in the list. The rest of the tree is a click away."
+      text "in the list. The rest of the tree is a click away. A view that wouldn't list exactly what the text printed opens on the tree instead, badged"
+      code "tree"
+      text ": an outline of a DOM-view tree that holds headings AT can't reach, which the filter would list, or a record that leaves a stop or a heading out ("
+      link "What it records"
+      text ")."
     listitem
       strong "A diff on the tree it describes."
       text "The after tree opens with what changed marked: new rows, changed rows with the field that changed (a description, the order of a row's children and where focus went among them), and a count of rows removed. The before tree is one click away."
@@ -817,7 +821,16 @@ main
       text "attribute."
     listitem
       strong "Nothing inside an editor."
-      text "A rich-text editor's lines and runs are left out of the record, and the nodes above a field keep their own text but not a preview of the field's."
+      text "A rich-text editor's lines and runs are left out of the record, and the nodes above a field keep their own text but not a preview of the field's. A tab stop inside an editor, such as a mention chip's link, stays in its place in the TAB view, named"
+      code "[redacted]"
+      text "."
+    listitem
+      strong "No sensitive field's choice."
+      text "The tree already withholds which option of a sensitive field's popup is chosen, and the tab order names its one stop"
+      code "[redacted]"
+      text ". The record keeps every option of that popup alike, with no"
+      code "tabindex"
+      text "and no focus, so it can't say which is the stop. Focus on one shows on the list it's in, and the TAB view leaves that stop out."
     listitem
       strong "Sensitive fields are masked"
       text "as the extractor reads the page, and"

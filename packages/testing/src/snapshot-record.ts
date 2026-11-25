@@ -22,7 +22,11 @@
  * `expect(serializeTree(el)).toMatchSnapshot()`) has no tree to write.
  */
 
-import { toRecordedTree, type RecordedTree } from "./recorded-tree.js";
+import {
+  listsAsPrinted,
+  toRecordedTree,
+  type RecordedTree,
+} from "./recorded-tree.js";
 import type {
   A11ySnapshotBox,
   SnapshotTrees,
@@ -61,7 +65,8 @@ export interface SnapshotRecord {
   recordedAt: string;
   tree?: RecordedTree;
   /** The view a tree opens on, for a snapshot of its tab sequence or its
-   *  outline; left out for one of the whole tree. */
+   *  outline; left out for one of the whole tree, and where that view
+   *  wouldn't list what the text printed (`listsAsPrinted`). */
   view?: SnapshotView;
   before?: RecordedTree;
   after?: RecordedTree;
@@ -328,11 +333,14 @@ function toRecord(
     recordedAt: new RealDate().toISOString(),
   } as const;
   if (trees.kind === "tree") {
-    return {
-      ...base,
-      tree: toRecordedTree(trees.tree).recorded,
-      ...(trees.view ? { view: trees.view } : {}),
-    };
+    const { recorded } = toRecordedTree(trees.tree);
+    // Opened on its view only where that view lists what the text printed:
+    // otherwise on the tree, the text beside it.
+    const view =
+      trees.view && listsAsPrinted(trees.view, trees.tree, recorded)
+        ? trees.view
+        : undefined;
+    return { ...base, tree: recorded, ...(view ? { view } : {}) };
   }
   const before = toRecordedTree(trees.before);
   const after = toRecordedTree(trees.after);

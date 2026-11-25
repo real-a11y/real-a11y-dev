@@ -28,8 +28,11 @@ import {
 import {
   a11yDiff,
   capture,
+  extract,
+  getTabSequence,
   outlineSnapshot,
   tabSequenceSnapshot,
+  type ExtractionResult,
 } from "./index.js";
 
 let dir: string;
@@ -137,6 +140,123 @@ describe("snapshot recorder", () => {
       boxedTreeSnapshot(mount(`<button>Go</button>`)),
     );
     expect(records()[0]).not.toHaveProperty("view");
+  });
+
+  describe("a tab stop the record can't place", () => {
+    /** A roving-tabindex list box a card-expiry field controls: 03 is chosen. */
+    const months = (others: string) =>
+      `<input role="combobox" aria-label="Month" aria-expanded="true" aria-controls="lb" autocomplete="cc-exp-month">` +
+      `<ul role="listbox" id="lb" aria-label="Months">` +
+      `<li role="option" id="o1" ${others}>01</li>` +
+      `<li role="option" id="o3" tabindex="0" aria-selected="true">03</li></ul>`;
+
+    /** A recorded option, less what sets any two options apart: its own
+     *  name, text and element id. */
+    const shape = (record: SnapshotRecord, name: string) => {
+      const node = record.tree!.nodes.find(
+        ([, n]) => n.a11y.role === "option" && n.a11y.name === name,
+      )![1];
+      const { id: _id, ...attributes } = node.dom!.attributes;
+      return {
+        a11y: { ...node.a11y, name: "" },
+        interaction: node.interaction,
+        dom: {
+          ...node.dom!,
+          attributes,
+          textContent: null,
+          descendantText: "",
+          locator: undefined,
+        },
+      };
+    };
+
+    for (const others of ['tabindex="-1"', ""]) {
+      for (const redactInput of [false, true]) {
+        it(`says no sensitive choice: options ${others || "without tabindex"}, redactInput ${redactInput}`, () => {
+          const root = mount(months(others));
+          root.querySelector<HTMLElement>("#o3")!.focus();
+          const box = boxedTabSequenceSnapshot(root, { redactInput });
+          // The text names the stop `[redacted]`…
+          expect(box.text).toContain('option "[redacted]" [focused]');
+          a11ySnapshotSerializer.serialize(box);
+          a11ySnapshotSerializer.serialize(boxedTreeSnapshot(root));
+
+          // …and neither record says which option it is: the chosen one
+          // reads as the other does, and focus is on the list.
+          for (const record of records()) {
+            expect(shape(record, "03")).toEqual(shape(record, "01"));
+            const focused = new Map(record.tree!.nodes).get(
+              record.tree!.focusedId!,
+            );
+            expect(focused?.a11y.role).toBe("listbox");
+            expect(JSON.stringify(record.tree)).not.toContain("choiceWithheld");
+          }
+          // The TAB view can't list that stop, so the record opens on the tree.
+          expect(records()[0]).not.toHaveProperty("view");
+        });
+      }
+    }
+
+    const COMPOSER = `
+      <h1>Compose</h1>
+      <div contenteditable="true" role="textbox" aria-label="Message">
+        <p>Reset link: <a href="https://x.test/reset?token=abc123">https://x.test/reset?token=abc123</a></p>
+        <h3>Q3 layoffs plan</h3>
+        <p>cc <a contenteditable="false" href="/u/alice" aria-label="Mention Alice">@alice</a></p>
+      </div>
+      <article><div contenteditable="true">my password is hunter2</div></article>`;
+
+    it("keeps an editor's tab stops in place, without their names", () => {
+      const root = mount(COMPOSER);
+      const box = boxedTabSequenceSnapshot(root);
+      expect(box.text).toBe(
+        ['textbox "Message"', 'link "Mention Alice"', "generic"].join("\n"),
+      );
+      a11ySnapshotSerializer.serialize(box);
+
+      const [record] = records();
+      expect(record).toMatchObject({ view: "tab" });
+      const tree: ExtractionResult = {
+        ...record!.tree!,
+        nodes: new Map(record!.tree!.nodes),
+      };
+      expect(
+        getTabSequence(tree).map((n) => `${n.a11y.role} ${n.a11y.name}`),
+      ).toEqual(["textbox Message", "link [redacted]", "generic "]);
+      const raw = JSON.stringify(record!.tree);
+      for (const typed of [
+        "Alice",
+        "alice",
+        "abc123",
+        "Q3 layoffs",
+        "hunter2",
+      ]) {
+        expect(raw).not.toContain(typed);
+      }
+    });
+
+    it("opens an outline on the tree when the record leaves a heading out", () => {
+      // The heading inside the editor is in the outline, not in the record.
+      a11ySnapshotSerializer.serialize(boxedOutlineSnapshot(mount(COMPOSER)));
+      expect(records()[0]!.text).toContain("h3 Q3 layoffs plan");
+      expect(records()[0]).not.toHaveProperty("view");
+    });
+
+    it("opens an outline on the tree when the panel would list headings AT can't reach", () => {
+      // A DOM-view tree keeps aria-hidden subtrees; the outline leaves them out.
+      const root = mount(
+        `<h2 aria-hidden="true">Decorative</h2><div aria-hidden="true"><h2>Behind a modal</h2></div><h2>Shown</h2>`,
+      );
+      const box = boxedOutlineSnapshot(extract(root, "dom"));
+      expect(box.text).toBe("  h2 Shown");
+      a11ySnapshotSerializer.serialize(box);
+      a11ySnapshotSerializer.serialize(boxedOutlineSnapshot(root));
+
+      const [dom, a11y] = records();
+      expect(dom).not.toHaveProperty("view");
+      // An a11y-view read leaves them out itself, so its record opens on them.
+      expect(a11y).toMatchObject({ view: "headings" });
+    });
   });
 
   it("redacts a tab sequence's record as its text", () => {

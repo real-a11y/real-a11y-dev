@@ -70,6 +70,7 @@ link "outlineSnapshot"
 button "Copy Code"
 generic
 link "snapshot report"
+link "why"
 table
 button "Copy Code"
 generic

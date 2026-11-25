@@ -81,6 +81,7 @@ generic
 link "boxedTreeSnapshot()"
 link "boxedTabSequenceSnapshot() and boxedOutlineSnapshot()"
 link "a11yDiff()"
+link "What it records"
 link "registerA11yMatchers(expect)"
 link "values: true"
 link "redactInput: true"

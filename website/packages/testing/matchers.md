@@ -329,7 +329,7 @@ expect(boxedTabSequenceSnapshot(container)).toMatchSnapshot("tab-sequence");
 expect(boxedOutlineSnapshot(container)).toMatchSnapshot("heading-outline");
 ```
 
-What a box adds is the [snapshot report](/packages/testing/snapshots#the-snapshot-report), which only boxed snapshots reach. Each of these records the tree its text was printed from, and the report opens that tree on what the text shows: the TAB view for a tab sequence, the headings filter for an outline. A `tabSequenceSnapshot` or `outlineSnapshot` string has no tree behind it, so it never appears there.
+What a box adds is the [snapshot report](/packages/testing/snapshots#the-snapshot-report), which only boxed snapshots reach. Each of these records the tree its text was printed from, and the report opens that tree on what the text shows: the TAB view for a tab sequence, the headings filter for an outline. Where that view wouldn't list exactly what the text printed, it opens on the tree ([why](/packages/testing/snapshots#what-it-shows)). A `tabSequenceSnapshot` or `outlineSnapshot` string has no tree behind it, so it never appears there.
 
 Switching a committed snapshot from the string to the box changes it once, in its quotes alone: the serializer prints a box's text as it is, where a string snapshots inside quotes. Every line stays the same. Update the snapshots (`vitest -u` or `jest -u`) and the diff shows only the quotes going.
 

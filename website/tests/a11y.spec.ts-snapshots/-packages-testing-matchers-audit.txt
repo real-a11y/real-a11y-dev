@@ -533,7 +533,9 @@ main
   paragraph
     text "What a box adds is the"
     link "snapshot report"
-    text ", which only boxed snapshots reach. Each of these records the tree its text was printed from, and the report opens that tree on what the text shows: the TAB view for a tab sequence, the headings filter for an outline. A"
+    text ", which only boxed snapshots reach. Each of these records the tree its text was printed from, and the report opens that tree on what the text shows: the TAB view for a tab sequence, the headings filter for an outline. Where that view wouldn't list exactly what the text printed, it opens on the tree ("
+    link "why"
+    text "). A"
     code "tabSequenceSnapshot"
     text "or"
     code "outlineSnapshot"
