@@ -268,7 +268,7 @@ The order is the point. In the example, React renders `setStatus("Draft deleted.
 
 `stop()` returns a box like `a11yDiff`'s, so with the serializer registered ([`registerA11yMatchers`](/packages/testing/matchers)) it snapshots as the plain text above. A timeline that heard nothing prints `(nothing recorded)`. Calling `stop()` again returns the same box; nothing is recorded after the first call.
 
-| Option | Default | |
+| Option | Default | What it does |
 |---|---|---|
 | `focus` | `true` | Record focus moves. |
 | `announcements` | `true` | Record live-region announcements. |
