@@ -146,7 +146,9 @@ main
   paragraph
     text "They agree on most of a page, but never byte for byte, by design. Chromium names some controls differently (a file input is a"
     code "button"
-    text ","
+    text ", and an unlabeled one reads"
+    code "button """
+    text "in both trees, not Chromium's own "Choose File";"
     code "<details>"
     text "is a disclosure), places names differently, and sees content the in-page walk can't reach: the built-in media controls inside"
     code "<video>"
