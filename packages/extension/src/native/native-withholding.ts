@@ -49,7 +49,8 @@ export interface RawAXNode extends RawAXNameNode {
 
 /** The id `normalizeNativeAX` assigns a raw node, so a normalized node can be
  *  looked back up to its raw AX node for states/properties. Kept in lockstep
- *  with core's own `idOf` — asserted by this file's tests.  *
+ *  with core's own `idOf` — asserted by this file's tests.
+ *
  * @internal
  */
 export function nativeIdOf(raw: RawAXNode): string {
@@ -61,7 +62,8 @@ export function nativeIdOf(raw: RawAXNode): string {
 /** The raw nodes some node is labelled or described by that the normalized
  *  tree doesn't keep, or keeps as no more than a block of text: a `<div>` the
  *  tree keeps for the text it holds is looked into as it was when the tree
- *  dropped it, Chromium having named it nothing.  *
+ *  dropped it, Chromium having named it nothing.
+ *
  * @internal
  */
 export function referencedOutsideTree(
