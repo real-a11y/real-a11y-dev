@@ -1,6 +1,6 @@
 {
   "packages/extension/src/background.ts": 703,
-  "packages/extension/src/content.ts": 632,
+  "packages/extension/src/content.ts": 631,
   "packages/extension/src/native/debugger-session.ts": 693,
   "packages/extension/src/native/index.ts": 559,
   "packages/extension/src/native/native-core.ts": 1233,

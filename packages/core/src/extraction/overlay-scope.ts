@@ -256,7 +256,7 @@ const IMPLICIT_LIVE_ROLES = new Set(["status", "alert", "log"]);
 export function countsAsOverlay(el: Element): boolean {
   const role = getExplicitRole(el);
   if (role && OVERLAY_ROLES.has(role)) return true;
-  return liveLevelOf(el, role) !== null;
+  return liveRegionLevel(el) !== null;
 }
 
 /**
@@ -270,18 +270,11 @@ export function countsAsOverlay(el: Element): boolean {
  * live-region line and `testing`'s timeline. Not a stability promise.
  */
 export function liveRegionLevel(el: Element): "polite" | "assertive" | null {
-  return liveLevelOf(el, getExplicitRole(el));
-}
-
-/** {@link liveRegionLevel}, given the element's explicit role. */
-function liveLevelOf(
-  el: Element,
-  role: string | undefined,
-): "polite" | "assertive" | null {
   // `aria-live` values ARE case-insensitive tokens, unlike `role`.
   const live = safeGetAttribute(el, "aria-live")?.trim().toLowerCase();
   if (live === "polite" || live === "assertive") return live;
   if (live === "off") return null;
+  const role = getExplicitRole(el);
   if (role === "alert") return "assertive";
   return role && IMPLICIT_LIVE_ROLES.has(role) ? "polite" : null;
 }
