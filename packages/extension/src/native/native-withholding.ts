@@ -30,6 +30,8 @@ import {
  * header already gives for the action functions: `browser` carries
  * Playwright, no good in an MV3 worker, and core stays a pure structural
  * normalizer by design (R4) rather than growing a second enrichment path.
+ *
+ * @internal
  */
 export interface RawAXNode extends RawAXNameNode {
   properties?: Array<{
@@ -47,7 +49,9 @@ export interface RawAXNode extends RawAXNameNode {
 
 /** The id `normalizeNativeAX` assigns a raw node, so a normalized node can be
  *  looked back up to its raw AX node for states/properties. Kept in lockstep
- *  with core's own `idOf` — asserted by this file's tests. */
+ *  with core's own `idOf` — asserted by this file's tests.  *
+ * @internal
+ */
 export function nativeIdOf(raw: RawAXNode): string {
   return typeof raw.backendDOMNodeId === "number"
     ? nativeNodeId(raw.backendDOMNodeId)
@@ -57,7 +61,9 @@ export function nativeIdOf(raw: RawAXNode): string {
 /** The raw nodes some node is labelled or described by that the normalized
  *  tree doesn't keep, or keeps as no more than a block of text: a `<div>` the
  *  tree keeps for the text it holds is looked into as it was when the tree
- *  dropped it, Chromium having named it nothing. */
+ *  dropped it, Chromium having named it nothing.  *
+ * @internal
+ */
 export function referencedOutsideTree(
   rawNodes: RawAXNode[],
   index: NativeAXIndex<RawAXNode>,
@@ -102,6 +108,8 @@ export function referencedOutsideTree(
  * everything else under a target is either such a field, already read, or a
  * node whose role and value Chromium does send. A plain `<label>` around a
  * field holds no ignored node and needs no read of its own.
+ *
+ * @internal
  */
 export function hidesUnreadNode(
   target: RawAXNode,
@@ -133,6 +141,8 @@ export function hidesUnreadNode(
  *   dropped it, so it was no candidate, and nothing that names another node
  *   held it. Unread is withheld.
  * - a value that is Chromium's password mask: its length is the password's.
+ *
+ * @internal
  */
 export function nameWithholdingRoots(
   rawNodes: RawAXNode[],
