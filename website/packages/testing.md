@@ -173,6 +173,7 @@ New to the idea of snapshotting the accessibility tree? Start with the concept: 
 - **Assert a specific invariant** ("one `<h1>`", "no unlabeled buttons") → [Assertions](/packages/testing/assertions) or, for `expect` style, [Matchers](/packages/testing/matchers). `assertRules` runs an arbitrary subset of the rule set, and `formatFindings` renders findings for your own reporting.
 - **Test an interaction** (open a menu, submit a form, dismiss a modal) → [Flow API](/packages/testing/flow).
 - **Assert what an interaction _changed_** (options appeared, `aria-expanded` flipped, focus moved) → [`capture` + `a11yDiff` or `flow().expectChanges`](/packages/testing/flow#asserting-what-an-interaction-changed).
+- **Assert the order a user meets things in** (focus dropping to the page, a status shown and cleared, a message before or after a focus move) → [`recordTimeline`](/packages/testing/flow#recording-what-happened-in-between).
 - **See what a snapshot holds beyond its text** (states, tab stops, a diff marked on the tree) → the [snapshot report](/packages/testing/snapshots#the-snapshot-report).
 - **Audit a real, rendered page** (not jsdom) → [Playwright adapter](/packages/testing/playwright).
 

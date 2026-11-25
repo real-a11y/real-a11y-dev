@@ -34,6 +34,12 @@ export { configureA11y } from "./config.js";
 export type { A11yConfig } from "./config.js";
 export type { ChangeSpec, NodeMatcher, ChangedMatcher } from "./change-spec.js";
 
+// Timeline (what a keyboard and screen-reader user met during an interaction,
+// in order) — focus moves and live-region announcements, boxed for the same
+// serializer as `a11yDiff`.
+export { recordTimeline } from "./timeline.js";
+export type { A11yTimeline, RecordTimelineOptions } from "./timeline.js";
+
 // Audit engine — the canonical home is @real-a11y-dev/audit; re-exported here
 // so test authors get the assertions + findings API from one entrypoint.
 export {

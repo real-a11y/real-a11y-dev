@@ -94,6 +94,17 @@ function redactText(input: string, patterns: RegExp[] | undefined): string {
   return out;
 }
 
+/**
+ * Apply `redact` to one string as the serializers apply it to a name: every
+ * match of every pattern becomes `[REDACTED]`. For text a reader prints next
+ * to serialized lines, such as `testing`'s timeline announcements.
+ *
+ * @internal Shared with `testing`; not re-exported by any published package.
+ */
+export function redactString(input: string, redact?: RegExp[]): string {
+  return redactText(input, ensureGlobalFlags(redact));
+}
+
 /** ` = "value"`, JSON-escaped and redacted, or `""` when the node has none.
  *  The one place a value is formatted, so every view prints it alike. */
 function valueText(node: SemanticNode, redact?: RegExp[]): string {
@@ -313,19 +324,45 @@ export function serializeTabSequence(
     "serializeTabSequence",
     options.redactInput,
   );
-  const block = blockWriter(states, redact);
+  const line = tabStopWriter(redact, values, states);
   const focusedId = markFocus ? tree.focusedId : undefined;
   const seq = getTabSequence(tree);
   if (seq.length === 0) return "(nothing focusable)";
   return seq
-    .map((n) => {
-      const redacted = redactText(n.a11y.name, redact);
-      const name = redacted ? ` "${redacted}"` : "";
-      const value = values ? valueText(n, redact) : "";
-      const marker = n.id === focusedId ? " [focused]" : "";
-      return `${n.a11y.role}${name}${value}${block(n)}${marker}`;
-    })
+    .map((n) => `${line(n)}${n.id === focusedId ? " [focused]" : ""}`)
     .join("\n");
+}
+
+/** One tab stop's line, `role "name" = "value" {states}`, with no marker.
+ *  `redact` is already normalized by {@link ensureGlobalFlags}. */
+function tabStopWriter(
+  redact: RegExp[] | undefined,
+  values: boolean,
+  states: boolean,
+): (node: SemanticNode) => string {
+  const block = blockWriter(states, redact);
+  return (n) => {
+    const redacted = redactText(n.a11y.name, redact);
+    const name = redacted ? ` "${redacted}"` : "";
+    const value = values ? valueText(n, redact) : "";
+    return `${n.a11y.role}${name}${value}${block(n)}`;
+  };
+}
+
+/**
+ * One node as a line of {@link serializeTabSequence} prints it —
+ * `role "name" {states}`, with ` = "value"` when `values` is on — and no
+ * `[focused]` marker. For a reader that names one node the way the tab view
+ * does, such as `testing`'s timeline.
+ *
+ * @internal Shared with `testing`; not re-exported by any published package.
+ */
+export function serializeTabStop(
+  node: SemanticNode,
+  options: Pick<SerializeOptions, "redact" | "values" | "states"> = {},
+): string {
+  const { values = false, states = true } = options;
+  return tabStopWriter(ensureGlobalFlags(options.redact), values, states)(node);
 }
 
 /**

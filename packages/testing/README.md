@@ -132,6 +132,28 @@ To set `childIds`, `values` and `redact` once for the whole project, pass them t
 registerA11yMatchers(expect, { diff: { childIds: false, redact: [/\d{2}:\d{2}/] } });
 ```
 
+## Record the order a user meets things in
+
+A diff sees two moments. `recordTimeline` records what a keyboard and screen-reader user met between them, in order: where focus went, and what live regions announced:
+
+```ts
+import { recordTimeline } from "@real-a11y-dev/testing";
+
+const timeline = recordTimeline(document.body);
+await user.click(screen.getByRole("button", { name: "Delete draft" }));
+await screen.findByText("Draft deleted.");
+
+expect(timeline.stop()).toMatchInlineSnapshot(`
+  focus     button "Delete draft"
+  announce  status "Deleting…"
+  focus     (none)
+  announce  status "Draft deleted."
+  focus     button "New draft"
+`);
+```
+
+`focus     (none)` is focus falling to the page when the row was removed, which a diff of the two ends can't show. Pass `{ announcements: false }` or `{ focus: false }` for one half alone, and `redact` as in the other snapshots. See [Recording what happened in between](https://real-a11y.dev/packages/testing/flow#recording-what-happened-in-between).
+
 ## See snapshots as a tree
 
 A snapshot's text leaves out states, descriptions and what each element takes. Add the snapshot reporter to Vitest or Jest, and after every run `a11y-snapshots/index.html` draws each boxed snapshot the way the Semantic Navigator panel does: a `boxedTreeSnapshot()` as its tree, a `boxedTabSequenceSnapshot()` on the TAB view, a `boxedOutlineSnapshot()` on the headings, and an `a11yDiff()` with its changes marked on its tree. Those three print what `treeSnapshot`, `tabSequenceSnapshot` and `outlineSnapshot` print; only the boxed ones, from `@real-a11y-dev/testing/matchers`, reach the report:

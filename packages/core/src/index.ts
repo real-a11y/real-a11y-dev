@@ -37,6 +37,7 @@ export {
   finishAnnouncedValue,
   getAnnouncedValue,
   getElementRefs,
+  resolveFocusedElement,
   PAGE_STATE_VALUE_ROLES,
   RANGE_VALUE_ROLES,
   STATE_ONLY_ROLES,
@@ -79,13 +80,23 @@ export { safeParentElement } from "./extraction/clobber-safe.js";
 // producer does: the flat tree, what is rendered, what AT can reach, and the
 // same elements skipped, read through the same clobber-safe accessors.
 export { ignoresChildText, isTextVisible } from "./extraction/dom-extractor.js";
+// @internal — what a screen reader could say for a live region, and which
+// elements are one: the extension's live-region line and field state, and
+// `testing`'s timeline, read the page's text through this one walk.
+export { pageText } from "./extraction/page-text.js";
+export { liveRegionLevel } from "./extraction/overlay-scope.js";
 export {
   flatChildNodes,
   isRenderedInFlatTree,
   renderingParent,
 } from "./extraction/flat-tree.js";
 export { isAriaHiddenValue } from "./extraction/aria-tokens.js";
-export { safeGetAttribute, safeNodeType } from "./extraction/clobber-safe.js";
+export {
+  safeContains,
+  safeGetAttribute,
+  safeNodeType,
+  safeOwnerDocument,
+} from "./extraction/clobber-safe.js";
 export {
   getExplicitRole,
   getImplicitRole,

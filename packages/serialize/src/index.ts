@@ -5,6 +5,8 @@ export {
   serializeTabSequence,
   numberTabStops,
   serializeTreeDiff,
+  serializeTabStop,
+  redactString,
 } from "./serialize.js";
 export type {
   SerializeInput,
