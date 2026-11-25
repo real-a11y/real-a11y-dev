@@ -3401,10 +3401,11 @@ describe("an unlabeled file input", () => {
         redactInput ? undefined : "report.pdf",
       );
       expect(
-        collectFindings(tree, ["no-unlabeled-interactive"]).map(
-          (f) => f.locator,
-        ),
-      ).toEqual(["#bare"]);
+        collectFindings(tree, ["no-unlabeled-interactive"]).map((f) => [
+          f.role,
+          f.tagName,
+        ]),
+      ).toEqual([["button", "input"]]);
     });
   }
 });
