@@ -116,6 +116,50 @@ describe("collectFindings — no-unlabeled-interactive", () => {
   });
 });
 
+describe("collectFindings — name-required roles", () => {
+  const REPRO = `<main><h1>t</h1>
+    <div role="tree"><div role="treeitem"__L__></div></div>
+    <div role="tooltip"__L__></div>
+    <div role="meter" aria-valuenow="1"__L__></div>
+    <div role="progressbar"__L__></div>
+    <img src="a.png"><div role="dialog"></div></main>`;
+
+  it("reports an unnamed treeitem, tooltip, meter and progressbar once each", () => {
+    const root = mount(REPRO.replaceAll("__L__", ""));
+    const unnamed = collectFindings(extractA11yTree(root), [
+      "no-unlabeled-interactive",
+    ]);
+    expect(unnamed.map((f) => f.role).sort()).toEqual([
+      "meter",
+      "progressbar",
+      "tooltip",
+      "treeitem",
+    ]);
+    for (const f of unnamed) {
+      expect(f.severity).toBe("error");
+      expect(f.message).not.toContain("interactive");
+      expect(f.message).toContain("requires an accessible name");
+    }
+  });
+
+  it("passes when each has a name", () => {
+    const root = mount(REPRO.replaceAll("__L__", ' aria-label="x"'));
+    expect(
+      collectFindings(extractA11yTree(root), ["no-unlabeled-interactive"]),
+    ).toEqual([]);
+  });
+
+  it("leaves img and dialog to their own rules, one finding each", () => {
+    const root = mount(REPRO.replaceAll("__L__", ' aria-label="x"'));
+    const all = collectFindings(extractA11yTree(root));
+    expect(all.filter((f) => f.rule === "image-alt")).toHaveLength(1);
+    expect(all.filter((f) => f.rule === "dialog-labeled")).toHaveLength(1);
+    expect(all.filter((f) => f.rule === "no-unlabeled-interactive")).toEqual(
+      [],
+    );
+  });
+});
+
 describe("collectFindings — label-title-only", () => {
   it("flags an input whose only label is title", () => {
     const root = mount(`<input title="Email">`);
@@ -718,6 +762,25 @@ describe("collectFindings — locators on a pre-extracted tree", () => {
       "#go",
       "body > main > img:nth-of-type(2)",
     ]);
+  });
+
+  it("reports the name-required roles on a native tree, with and without a dom facet", () => {
+    const tree = nativeTree(
+      ["treeitem", "tooltip", "meter", "progressbar"].flatMap((role, i) => [
+        nativeNode(`ax-dom-${i}a`, role, {
+          tagName: "div",
+          locator: `#n${i}`,
+        }),
+        nativeNode(`ax-${i}b`, role),
+      ]),
+    );
+    const findings = collectFindings(tree, ["no-unlabeled-interactive"]);
+    expect(findings).toHaveLength(8);
+    expect(findings.filter((f) => f.locator)).toHaveLength(4);
+    expect(findings.filter((f) => !f.tagName)).toHaveLength(4);
+    expect(findings.every((f) => f.message.includes("Unlabeled element"))).toBe(
+      true,
+    );
   });
 
   it("still reports the finding when no locator was computed", () => {

@@ -135,7 +135,7 @@ export interface SemanticNavigatorPageHandle {
   outlineSnapshot(): Promise<string>;
   /** Focusable elements in computed tab order, numbered. */
   tabSequenceSnapshot(options?: TabSequenceSnapshotOptions): Promise<string>;
-  /** Throws if any interactive element has an empty accessible name. */
+  /** Throws if any interactive element, treeitem, tooltip, meter or progressbar has an empty accessible name. */
   assertNoUnlabeledInteractive(): Promise<void>;
   /** Throws if heading levels are skipped or there is not exactly one h1. */
   assertHeadingOrder(): Promise<void>;

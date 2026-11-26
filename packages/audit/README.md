@@ -57,7 +57,7 @@ The rules, in run order (`ALL_RULES`):
 
 | Rule | Catches |
 |---|---|
-| `no-unlabeled-interactive` | An interactive control (button, link, textbox, …) with no accessible name. Glyph / `title=` buttons pass — the name is non-empty, matching axe `button-name`. An unlabeled `<input type="file">` is reported on both producers (the native tree reads it as `button ""`, not Chromium's own "Choose File"); one with only a `title` is reported here on the native path (alongside `label-title-only`, since the title is now its description) and only as `label-title-only` on the DOM path. |
+| `no-unlabeled-interactive` | An interactive control (button, link, textbox, …), or a `treeitem`, `tooltip`, `meter` or `progressbar` (WAI-ARIA 1.2 requires a name for these four), with no accessible name. Glyph / `title=` buttons pass — the name is non-empty, matching axe `button-name`. An unlabeled `<input type="file">` is reported on both producers (the native tree reads it as `button ""`, not Chromium's own "Choose File"); one with only a `title` is reported here on the native path (alongside `label-title-only`, since the title is now its description) and only as `label-title-only` on the DOM path. |
 | `label-title-only` | A form control (`input` / `select` / `textarea`) whose only label is `title` or `aria-describedby`. Warning, matching axe `label-title-only`. Placeholder-only and title-only **buttons** are out of scope. |
 | `image-alt` | An image with no text alternative. |
 | `heading-order` | More than one `h1`, or a skipped heading level. |

@@ -52,18 +52,26 @@ function keepNode(node: SemanticNode, rootId: string): boolean {
   )
     return true;
 
+  return sectioned && keepsBareSection(node);
+}
+
+/**
+ * Whether an unnamed header/footer in sectioning content still stays in the
+ * tree: HTML-AAM lets it go only when it isn't focusable and carries no other
+ * global ARIA attribute.
+ */
+function keepsBareSection(node: SemanticNode): boolean {
   // "Another global ARIA attribute", as far as the node records it:
   // `dom.attributes` holds only KEY_ATTRIBUTES (no `aria-describedby`), but a
   // describedby reference surfaces as a computed description instead, and
   // aria-busy (not a KEY_ATTRIBUTE) lands in `a11y.states`.
   return (
-    sectioned &&
-    (node.interaction!.isFocusable ||
-      !!node.a11y.description ||
-      "busy" in node.a11y.states ||
-      Object.keys(node.dom?.attributes ?? {}).some(
-        (name) => name.startsWith("aria-") && name !== "aria-hidden",
-      ))
+    node.interaction!.isFocusable ||
+    !!node.a11y.description ||
+    "busy" in node.a11y.states ||
+    Object.keys(node.dom?.attributes ?? {}).some(
+      (name) => name.startsWith("aria-") && name !== "aria-hidden",
+    )
   );
 }
 

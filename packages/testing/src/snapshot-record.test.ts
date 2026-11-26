@@ -12,7 +12,11 @@ import {
   vi,
 } from "vitest";
 
-import { boxedTreeSnapshot } from "./matchers.js";
+import {
+  boxedOutlineSnapshot,
+  boxedTabSequenceSnapshot,
+  boxedTreeSnapshot,
+} from "./matchers.js";
 import { a11ySnapshotSerializer } from "./snapshot-box.js";
 import {
   bindSnapshotRecorder,
@@ -21,7 +25,15 @@ import {
   type SnapshotRecord,
 } from "./snapshot-record.js";
 
-import { a11yDiff, capture } from "./index.js";
+import {
+  a11yDiff,
+  capture,
+  extract,
+  getTabSequence,
+  outlineSnapshot,
+  tabSequenceSnapshot,
+  type ExtractionResult,
+} from "./index.js";
 
 let dir: string;
 
@@ -88,6 +100,439 @@ describe("snapshot recorder", () => {
     expect(roles(record!, "tree")).toEqual(
       expect.arrayContaining(["heading", "button"]),
     );
+  });
+
+  it("writes the whole tree behind a tab sequence, to open on the TAB view", () => {
+    const root = mount(
+      `<h1>Hi</h1><a href="/a">Home</a><p>Text</p><button>Go</button>`,
+    );
+    const box = boxedTabSequenceSnapshot(root);
+    expect(box.text).toBe(tabSequenceSnapshot(root));
+    a11ySnapshotSerializer.serialize(box);
+
+    const [record] = records();
+    expect(record).toMatchObject({ kind: "tree", view: "tab", text: box.text });
+    // The tree, not only its tab stops: the TAB view is one view of it.
+    expect(roles(record!, "tree")).toEqual(
+      expect.arrayContaining(["heading", "link", "paragraph", "button"]),
+    );
+  });
+
+  it("writes the whole tree behind an outline, to open on the headings", () => {
+    const root = mount(`<h1>Hi</h1><h2>More</h2><button>Go</button>`);
+    const box = boxedOutlineSnapshot(root);
+    expect(box.text).toBe(outlineSnapshot(root));
+    a11ySnapshotSerializer.serialize(box);
+
+    const [record] = records();
+    expect(record).toMatchObject({
+      kind: "tree",
+      view: "headings",
+      text: box.text,
+    });
+    expect(roles(record!, "tree")).toEqual(
+      expect.arrayContaining(["heading", "button"]),
+    );
+  });
+
+  it("names no view for a snapshot of the whole tree", () => {
+    a11ySnapshotSerializer.serialize(
+      boxedTreeSnapshot(mount(`<button>Go</button>`)),
+    );
+    expect(records()[0]).not.toHaveProperty("view");
+  });
+
+  describe("a tab stop the record can't place", () => {
+    /** A roving-tabindex list box a card-expiry field controls: 03 is chosen. */
+    const months = (others: string) =>
+      `<input role="combobox" aria-label="Month" aria-expanded="true" aria-controls="lb" autocomplete="cc-exp-month">` +
+      `<ul role="listbox" id="lb" aria-label="Months">` +
+      `<li role="option" id="o1" ${others}>01</li>` +
+      `<li role="option" id="o3" tabindex="0" aria-selected="true">03</li></ul>`;
+
+    /** A recorded option, less what sets any two options apart: its own
+     *  name, text and element id. */
+    const shape = (record: SnapshotRecord, name: string) => {
+      const node = record.tree!.nodes.find(
+        ([, n]) => n.a11y.role === "option" && n.a11y.name === name,
+      )![1];
+      const { id: _id, ...attributes } = node.dom!.attributes;
+      return {
+        a11y: { ...node.a11y, name: "" },
+        interaction: node.interaction,
+        dom: {
+          ...node.dom!,
+          attributes,
+          textContent: null,
+          descendantText: "",
+          locator: undefined,
+        },
+      };
+    };
+
+    for (const others of ['tabindex="-1"', ""]) {
+      for (const redactInput of [false, true]) {
+        it(`says no sensitive choice: options ${others || "without tabindex"}, redactInput ${redactInput}`, () => {
+          const root = mount(months(others));
+          root.querySelector<HTMLElement>("#o3")!.focus();
+          const box = boxedTabSequenceSnapshot(root, { redactInput });
+          // The text names the stop `[redacted]`…
+          expect(box.text).toContain('option "[redacted]" [focused]');
+          a11ySnapshotSerializer.serialize(box);
+          a11ySnapshotSerializer.serialize(boxedTreeSnapshot(root));
+
+          // …and neither record says which option it is: the chosen one
+          // reads as the other does, and focus is on the list.
+          for (const record of records()) {
+            expect(shape(record, "03")).toEqual(shape(record, "01"));
+            const focused = new Map(record.tree!.nodes).get(
+              record.tree!.focusedId!,
+            );
+            expect(focused?.a11y.role).toBe("listbox");
+            expect(JSON.stringify(record.tree)).not.toContain("choiceWithheld");
+          }
+          // The TAB view can't list that stop, so the record opens on the tree.
+          expect(records()[0]).not.toHaveProperty("view");
+        });
+      }
+    }
+
+    const COMPOSER = `
+      <h1>Compose</h1>
+      <div contenteditable="true" role="textbox" aria-label="Message">
+        <p>Reset link: <a href="https://x.test/reset?token=abc123">https://x.test/reset?token=abc123</a></p>
+        <h3>Q3 layoffs plan</h3>
+        <p>cc <a contenteditable="false" href="/u/alice" aria-label="Mention Alice">@alice</a></p>
+      </div>
+      <article><div contenteditable="true">my password is hunter2</div></article>`;
+
+    it("moves a diff's focus off a sensitive choice's option, on both sides", () => {
+      const root = mount(months('tabindex="-1"'));
+      root.querySelector<HTMLElement>("#o1")!.focus();
+      const before = capture(root);
+      root.querySelector<HTMLElement>("#o3")!.focus();
+      a11ySnapshotSerializer.serialize(a11yDiff(before, root));
+
+      const [record] = records();
+      for (const side of ["before", "after"] as const) {
+        const focus =
+          side === "before" ? record!.focusBefore : record!.focusAfter;
+        expect(new Map(record![side]!.nodes).get(focus!)?.a11y.role).toBe(
+          "listbox",
+        );
+      }
+    });
+
+    /** Three choices in a dialog a card-expiry field controls. */
+    const popup = (items: string) =>
+      `<input role="combobox" aria-label="Month" aria-expanded="true" aria-controls="pop" autocomplete="cc-exp-month">` +
+      `<div role="dialog" id="pop" aria-label="Months">${items}</div>`;
+
+    // Outside a list box or a grid, the tree marks only the chosen item: the
+    // one whose own choice state it withheld.
+    const onlyChosenMarked = [
+      {
+        role: "button",
+        html: popup(
+          `<button id="c1" aria-pressed="true">01</button><button id="c2">02</button><button id="c3">03</button>`,
+        ),
+        choose: (el: Element, on: boolean) =>
+          on
+            ? el.setAttribute("aria-pressed", "true")
+            : el.removeAttribute("aria-pressed"),
+      },
+      {
+        role: "tab",
+        html: popup(
+          `<div role="tablist" aria-label="Months">` +
+            `<div role="tab" id="c1" tabindex="0" aria-selected="true">01</div>` +
+            `<div role="tab" id="c2" tabindex="-1">02</div>` +
+            `<div role="tab" id="c3" tabindex="-1">03</div></div>`,
+        ),
+        choose: (el: Element, on: boolean) => {
+          el.setAttribute("tabindex", on ? "0" : "-1");
+          if (on) el.setAttribute("aria-selected", "true");
+          else el.removeAttribute("aria-selected");
+        },
+      },
+      {
+        role: "link",
+        html: popup(
+          `<a id="c1" href="#" aria-current="true">01</a><a id="c2" href="#">02</a><a id="c3" href="#">03</a>`,
+        ),
+        choose: (el: Element, on: boolean) =>
+          on
+            ? el.setAttribute("aria-current", "true")
+            : el.removeAttribute("aria-current"),
+      },
+    ];
+
+    for (const { role, html, choose } of onlyChosenMarked) {
+      it(`keeps a chosen ${role} that alone is marked as its siblings read, on both sides of a diff`, () => {
+        const root = mount(html);
+        const marked = [...extract(root).nodes.values()]
+          .filter((n) => n.a11y.choiceWithheld)
+          .map((n) => n.a11y.name);
+        expect(marked).toEqual(["01"]);
+
+        const read = (
+          record: SnapshotRecord,
+          side: "tree" | "before" | "after",
+          name: string,
+        ) => {
+          const node = record[side]!.nodes.find(
+            ([, n]) => n.a11y.role === role && n.a11y.name === name,
+          )![1];
+          const { id: _id, ...attributes } = node.dom!.attributes;
+          return {
+            states: node.a11y.states,
+            interaction: node.interaction,
+            attributes,
+          };
+        };
+
+        a11ySnapshotSerializer.serialize(boxedTreeSnapshot(root));
+        const before = capture(root);
+        choose(root.querySelector("#c1")!, false);
+        choose(root.querySelector("#c3")!, true);
+        const diff = a11yDiff(before, root);
+        expect(diff.text).toBe("(no changes)");
+        a11ySnapshotSerializer.serialize(diff);
+
+        const [tree, change] = records();
+        for (const name of ["01", "03"]) {
+          expect(read(tree!, "tree", name)).toEqual(read(tree!, "tree", "02"));
+        }
+        // What the text calls no change, the viewer marks as none: every
+        // item reads the same before as after.
+        for (const name of ["01", "02", "03"]) {
+          expect(read(change!, "before", name)).toEqual(
+            read(change!, "after", name),
+          );
+        }
+      });
+    }
+
+    it("opens a tab sequence on the tree when it printed a stop as [redacted]", () => {
+      const root = mount(onlyChosenMarked[0]!.html);
+      const box = boxedTabSequenceSnapshot(root);
+      expect(box.text).toContain('button "[redacted]"');
+      a11ySnapshotSerializer.serialize(box);
+      // The record keeps that stop by its name, as the other buttons read.
+      expect(records()[0]).not.toHaveProperty("view");
+    });
+
+    it("moves focus on a date grid's day to the grid, not the day's cell", () => {
+      const root = mount(
+        `<input role="combobox" aria-label="Expiry" aria-expanded="true" aria-controls="cal" autocomplete="cc-exp">` +
+          `<table role="grid" id="cal" aria-label="Days"><tbody><tr>` +
+          `<td><button id="d14" tabindex="-1">14</button></td>` +
+          `<td><button id="d15" tabindex="0" aria-pressed="true">15</button></td>` +
+          `<td><button id="d16" tabindex="-1">16</button></td>` +
+          `</tr></tbody></table>`,
+      );
+      const roleOf = (
+        nodes: SnapshotRecord["tree"],
+        id: string | null | undefined,
+      ) => new Map(nodes!.nodes).get(id!)?.a11y.role;
+
+      root.querySelector<HTMLElement>("#d15")!.focus();
+      a11ySnapshotSerializer.serialize(boxedTreeSnapshot(root));
+      const before = capture(root);
+      root.querySelector<HTMLElement>("#d16")!.focus();
+      a11ySnapshotSerializer.serialize(a11yDiff(before, root));
+
+      const [tree, diff] = records();
+      expect(roleOf(tree!.tree, tree!.tree!.focusedId)).toBe("grid");
+      expect(roleOf(diff!.before, diff!.focusBefore)).toBe("grid");
+      expect(roleOf(diff!.after, diff!.focusAfter)).toBe("grid");
+      expect(diff!.focusBefore).toBe(diff!.focusAfter);
+    });
+
+    it("makes no tab stop of a chosen tab that focus has left", () => {
+      // Manual activation: the arrow keys moved focus, and the stop, to 02,
+      // while 01 stays selected.
+      const root = mount(
+        popup(
+          `<div role="tablist" aria-label="Months">` +
+            `<div role="tab" id="c1" tabindex="-1" aria-selected="true">01</div>` +
+            `<div role="tab" id="c2" tabindex="0">02</div>` +
+            `<div role="tab" id="c3" tabindex="-1">03</div></div>`,
+        ),
+      );
+      root.querySelector<HTMLElement>("#c2")!.focus();
+      const box = boxedTabSequenceSnapshot(root);
+      a11ySnapshotSerializer.serialize(box);
+
+      const [record] = records();
+      const tree: ExtractionResult = {
+        ...record!.tree!,
+        nodes: new Map(record!.tree!.nodes),
+      };
+      const nameOf = (id: string) => tree.nodes.get(id)!.a11y.name;
+      expect(getTabSequence(tree).map((n) => nameOf(n.id))).toEqual(
+        getTabSequence(extract(root)).map((n) => n.a11y.name),
+      );
+      expect(record).toMatchObject({ view: "tab" });
+      const tab = (name: string) =>
+        [...tree.nodes.values()].find(
+          (n) => n.a11y.role === "tab" && n.a11y.name === name,
+        )!;
+      expect(tab("01").dom!.attributes.tabindex).toBe("-1");
+      expect(tab("01").interaction).toEqual(tab("03").interaction);
+    });
+
+    it("keeps a chosen button as most of its siblings read, not as a disabled one", () => {
+      a11ySnapshotSerializer.serialize(
+        boxedTreeSnapshot(
+          mount(
+            popup(
+              `<button disabled>00</button><button aria-pressed="true">01</button><button>02</button><button>03</button>`,
+            ),
+          ),
+        ),
+      );
+      const nodes = records()[0]!.tree!.nodes.map(([, n]) => n);
+      const button = (name: string) =>
+        nodes.find((n) => n.a11y.role === "button" && n.a11y.name === name)!;
+      expect(button("01").interaction).toEqual(button("02").interaction);
+      expect(button("01").interaction?.isFocusable).toBe(true);
+    });
+
+    it("moves focus on a choice in a popup to the popup, not a grid around it", () => {
+      // A saved-cards grid holds the expiry field and its popup in one cell.
+      const root = mount(
+        `<table role="grid" aria-label="Cards"><tbody><tr><td>` +
+          `<input id="exp" role="combobox" aria-label="Month" aria-expanded="true" aria-controls="months" autocomplete="cc-exp-month">` +
+          `<div role="dialog" id="months" aria-label="Months">` +
+          `<button id="m3" aria-pressed="true">03</button><button>Cancel</button></div>` +
+          `</td></tr></tbody></table>`,
+      );
+      root.querySelector<HTMLElement>("#exp")!.focus();
+      const before = capture(root);
+      root.querySelector<HTMLElement>("#m3")!.focus();
+      a11ySnapshotSerializer.serialize(a11yDiff(before, root));
+      a11ySnapshotSerializer.serialize(boxedTreeSnapshot(root));
+
+      const [diff, tree] = records();
+      const roleOf = (side: SnapshotRecord["tree"], id?: string | null) =>
+        new Map(side!.nodes).get(id!)?.a11y.role;
+      expect(roleOf(diff!.before, diff!.focusBefore)).toBe("combobox");
+      expect(roleOf(diff!.after, diff!.focusAfter)).toBe("dialog");
+      expect(roleOf(tree!.tree, tree!.tree!.focusedId)).toBe("dialog");
+    });
+
+    it("keeps the stops of an editor the tab order lists, and no other", () => {
+      // A DOM-view read keeps a hidden button, which the tab order skips; a
+      // tabindex out of range reads as none, so that button is a stop.
+      const root = mount(
+        `<div contenteditable="true" role="textbox" aria-label="Notes"><p><span contenteditable="false">` +
+          `<button style="visibility: hidden">Hidden</button>` +
+          `<button tabindex="-2147483649">Shown</button>` +
+          `</span></p></div>`,
+      );
+      const box = boxedTabSequenceSnapshot(extract(root, "dom"));
+      expect(box.text).toBe('textbox "Notes"\nbutton "Shown"');
+      a11ySnapshotSerializer.serialize(box);
+
+      const [record] = records();
+      expect(record).toMatchObject({ view: "tab" });
+      const buttons = record!.tree!.nodes.filter(
+        ([, n]) => n.a11y.role === "button",
+      );
+      expect(buttons).toHaveLength(1);
+    });
+
+    it("opens an outline on the tree when a heading inside an editor is a stop", () => {
+      // The record keeps the heading as a nameless stop, with no level.
+      const root = mount(
+        `<h1>Notes</h1><div contenteditable="true" role="textbox" aria-label="Notes">` +
+          `<div contenteditable="false"><h3 tabindex="0">Plan</h3></div></div>`,
+      );
+      const box = boxedOutlineSnapshot(root);
+      expect(box.text).toContain("h3 Plan");
+      a11ySnapshotSerializer.serialize(box);
+      expect(records()[0]).not.toHaveProperty("view");
+    });
+
+    it("keeps no state of a stop inside an editor", () => {
+      a11ySnapshotSerializer.serialize(
+        boxedTabSequenceSnapshot(
+          mount(
+            `<div contenteditable="true" role="textbox" aria-label="Notes"><p><span contenteditable="false"><input type="checkbox" checked aria-label="Pay rent"></span></p></div>`,
+          ),
+        ),
+      );
+      const [record] = records();
+      const stop = record!.tree!.nodes.find(
+        ([, n]) => n.a11y.role === "checkbox",
+      )![1];
+      expect(stop.a11y.name).toBe("[redacted]");
+      expect(stop.a11y.states).toEqual({});
+      expect(JSON.stringify(record!.tree)).not.toContain("Pay rent");
+    });
+
+    it("keeps an editor's tab stops in place, without their names", () => {
+      const root = mount(COMPOSER);
+      const box = boxedTabSequenceSnapshot(root);
+      expect(box.text).toBe(
+        ['textbox "Message"', 'link "Mention Alice"', "generic"].join("\n"),
+      );
+      a11ySnapshotSerializer.serialize(box);
+
+      const [record] = records();
+      expect(record).toMatchObject({ view: "tab" });
+      const tree: ExtractionResult = {
+        ...record!.tree!,
+        nodes: new Map(record!.tree!.nodes),
+      };
+      expect(
+        getTabSequence(tree).map((n) => `${n.a11y.role} ${n.a11y.name}`),
+      ).toEqual(["textbox Message", "link [redacted]", "generic "]);
+      const raw = JSON.stringify(record!.tree);
+      for (const typed of [
+        "Alice",
+        "alice",
+        "abc123",
+        "Q3 layoffs",
+        "hunter2",
+      ]) {
+        expect(raw).not.toContain(typed);
+      }
+    });
+
+    it("opens an outline on the tree when the record leaves a heading out", () => {
+      // The heading inside the editor is in the outline, not in the record.
+      a11ySnapshotSerializer.serialize(boxedOutlineSnapshot(mount(COMPOSER)));
+      expect(records()[0]!.text).toContain("h3 Q3 layoffs plan");
+      expect(records()[0]).not.toHaveProperty("view");
+    });
+
+    it("opens an outline on the tree when the panel would list headings AT can't reach", () => {
+      // A DOM-view tree keeps aria-hidden subtrees; the outline leaves them out.
+      const root = mount(
+        `<h2 aria-hidden="true">Decorative</h2><div aria-hidden="true"><h2>Behind a modal</h2></div><h2>Shown</h2>`,
+      );
+      const box = boxedOutlineSnapshot(extract(root, "dom"));
+      expect(box.text).toBe("  h2 Shown");
+      a11ySnapshotSerializer.serialize(box);
+      a11ySnapshotSerializer.serialize(boxedOutlineSnapshot(root));
+
+      const [dom, a11y] = records();
+      expect(dom).not.toHaveProperty("view");
+      // An a11y-view read leaves them out itself, so its record opens on them.
+      expect(a11y).toMatchObject({ view: "headings" });
+    });
+  });
+
+  it("redacts a tab sequence's record as its text", () => {
+    const box = boxedTabSequenceSnapshot(
+      mount(`<button>Order 4821-7730</button>`),
+      { redact: [/\d{4}-\d{4}/] },
+    );
+    expect(box.text).toBe(`button "Order [REDACTED]"`);
+    a11ySnapshotSerializer.serialize(box);
+    expect(rawRecords().join("")).not.toContain("4821-7730");
   });
 
   it("writes both sides of a diff and where focus went", () => {
@@ -319,6 +764,37 @@ describe("snapshot recorder", () => {
       expect(record!.text).toContain('"jane@x.com"');
       expect(tree).not.toContain("jane@x.com");
       expect(tree).not.toMatch(/"(value|aria-valuenow|aria-valuetext)":/);
+    });
+
+    it("keeps none behind a tab sequence or an outline that printed them", () => {
+      const root = mount(
+        `<h1>Order</h1>${form}<div role="textbox" contenteditable="true" aria-label="Note">EDITOR-SENTINEL</div>`,
+      );
+      const tabs = boxedTabSequenceSnapshot(root, { values: true });
+      const strict = boxedTabSequenceSnapshot(root, {
+        values: true,
+        redactInput: true,
+      });
+      a11ySnapshotSerializer.serialize(tabs);
+      a11ySnapshotSerializer.serialize(strict);
+      a11ySnapshotSerializer.serialize(boxedOutlineSnapshot(root));
+
+      const [plain, masked, outline] = records();
+      // Each text holds what the string would print…
+      expect(plain!.text).toBe(tabSequenceSnapshot(root, { values: true }));
+      expect(plain!.text).toContain('"jane@x.com"');
+      expect(masked!.text).toBe(
+        tabSequenceSnapshot(root, { values: true, redactInput: true }),
+      );
+      expect(masked!.text).not.toContain("jane@x.com");
+      // …and no tree beside it holds a value or an editor's text.
+      for (const record of [plain, masked, outline]) {
+        const tree = JSON.stringify(record!.tree);
+        expect(tree).not.toContain("jane@x.com");
+        expect(tree).not.toContain("EDITOR-SENTINEL");
+        expect(tree).not.toMatch(/"(value|aria-valuenow|aria-valuetext)":/);
+      }
+      expect(masked!.tree!.source).toMatchObject({ redactInput: true });
     });
 
     it("keeps none on either side of a diff that didn't print them", () => {

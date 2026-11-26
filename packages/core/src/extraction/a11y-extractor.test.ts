@@ -138,6 +138,15 @@ describe("extractA11yTree", () => {
       ).toHaveLength(1);
     });
 
+    it("does not count aria-hidden as another global ARIA attribute", () => {
+      expect(
+        roleOf(
+          `<main><header aria-hidden="false"><h2>T</h2></header></main>`,
+          (r) => r === "sectionheader",
+        ),
+      ).toHaveLength(0);
+    });
+
     it("keeps a busy one (aria-busy)", () => {
       expect(
         roleOf(

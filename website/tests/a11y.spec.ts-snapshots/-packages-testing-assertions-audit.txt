@@ -80,7 +80,7 @@ main
       row
         cell "severity"
           code "severity"
-        cell ""error" blocks use (unlabeled controls, unlabeled dialogs); "warning" is triage-later (heading order, a missing main landmark, duplicate landmarks, images missing alt, form controls labeled only by title)."
+        cell ""error" blocks use (unlabeled controls, unnamed tree items, tooltips, meters and progress bars, unlabeled dialogs); "warning" is triage-later (heading order, a missing main landmark, duplicate landmarks, images missing alt, form controls labeled only by title)."
           code ""error""
           code ""warning""
           code "title"
@@ -140,7 +140,15 @@ main
   heading "assertNoUnlabeledInteractive(root)" (level 2)
     code "assertNoUnlabeledInteractive(root)"
   paragraph
-    text "Throws if any interactive element (button, link, textbox, combobox, checkbox, radio, etc.) has an empty accessible name. A glyph, emoji, or"
+    text "Throws if any interactive element (button, link, textbox, combobox, checkbox, radio, etc.), or any"
+    code "treeitem"
+    text ","
+    code "tooltip"
+    text ","
+    code "meter"
+    text "or"
+    code "progressbar"
+    text "(WAI-ARIA 1.2 requires a name for these), has an empty accessible name. A glyph, emoji, or"
     code "title="
     text "on a button is a"
     strong "non-empty"

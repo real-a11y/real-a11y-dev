@@ -14,6 +14,8 @@ navigation "On this page"
     listitem
       link "boxedTreeSnapshot(root, options?) — snapshot serializer"
     listitem
+      link "boxedTabSequenceSnapshot(root, options?) and boxedOutlineSnapshot(root, options?)"
+    listitem
       link "Rules, contracts, and snapshots — which to reach for"
     listitem
       link "Vitest vs Jest type augmentation"
@@ -124,7 +126,7 @@ main
       row
         cell "toHaveNoUnlabeledInteractive()"
           code "toHaveNoUnlabeledInteractive()"
-        cell "Every interactive node has a non-empty accessible name."
+        cell "Every interactive node, and every treeitem, tooltip, meter and progressbar, has a non-empty accessible name."
       row
         cell "toHaveValidHeadingOrder()"
           code "toHaveValidHeadingOrder()"
@@ -512,6 +514,51 @@ main
     text "Because the snapshot reflects the extracted a11y tree, an open dialog"
     strong "scopes"
     text "the snapshot — content behind a modal is inert to assistive tech, so it drops out and the snapshot captures only the dialog. That makes the snapshot a precise regression artifact for the modal state, not just the page."
+  heading "boxedTabSequenceSnapshot(root, options?) and boxedOutlineSnapshot(root, options?)" (level 2)
+    code "boxedTabSequenceSnapshot(root, options?)"
+    code "boxedOutlineSnapshot(root, options?)"
+  paragraph
+    link "tabSequenceSnapshot"
+      code "tabSequenceSnapshot"
+    text "and"
+    link "outlineSnapshot"
+      code "outlineSnapshot"
+    text "as boxes, the way"
+    code "boxedTreeSnapshot"
+    text "boxes"
+    code "treeSnapshot"
+    text ". They take the same options and print the same text, byte for byte:"
+  button "Copy Code"
+  code "import { boxedOutlineSnapshot, boxedTabSequenceSnapshot, } from "@real-a11y-dev/testing/matchers"; expect(boxedTabSequenceSnapshot(container)).toMatchSnapshot("tab-sequence"); expect(boxedOutlineSnapshot(container)).toMatchSnapshot("heading-outline");"
+  paragraph
+    text "What a box adds is the"
+    link "snapshot report"
+    text ", which only boxed snapshots reach. Each of these records the tree its text was printed from, and the report opens that tree on what the text shows: the TAB view for a tab sequence, the headings filter for an outline. Where that view wouldn't list exactly what the text printed, it opens on the tree ("
+    link "why"
+    text "). A"
+    code "tabSequenceSnapshot"
+    text "or"
+    code "outlineSnapshot"
+    text "string has no tree behind it, so it never appears there."
+  paragraph
+    text "Switching a committed snapshot from the string to the box changes it once, in its quotes alone: the serializer prints a box's text as it is, where a string snapshots inside quotes. Every line stays the same. Update the snapshots ("
+    code "vitest -u"
+    text "or"
+    code "jest -u"
+    text ") and the diff shows only the quotes going."
+  paragraph
+    text "An outline whose first heading is below"
+    code "h1"
+    text "is the exception, inline. Its text starts with indentation ("
+    code "h2 Card"
+    text "), and neither runner keeps a first line's indentation in an inline snapshot. Jest takes it for indentation it added and strips it on reading, so the snapshot it wrote fails on every later run. Vitest drops it on writing, so the stored outline indents that heading as an"
+    code "h1"
+    text "'s. Snapshot such an outline with"
+    code "toMatchSnapshot()"
+    text ", which keeps every line as printed. The"
+    code "outlineSnapshot"
+    text "string is unaffected inline, because its opening quote comes first."
+  paragraph "Keep the string where you use it as one, say to split the tab sequence into lines and look for a name that repeats."
   heading "Rules, contracts, and snapshots — which to reach for" (level 2)
   paragraph "Three of these matchers assert about the same tree but answer different questions, so it's worth being precise about when each earns its place."
   table

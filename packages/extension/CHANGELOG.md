@@ -24,6 +24,10 @@
 - **Internal refactor, no behaviour change.** `dispatchNative` in `native-core.ts`
   is split into smaller helpers
   ([#734](https://github.com/real-a11y/real-a11y-dev/pull/734)).
+- Internal: the panel's tree can start on a role filter, for the snapshot
+  report in `@real-a11y-dev/testing`. The extension re-bundles the panel and
+  never asks for one, so nothing changes for users
+  ([#726](https://github.com/real-a11y/real-a11y-dev/pull/726)).
 - **Internal refactor, no behaviour change.** The raw accessibility-tree
   withholding helpers moved out of `native-core.ts` into their own module
   ([#730](https://github.com/real-a11y/real-a11y-dev/pull/730)).

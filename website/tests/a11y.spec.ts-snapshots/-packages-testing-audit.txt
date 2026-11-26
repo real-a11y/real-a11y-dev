@@ -178,9 +178,11 @@ main
       row
         cell "Matchers"
           strong "Matchers"
-        cell "The same checks as ergonomic expect matchers, plus the boxedTreeSnapshot() serializer. Vitest + Jest."
+        cell "The same checks as ergonomic expect matchers, plus the boxed snapshots that reach the snapshot report: boxedTreeSnapshot(), boxedTabSequenceSnapshot() and boxedOutlineSnapshot(). Vitest + Jest."
           code "expect"
           code "boxedTreeSnapshot()"
+          code "boxedTabSequenceSnapshot()"
+          code "boxedOutlineSnapshot()"
         cell "Matchers →"
           link "Matchers →"
       row

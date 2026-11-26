@@ -4,6 +4,8 @@ import {
   fillHint,
   groupByFile,
   keepUnchanged,
+  kindLabel,
+  openingView,
   readableRecords,
   RECORD_VERSION,
   type SnapshotRecord,
@@ -23,6 +25,45 @@ function record(over: Partial<SnapshotRecord> = {}): SnapshotRecord {
     ...over,
   };
 }
+
+describe("openingView", () => {
+  it("opens a tab sequence's tree on the TAB view", () => {
+    expect(openingView(record({ view: "tab" }))).toEqual({
+      viewMode: "tab",
+      roleFilter: null,
+    });
+  });
+
+  it("opens an outline's tree on the headings", () => {
+    expect(openingView(record({ view: "headings" }))).toEqual({
+      viewMode: "a11y",
+      roleFilter: "heading",
+    });
+  });
+
+  it("opens a whole tree, and a record from before views, on the tree", () => {
+    expect(openingView(record())).toEqual({
+      viewMode: "a11y",
+      roleFilter: null,
+    });
+  });
+
+  it("opens a diff on the tree, whatever its record says of a view", () => {
+    expect(openingView(record({ kind: "diff", view: "tab" }))).toEqual({
+      viewMode: "a11y",
+      roleFilter: null,
+    });
+  });
+});
+
+describe("kindLabel", () => {
+  it("names what the snapshot printed", () => {
+    expect(kindLabel(record())).toBe("tree");
+    expect(kindLabel(record({ view: "tab" }))).toBe("tabs");
+    expect(kindLabel(record({ view: "headings" }))).toBe("outline");
+    expect(kindLabel(record({ kind: "diff" }))).toBe("diff");
+  });
+});
 
 describe("keepUnchanged", () => {
   it("keeps the object of a record that hasn't changed", () => {

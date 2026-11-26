@@ -4,6 +4,7 @@ link "toBeValidA11yTree()"
 link "toHaveTabSequence(expected)"
 link "toMatchA11yContract(contract, options?)"
 link "boxedTreeSnapshot(root, options?) — snapshot serializer"
+link "boxedTabSequenceSnapshot(root, options?) and boxedOutlineSnapshot(root, options?)"
 link "Rules, contracts, and snapshots — which to reach for"
 link "Vitest vs Jest type augmentation"
 link "See it running"
@@ -64,6 +65,12 @@ generic
 link "redact"
 link "treeSnapshot()"
 table
+link "tabSequenceSnapshot"
+link "outlineSnapshot"
+button "Copy Code"
+generic
+link "snapshot report"
+link "why"
 table
 button "Copy Code"
 generic

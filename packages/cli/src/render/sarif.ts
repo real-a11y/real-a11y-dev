@@ -38,7 +38,7 @@ const RULE_LEVEL: Record<string, "error" | "warning"> = {
 
 const RULE_DESCRIPTION: Record<string, string> = {
   "no-unlabeled-interactive":
-    "Interactive elements must have an accessible name.",
+    "Interactive elements, and tree items, tooltips, meters and progress bars, must have an accessible name.",
   "label-title-only":
     "Form controls should not be labeled only by title or aria-describedby.",
   "image-alt": "Images must have alternative text (or be marked decorative).",
