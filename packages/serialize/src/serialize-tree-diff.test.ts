@@ -636,6 +636,23 @@ describe("serializeTreeDiff: a text change that is also a name change", () => {
     );
   });
 
+  it("keeps the text line of a diff whose a11y.name change was filtered out", () => {
+    // A caller that drops `a11y.name` from `changes` gets no name line, so the
+    // text line is the only one left to say what changed.
+    const change = retexted(
+      "paragraph",
+      { name: "Pending", text: "Pending" },
+      { name: "Cancelled", text: "Cancelled" },
+    );
+    const diff: TreeDiff = {
+      ...empty,
+      changed: [{ ...change, changes: ["dom.textContent"] }],
+    };
+    expect(serializeTreeDiff(diff)).toBe(
+      '~ paragraph "Cancelled": dom.textContent "Pending" → "Cancelled"',
+    );
+  });
+
   it("keeps the text line where the node has no text on one side", () => {
     // `null` text is not an empty name: the two lines say different things.
     const diff: TreeDiff = {

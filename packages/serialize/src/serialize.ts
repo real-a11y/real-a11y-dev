@@ -480,9 +480,11 @@ function childIdsExplained(change: NodeChange, diff: TreeDiff): boolean {
  * on each side the text is the name, so the name changed between the same two
  * strings and its line already says it. Where the two differ — an `aria-label`
  * that stays put, a name from `aria-labelledby`, or one that also reads nested
- * elements — both lines print.
+ * elements — both lines print. So does the text line of a diff whose `changes`
+ * a caller filtered `a11y.name` out of: no name line would say it.
  */
-const textRepeatsName = ({ before, after }: NodeChange): boolean =>
+const textRepeatsName = ({ before, after, changes }: NodeChange): boolean =>
+  changes.includes("a11y.name") &&
   before.dom?.textContent === before.a11y.name &&
   after.dom?.textContent === after.a11y.name;
 
