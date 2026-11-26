@@ -3,7 +3,7 @@ id: R48
 suite: regression
 scenario: "Testing pkg — `a11yDiff` defaults set once in a setup file reach every diff, under Jest (CJS) and Vitest (ESM)"
 area: Testing
-type: Automated
+type: Manual
 priority: P1
 status: Active
 validFrom: "testing ≥ 0.1.0-beta.25. On 0.1.0-beta.24 or earlier `configureA11y` is not exported and `registerA11yMatchers` ignores a second argument, so every diff prints its `childIds` lines: that is the old behaviour, not a fail. Run it against a packed tarball, not the workspace: from source the two entries share one module and the failure this guards can't happen."

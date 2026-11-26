@@ -55,6 +55,9 @@ export function configureA11y(next: A11yConfig): void {
 /**
  * The options a diff prints with: the call's own, then the project's for each
  * key the call leaves `undefined`.
+ *
+ * @internal What `a11yDiff` and `flow().expectChanges` print with; not
+ * exported from the package.
  */
 export function diffOptions(options: A11yDiffOptions = {}): A11yDiffOptions {
   const defaults = config().diff ?? {};

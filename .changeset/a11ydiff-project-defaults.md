@@ -1,5 +1,5 @@
 ---
-"@real-a11y-dev/testing": patch
+"@real-a11y-dev/testing": minor
 ---
 
 Set `a11yDiff`'s options once for the whole project. A suite that wants `{ childIds: false }` in every diff no longer has to pass it to every call, and a call that forgets it no longer records a snapshot the other way. Pass the defaults to `registerA11yMatchers` in the setup file:
