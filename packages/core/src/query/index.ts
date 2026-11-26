@@ -1,7 +1,7 @@
 export { findByRole, findAllByRole } from "./find-by-role.js";
 export { linearize } from "./linearize.js";
 export { getOutline } from "./outline.js";
-export { getTabSequence } from "./tab-sequence.js";
+export { asStop, getTabSequence } from "./tab-sequence.js";
 export { diffTrees } from "./diff.js";
 
 export type { FindByRoleOptions, QueryInput } from "./types.js";

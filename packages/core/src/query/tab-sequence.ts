@@ -106,8 +106,11 @@ const STOP_ATTRIBUTES = ["tabindex", "role", "type"] as const;
  * description, value, text or naming attribute (`aria-label`, `id`, `name`, `class`)
  * to tell it by. The panels' search filters on the text, so a search for the
  * chosen option would otherwise still find it.
+ *
+ * @internal Also for any other view that singles one node out, such as
+ * `testing`'s timeline naming the focused node. Not a stability promise.
  */
-function asStop(node: SemanticNode): SemanticNode {
+export function asStop(node: SemanticNode): SemanticNode {
   if (!node.a11y.choiceWithheld) return node;
   const attributes: Record<string, string> = {};
   for (const name of STOP_ATTRIBUTES) {

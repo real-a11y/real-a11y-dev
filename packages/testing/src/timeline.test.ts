@@ -270,6 +270,42 @@ describe("recordTimeline", () => {
     expect(timeline.stop()).toMatchInlineSnapshot(`focus     button "Inside"`);
   });
 
+  it("follows focus between controls inside one shadow root", async () => {
+    // A move within one shadow root stops at its host: the document hears
+    // nothing, so the recorder listens in the shadow root too.
+    document.body.innerHTML = `<main><div id="host"></div></main>`;
+    const shadow = byId("host").attachShadow({ mode: "open" });
+    shadow.innerHTML = `<button>First</button><button>Second</button><button>Third</button>`;
+    const [first, second, third] = shadow.querySelectorAll("button");
+    first!.focus();
+    const timeline = recordTimeline(document.querySelector("main")!);
+    second!.focus();
+    await tick();
+    third!.focus();
+    expect(timeline.stop()).toMatchInlineSnapshot(`
+      focus     button "First"
+      focus     button "Second"
+      focus     button "Third"
+    `);
+  });
+
+  it("withholds a sensitive field's focused choice, as the tab order does", () => {
+    // Which option of a card-expiry popup holds focus says which month is
+    // chosen (ADR-0001), so its name never reaches the line.
+    document.body.innerHTML = `<main>
+      <input role="combobox" aria-label="Month" aria-expanded="true" aria-controls="lb" autocomplete="cc-exp-month">
+      <ul role="listbox" id="lb" aria-label="Months">
+        <li role="option" tabindex="-1">01</li>
+        <li role="option" tabindex="0" id="chosen" aria-selected="true">03</li>
+      </ul>
+    </main>`;
+    const timeline = recordTimeline(document.querySelector("main")!);
+    byId("chosen").focus();
+    const text = timeline.stop().text;
+    expect(text).not.toContain("03");
+    expect(text).toBe(`focus     option "[redacted]"`);
+  });
+
   it("records nothing for a focus that stays put", () => {
     const main = draftPage();
     byId("d").focus();
@@ -409,6 +445,26 @@ describe("recordTimeline announcements", () => {
     byId("l").insertAdjacentHTML("beforeend", `<div role="status">Hi</div>`);
     await tick();
     expect(timeline.stop()).toMatchInlineSnapshot(`announce  status "Hi"`);
+  });
+
+  it("stays silent for a child inserted under its own aria-live=off", async () => {
+    document.body.innerHTML = `<main><div role="status" id="s">Total</div></main>`;
+    const timeline = recordTimeline(document.querySelector("main")!);
+    byId("s").insertAdjacentHTML(
+      "beforeend",
+      `<span aria-live="off"> 2</span>`,
+    );
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`(nothing recorded)`);
+  });
+
+  it("announces nothing from a root taken off the page in the same block", async () => {
+    document.body.innerHTML = `<div role="dialog" aria-label="Edit" id="dlg"><p role="status" id="s"></p></div>`;
+    const timeline = recordTimeline(byId("dlg"));
+    byId("s").textContent = "Closed.";
+    byId("dlg").remove();
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`(nothing recorded)`);
   });
 
   it("treats the text a region holds at the start as already said", async () => {

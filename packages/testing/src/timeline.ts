@@ -5,6 +5,7 @@
 
 import type { ExtractionResult } from "@real-a11y-dev/core";
 import {
+  asStop,
   buildA11yTree,
   extractDomTree,
   getImplicitRole,
@@ -95,6 +96,19 @@ function exposed(tree: ExtractionResult, id: string): boolean {
   return true;
 }
 
+/** Is `node` an element under its own `aria-live="off"`? */
+function isSilent(node: Node): boolean {
+  return (
+    safeNodeType(node) === Node.ELEMENT_NODE &&
+    regionLevel(node as Element) === "off"
+  );
+}
+
+/** `holder`, silenced when `silent`. */
+function quieted(holder: Holder | null, silent: boolean): Holder | null {
+  return holder && silent ? { ...holder, quiet: true } : holder;
+}
+
 /** Is `region`'s level one that announces? */
 function isLive(level: Level | "off" | null): level is Level {
   return level !== null && level !== "off";
@@ -129,6 +143,14 @@ class TimelineRecorder {
   private readonly addListener = EventTarget.prototype.addEventListener;
   private readonly removeListener = EventTarget.prototype.removeEventListener;
   private readonly createTreeWalker = Document.prototype.createTreeWalker;
+  private readonly getRootNode = Node.prototype.getRootNode;
+  private readonly isConnected = Object.getOwnPropertyDescriptor(
+    Node.prototype,
+    "isConnected",
+  )!.get!;
+  /** Open shadow roots on focus's path. A move within one stops at its host
+   *  and never reaches the document, so each is listened to as well. */
+  private readonly shadowRoots = new Set<ShadowRoot>();
   private readonly lines: string[] = [];
   /** Each region's text when it last announced; gone once it empties. */
   private readonly lastText = new WeakMap<Element, string>();
@@ -184,6 +206,7 @@ class TimelineRecorder {
       // on nothing prints no line.
       const start = this.focusChange(0);
       if (start) this.lines.push(start.text);
+      this.listenInside(resolveFocusedElement(this.doc));
     }
   }
 
@@ -191,9 +214,9 @@ class TimelineRecorder {
     if (this.box) return this.box;
     this.settle();
     this.observer.disconnect();
-    if (this.options.focus) {
-      this.removeListener.call(this.doc, "focusin", this.onFocusIn, true);
-      this.removeListener.call(this.doc, "focusout", this.onFocusOut, true);
+    for (const target of [this.doc, ...this.shadowRoots]) {
+      this.removeListener.call(target, "focusin", this.onFocusIn, true);
+      this.removeListener.call(target, "focusout", this.onFocusOut, true);
     }
     this.box = boxSnapshot(
       this.lines.length ? this.lines.join("\n") : "(nothing recorded)",
@@ -201,10 +224,34 @@ class TimelineRecorder {
     return this.box;
   }
 
-  private readonly onFocusIn = (): void =>
-    this.moved(resolveFocusedElement(this.doc));
+  private readonly onFocusIn = (): void => {
+    const to = resolveFocusedElement(this.doc);
+    this.moved(to);
+    this.listenInside(to);
+  };
 
   private readonly onFocusOut = (): void => this.moved(null);
+
+  /** Listen in every open shadow root `element` is inside, once each. */
+  private listenInside(element: Element | null): void {
+    if (this.box) return;
+    for (let el = element; el;) {
+      const root = this.getRootNode.call(el);
+      if (!(root instanceof ShadowRoot)) return;
+      if (!this.shadowRoots.has(root)) {
+        this.shadowRoots.add(root);
+        this.addListener.call(root, "focusin", this.onFocusIn, true);
+        this.addListener.call(root, "focusout", this.onFocusOut, true);
+      }
+      el = root.host;
+    }
+  }
+
+  /** Is `element` in the root, and the root on the page? A region in a root
+   *  the block took off the page is read by nobody. */
+  private onPage(element: Element): boolean {
+    return this.inRoot(element) && this.isConnected.call(element) === true;
+  }
 
   /** Note a focus event at this point among the page's changes. */
   private moved(to: Element | null): void {
@@ -315,7 +362,9 @@ class TimelineRecorder {
     const kept = buildA11yTree(dom.nodes, dom.rootId, id, dom.source).nodes.get(
       id,
     );
-    const text = serializeTabStop(kept ?? node, {
+    // Singling a node out says what it is, so a sensitive field's choice is
+    // withheld here as the tab order withholds it (ADR-0001).
+    const text = serializeTabStop(asStop(kept ?? node), {
       redact: this.options.redact,
     });
     const reachable = (kept || exposed(dom, id)) && !this.hiddenAboveRoot();
@@ -380,7 +429,8 @@ class TimelineRecorder {
         continue;
       }
       if (record.removedNodes.length) {
-        write(this.regionHolding(record.target), at);
+        const silent = [...record.removedNodes].every(isSilent);
+        write(quieted(this.regionHolding(record.target), silent), at);
         removed.push(...record.removedNodes);
       }
       for (const node of record.addedNodes) this.added(node, record, at, write);
@@ -418,7 +468,8 @@ class TimelineRecorder {
       if (this.inRoot(element)) write({ region: element, quiet: false }, at);
       return;
     }
-    write(this.regionHolding(record.target), at);
+    // Content that arrives under its own `aria-live="off"` says nothing.
+    write(quieted(this.regionHolding(record.target), isSilent(node)), at);
     if (!element) return;
     for (const region of this.regionsWithin(element)) {
       write({ region, quiet: false }, at);
@@ -470,7 +521,7 @@ class TimelineRecorder {
    */
   private forget(node: Node): void {
     if (safeNodeType(node) !== Node.ELEMENT_NODE) return;
-    if (this.inRoot(node as Element)) return;
+    if (this.onPage(node as Element)) return;
     const walker = this.createTreeWalker.call(
       this.doc,
       node,
@@ -510,7 +561,7 @@ class TimelineRecorder {
    * whose text differs changed unseen, so it takes the text in quietly.
    */
   private announcement(region: Element, restyledOnly: boolean): string | null {
-    const level = this.inRoot(region) ? regionLevel(region) : null;
+    const level = this.onPage(region) ? regionLevel(region) : null;
     const text = isLive(level) ? announcedText(region) : "";
     const last = this.lastText.get(region);
     if (!isLive(level) || !text) {
@@ -531,7 +582,7 @@ class TimelineRecorder {
 
   /** A region changed under `aria-live="off"`: what it holds now is said. */
   private takeInQuietly(region: Element): void {
-    const level = this.inRoot(region) ? regionLevel(region) : null;
+    const level = this.onPage(region) ? regionLevel(region) : null;
     const text = isLive(level) ? announcedText(region) : "";
     if (text) this.remember(region, text);
   }
