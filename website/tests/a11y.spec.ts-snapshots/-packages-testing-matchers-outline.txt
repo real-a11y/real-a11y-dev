@@ -3,6 +3,7 @@ h1 Matchers
   h2 Setup
     h3 Vitest
     h3 Jest
+    h3 Project-wide defaults
   h2 Assertion matchers
   h2 toBeValidA11yTree()
   h2 toHaveTabSequence(expected)

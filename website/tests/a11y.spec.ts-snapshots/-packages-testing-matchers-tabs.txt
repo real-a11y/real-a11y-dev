@@ -21,6 +21,10 @@ button "Copy Code"
 generic
 button "Copy Code"
 generic
+link "a11yDiff"
+link "Setting the options once"
+button "Copy Code"
+generic
 link "assert* function"
 table
 button "Copy Code"

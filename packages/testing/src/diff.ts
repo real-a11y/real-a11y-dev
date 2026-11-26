@@ -4,8 +4,13 @@ import { diffTrees } from "@real-a11y-dev/core";
 import { serializeTreeDiff } from "@real-a11y-dev/serialize";
 
 import { capture, type A11yCapture } from "./capture.js";
+import { diffOptions } from "./config.js";
 import { boxSnapshot, type A11ySnapshotBox } from "./snapshot-box.js";
 
+/**
+ * How a diff prints. Each key left `undefined` takes the project's default
+ * (`configureA11y({ diff })`), then the built-in one.
+ */
 export interface A11yDiffOptions {
   /** Redact matching substrings from names/values (passed to serializeTreeDiff). */
   redact?: RegExp[];
@@ -28,8 +33,14 @@ interface Side {
   focus: SemanticNode | null | undefined;
 }
 
+/** `typeof` first: where there is no DOM, a bare `Element` reference throws,
+ *  and diffing two trees needs none. */
+function isElement(input: unknown): input is Element {
+  return typeof Element !== "undefined" && input instanceof Element;
+}
+
 function sideOf(input: A11yCapture | ExtractionResult | Element): Side {
-  if (input instanceof Element) {
+  if (isElement(input)) {
     const cap = capture(input);
     return { tree: cap.tree, focus: cap.focus };
   }
@@ -65,6 +76,9 @@ function sideOf(input: A11yCapture | ExtractionResult | Element): Side {
  * `@real-a11y-dev/testing/matchers`, as for `boxedTreeSnapshot`), a snapshot
  * prints the change list as plain text. Without it, the snapshot holds the
  * same text as a quoted string.
+ *
+ * `options` win key by key over the project's defaults, set once with
+ * `configureA11y({ diff })` or `registerA11yMatchers(expect, { diff })`.
  */
 export function a11yDiff(
   before: A11yCapture | ExtractionResult,
@@ -73,11 +87,10 @@ export function a11yDiff(
 ): A11ySnapshotBox {
   const b = sideOf(before);
   const a = sideOf(after);
+  const printing = diffOptions(options);
   return boxSnapshot(
     serializeTreeDiff(diffTrees(b.tree, a.tree), {
-      redact: options.redact,
-      values: options.values,
-      childIds: options.childIds,
+      ...printing,
       focusBefore: b.focus,
       focusAfter: a.focus,
     }),
@@ -87,7 +100,8 @@ export function a11yDiff(
       after: a.tree,
       focusBefore: b.focus === undefined ? undefined : (b.focus?.id ?? null),
       focusAfter: a.focus === undefined ? undefined : (a.focus?.id ?? null),
-      redact: options.redact,
+      // What the text was redacted with, so the report redacts the same.
+      redact: printing.redact,
     }),
   );
 }

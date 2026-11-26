@@ -94,6 +94,17 @@ main
     text "also needs"
     code ""isolatedModules": true"
     text "under Node16."
+  heading "Project-wide defaults" (level 3)
+  paragraph
+    code "registerA11yMatchers"
+    text "takes an optional second argument: the options every"
+    link "a11yDiff"
+      code "a11yDiff"
+    text "in the project prints with, unless a call passes its own. See"
+    link "Setting the options once"
+    text ":"
+  button "Copy Code"
+  code "registerA11yMatchers(expect, { diff: { childIds: false } });"
   heading "Assertion matchers" (level 2)
   paragraph
     text "Each wraps the matching"

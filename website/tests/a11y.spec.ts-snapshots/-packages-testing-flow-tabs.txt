@@ -25,8 +25,14 @@ button "Copy Code"
 generic
 button "Copy Code"
 generic
+link "diff defaults"
 link "diffTrees"
 link "CLI's"
+button "Copy Code"
+generic
+button "Copy Code"
+generic
+link "snapshot report"
 table
 button "Copy Code"
 generic

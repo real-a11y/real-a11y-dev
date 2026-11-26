@@ -68,6 +68,14 @@ module.exports = {
 The `/matchers` subpath is exposed through the package `exports` field, so TypeScript must read it. Use `"moduleResolution": "Node16"` (or `"NodeNext"` / `"Bundler"`) — the legacy `"node"` resolver ignores `exports` and the import won't resolve. `ts-jest` also needs `"isolatedModules": true` under Node16.
 :::
 
+### Project-wide defaults
+
+`registerA11yMatchers` takes an optional second argument: the options every [`a11yDiff`](/packages/testing/flow#asserting-what-an-interaction-changed) in the project prints with, unless a call passes its own. See [Setting the options once](/packages/testing/flow#setting-the-options-once):
+
+```ts
+registerA11yMatchers(expect, { diff: { childIds: false } });
+```
+
 ## Assertion matchers
 
 Each wraps the matching [`assert*` function](/packages/testing/assertions). They take a DOM root (e.g. `container`, `document.body`).

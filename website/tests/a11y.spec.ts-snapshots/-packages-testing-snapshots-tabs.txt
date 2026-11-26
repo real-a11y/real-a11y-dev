@@ -80,6 +80,7 @@ link "registerA11yMatchers(expect)"
 link "values: true"
 link "redactInput: true"
 link "redact"
+link "project defaults"
 button "Copy Code"
 generic
 table
