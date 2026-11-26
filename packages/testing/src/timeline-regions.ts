@@ -136,19 +136,24 @@ export function audible(region: Element, from: Map<Text, string>): string[] {
 }
 
 /**
- * Had a region that said `then` already said `now`? It had if the two read
- * the same, whichever nodes carry the words, or if `now` is `then` with some
- * of it taken away, the rest in the same order: a log trimmed of an old
- * entry says nothing new. Words put in a new order are new.
+ * Had a region that said `then` already said `now`? It had if `now` reads as
+ * `then` with some of its pieces taken away, the rest in the same order: the
+ * same words in other nodes, or a log trimmed of an old entry, say nothing
+ * new, however the words that stay are now split into text nodes. Words put
+ * in a new order are new.
  */
 export function alreadySaid(then: string[], now: string[]): boolean {
-  if (then.join("") === now.join("")) return true;
-  let i = 0;
-  for (const part of now) {
-    while (i < then.length && then[i] !== part) i++;
-    if (i++ === then.length) return false;
+  const said = now.join("");
+  // Where in `said` the pieces of `then` kept so far can reach.
+  let reached = new Set([0]);
+  for (const piece of then) {
+    const next = new Set(reached);
+    for (const at of reached) {
+      if (said.startsWith(piece, at)) next.add(at + piece.length);
+    }
+    reached = next;
   }
-  return true;
+  return reached.has(said.length);
 }
 
 /** Is `node` under an `aria-live="off"` inside `region`? The nearest

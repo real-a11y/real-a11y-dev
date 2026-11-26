@@ -627,6 +627,23 @@ describe("recordTimeline announcements", () => {
     `);
   });
 
+  it("keeps a log's new entry before a focus move whatever re-renders it after", async () => {
+    document.body.innerHTML = `<main><button id="b">Continue</button><div role="log" id="l"><p id="old">Connecting</p></div></main>`;
+    const timeline = recordTimeline(document.querySelector("main")!);
+    byId("l").insertAdjacentHTML(
+      "beforeend",
+      `<p id="new">Con<b>nected</b></p>`,
+    );
+    byId("b").focus();
+    byId("old").remove();
+    byId("new").textContent = "Connected";
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`
+      announce  log "Connected"
+      focus     button "Continue"
+    `);
+  });
+
   it("places slotted text changed before a focus move before it", async () => {
     document.body.innerHTML = `<div id="host"><span id="t" slot="msg"></span></div>`;
     const shadow = byId("host").attachShadow({ mode: "open" });
