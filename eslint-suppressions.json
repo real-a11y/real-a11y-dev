@@ -268,7 +268,7 @@
   },
   "packages/extension/src/native/native-core.ts": {
     "complexity": {
-      "count": 4
+      "count": 5
     },
     "max-lines-per-function": {
       "count": 4

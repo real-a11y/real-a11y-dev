@@ -1638,9 +1638,14 @@ export function pageType(this: Element, text: string): Marker {
     return { ok: true };
   }
 
-  // Nested rather than a sibling: the function is serialized with `String(fn)`,
-  // so every helper it calls has to live inside its own body.
-  const typeIntoEditable = (editable: HTMLElement): Marker => {
+  const editable = el as HTMLElement;
+  const editableAttr = editable.getAttribute("contenteditable");
+  const isEditable =
+    editable.isContentEditable === true ||
+    editableAttr === "" ||
+    editableAttr === "true" ||
+    editableAttr === "plaintext-only";
+  if (isEditable) {
     // Clearing is a deletion. An `insertText` carrying no data asks a
     // model-driven editor to insert nothing, so its content stays while the
     // marker reports success. Select everything first — Lexical reads the DOM
@@ -1691,16 +1696,7 @@ export function pageType(this: Element, text: string): Marker {
       );
     }
     return { ok: true };
-  };
-
-  const editable = el as HTMLElement;
-  const editableAttr = editable.getAttribute("contenteditable");
-  const isEditable =
-    editable.isContentEditable === true ||
-    editableAttr === "" ||
-    editableAttr === "true" ||
-    editableAttr === "plaintext-only";
-  if (isEditable) return typeIntoEditable(editable);
+  }
 
   return { ok: false, reason: "not-a-text-field" };
 }
