@@ -44,6 +44,38 @@ import {
   warnUnscopable,
 } from "./common.js";
 
+/**
+ * Open one audit target and return the URL the browser landed on. The first
+ * target may reuse the page the session already shows; every later one is
+ * navigated fresh. Both are held to the invocation-wide `allowedOrigins`.
+ */
+async function openAuditTarget(
+  session: import("@real-a11y-dev/browser").BrowserSession,
+  target: Target,
+  flags: FlagValues,
+  opts: { reuseCurrentPage: boolean; allowedOrigins: string[] | undefined },
+): Promise<string> {
+  if (opts.reuseCurrentPage) {
+    const { url } = await ensurePageOpen(
+      session,
+      target,
+      flags,
+      opts.allowedOrigins,
+    );
+    return url;
+  }
+  const openOptions = parseOpenOptions(flags);
+  openOptions.allowedOrigins = opts.allowedOrigins;
+  const { url } = await openPage(
+    session,
+    target.url,
+    openOptions,
+    target.fileApproved,
+    isAuthenticated(flags),
+  );
+  return url;
+}
+
 export async function runAuditOnSession(
   session: import("@real-a11y-dev/browser").BrowserSession,
   positionals: string[],
@@ -79,25 +111,10 @@ export async function runAuditOnSession(
       // failed first target does not let the second one silently reuse stale DOM.
       const reuseCurrentPage = isFirstAuditTarget;
       isFirstAuditTarget = false;
-      let finalUrl: string;
-      if (reuseCurrentPage) {
-        ({ url: finalUrl } = await ensurePageOpen(
-          session,
-          target,
-          flags,
-          invocationAllowedOrigins,
-        ));
-      } else {
-        const openOptions = parseOpenOptions(flags);
-        openOptions.allowedOrigins = invocationAllowedOrigins;
-        ({ url: finalUrl } = await openPage(
-          session,
-          target.url,
-          openOptions,
-          target.fileApproved,
-          isAuthenticated(flags),
-        ));
-      }
+      const finalUrl = await openAuditTarget(session, target, flags, {
+        reuseCurrentPage,
+        allowedOrigins: invocationAllowedOrigins,
+      });
       // Findings print names, never values; strict mode still withholds a
       // name computed from what was typed into an editor.
       const snapshot = await nativeSnapshot(session, {

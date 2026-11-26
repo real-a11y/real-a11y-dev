@@ -20,14 +20,6 @@
       "count": 1
     }
   },
-  "packages/cli/src/commands/audit.ts": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "packages/cli/src/commands/snapshot.ts": {
     "complexity": {
       "count": 1
