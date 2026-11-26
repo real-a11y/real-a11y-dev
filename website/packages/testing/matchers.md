@@ -82,7 +82,7 @@ Each wraps the matching [`assert*` function](/packages/testing/assertions). They
 
 | Matcher | Asserts |
 |---|---|
-| `toHaveNoUnlabeledInteractive()` | Every interactive node has a non-empty accessible name. |
+| `toHaveNoUnlabeledInteractive()` | Every interactive node, and every treeitem, tooltip, meter and progressbar, has a non-empty accessible name. |
 | `toHaveValidHeadingOrder()` | Exactly one `<h1>` and no skipped heading levels. |
 | `toHaveLabeledDialogs()` | Every `dialog` / `alertdialog` has an accessible name. |
 | `toHaveValidLandmarks()` | Exactly one `main`; at most one `banner` / `contentinfo`. |

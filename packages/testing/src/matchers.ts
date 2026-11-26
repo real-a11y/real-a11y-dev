@@ -634,7 +634,7 @@ export function registerA11yMatchers(
 // again, and TypeScript could not prove the two signatures identical (TS2320).
 
 export interface A11yMatchers<R = unknown> {
-  /** Every interactive node has a non-empty accessible name. */
+  /** Every interactive node, and every treeitem, tooltip, meter and progressbar, has a non-empty accessible name. */
   toHaveNoUnlabeledInteractive(): R;
   /** Exactly one `<h1>` and no skipped heading levels. */
   toHaveValidHeadingOrder(): R;

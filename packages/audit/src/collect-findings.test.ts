@@ -778,7 +778,7 @@ describe("collectFindings — locators on a pre-extracted tree", () => {
     expect(findings).toHaveLength(8);
     expect(findings.filter((f) => f.locator)).toHaveLength(4);
     expect(findings.filter((f) => !f.tagName)).toHaveLength(4);
-    expect(findings.every((f) => f.message.includes("Unnamed element"))).toBe(
+    expect(findings.every((f) => f.message.includes("Unlabeled element"))).toBe(
       true,
     );
   });

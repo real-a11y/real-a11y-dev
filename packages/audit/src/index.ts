@@ -454,7 +454,7 @@ function unlabeledInteractiveFindings(
       role: node.a11y.role,
       ...(tag ? { tagName: tag } : {}),
       message: `${
-        interactive ? "Unlabeled interactive element" : "Unnamed element"
+        interactive ? "Unlabeled interactive element" : "Unlabeled element"
       }: ${node.a11y.role}${tag ? ` <${tag}>` : ""}${
         interactive ? "" : " (this role requires an accessible name)"
       }`,
