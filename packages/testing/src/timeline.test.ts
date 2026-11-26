@@ -495,6 +495,27 @@ describe("recordTimeline announcements", () => {
     `);
   });
 
+  it("keeps a line before a focus move it came before, whatever changes after", async () => {
+    document.body.innerHTML = `<style>.more { display: none } .open .more { display: inline }</style>
+      <main id="m"><button id="a">Sync</button><button id="b">Close</button>
+      <p role="status" id="s">Saved <span class="more">3 files synced</span></p></main>`;
+    const timeline = recordTimeline(byId("m"));
+    byId("m").className = "open";
+    byId("a").focus();
+    byId("m").style.backgroundColor = "white";
+    await tick();
+    byId("s").textContent = "Done.";
+    byId("b").focus();
+    byId("s").className = "done";
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`
+      announce  status "Saved 3 files synced"
+      focus     button "Sync"
+      announce  status "Done."
+      focus     button "Close"
+    `);
+  });
+
   it("prints nothing for text a restyle or a removal takes away", async () => {
     document.body.innerHTML = `<style>.more { display: none } .open .more { display: inline }</style>
       <main id="m" class="open">
