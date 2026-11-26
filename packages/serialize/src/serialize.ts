@@ -477,18 +477,14 @@ function childIdsExplained(change: NodeChange, diff: TreeDiff): boolean {
 
 /**
  * True when a node's `dom.textContent` change repeats its `a11y.name` change:
- * both changed, and on each side the text is the name. The name's line already
- * says it. Where the two differ — an `aria-label` that stays put, a name from
- * `aria-labelledby`, or one that also reads nested elements — both lines print.
+ * on each side the text is the name, so the name changed between the same two
+ * strings and its line already says it. Where the two differ — an `aria-label`
+ * that stays put, a name from `aria-labelledby`, or one that also reads nested
+ * elements — both lines print.
  */
-function textRepeatsName(change: NodeChange): boolean {
-  const { before, after } = change;
-  return (
-    change.changes.includes("a11y.name") &&
-    before.dom?.textContent === before.a11y.name &&
-    after.dom?.textContent === after.a11y.name
-  );
-}
+const textRepeatsName = ({ before, after }: NodeChange): boolean =>
+  before.dom?.textContent === before.a11y.name &&
+  after.dom?.textContent === after.a11y.name;
 
 /** `<path> <before> → <after>` for one changed field of a node. */
 function changeDetail(
