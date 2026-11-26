@@ -8,6 +8,8 @@ import {
   buildA11yTree,
   extractDomTree,
   getImplicitRole,
+  isAriaHiddenValue,
+  LIVE_REGION_ATTRIBUTES,
   liveRegionLevel,
   pageText,
   renderingParent,
@@ -43,22 +45,6 @@ export interface A11yTimeline {
   stop(): A11ySnapshotBox;
 }
 
-/**
- * Attributes that can show or hide a region's text, or make an element a
- * region at all: revealing a pre-filled `role="alert"` changes nothing else.
- * The extension's live-region observer watches the same ones.
- */
-const LIVE_REGION_ATTRIBUTES = [
-  "hidden",
-  "inert",
-  "class",
-  "style",
-  "aria-hidden",
-  "open",
-  "role",
-  "aria-live",
-];
-
 /** The politeness each live role implies, for the `{live=…}` suffix. */
 const ROLE_LEVELS: ReadonlyMap<string, "polite" | "assertive"> = new Map([
   ["alert", "assertive"],
@@ -67,6 +53,13 @@ const ROLE_LEVELS: ReadonlyMap<string, "polite" | "assertive"> = new Map([
 ]);
 
 type Level = "polite" | "assertive";
+
+/** The live region a change belongs to, and whether a nested
+ *  `aria-live="off"` silenced it on the way there. */
+interface Holder {
+  region: Element;
+  quiet: boolean;
+}
 
 /**
  * How `el` announces: a politeness, `"off"` when its `aria-live` switches
@@ -102,6 +95,11 @@ function exposed(tree: ExtractionResult, id: string): boolean {
   return true;
 }
 
+/** Is `region`'s level one that announces? */
+function isLive(level: Level | "off" | null): level is Level {
+  return level !== null && level !== "off";
+}
+
 /** One recorded line, `focus     …` or `announce  …`. */
 function line(kind: "focus" | "announce", text: string): string {
   return `${kind.padEnd(10)}${text}`;
@@ -134,6 +132,8 @@ class TimelineRecorder {
   private readonly lines: string[] = [];
   /** Each region's text when it last announced; gone once it empties. */
   private readonly lastText = new WeakMap<Element, string>();
+  /** What it held then, `aria-hidden` above it aside ({@link heldText}). */
+  private readonly lastHeld = new WeakMap<Element, string>();
   private readonly doc: Document;
   private readonly observer: MutationObserver;
   /** What the page changed since the block last settled, in order. */
@@ -173,7 +173,7 @@ class TimelineRecorder {
         ? {
             characterData: true,
             attributes: true,
-            attributeFilter: LIVE_REGION_ATTRIBUTES,
+            attributeFilter: [...LIVE_REGION_ATTRIBUTES],
           }
         : {}),
     });
@@ -262,7 +262,9 @@ class TimelineRecorder {
       while (next < moves.length && moves[next]!.at <= i) {
         current = moves[next++]!.to;
       }
-      if (current && this.removes(record, current)) at = 2 * i + 1;
+      if (current && this.removes(record, current)) {
+        at = Math.max(at, 2 * i + 1);
+      }
     });
     return at < 0 ? 2 * records.length : at;
   }
@@ -293,8 +295,10 @@ class TimelineRecorder {
    * `element` as a tab stop prints it, or null when the root doesn't hold it.
    * A focused node the a11y view folds away (a `<div tabindex="-1">` with no
    * name) is still where the user is, so it falls back to the DOM view's
-   * node; one hidden from assistive tech gets a trailing `[hidden]`, since a
-   * screen reader meets nothing there.
+   * node. One assistive tech can't reach gets a trailing `[hidden]`, since a
+   * screen reader meets nothing there: inside `aria-hidden` or `inert`
+   * content, above the root as well as in it, or somewhere the tree doesn't
+   * walk at all (jsdom lets a `hidden` element take focus).
    */
   private focusLabel(element: Element): string | null {
     if (!this.inRoot(element)) return null;
@@ -306,66 +310,136 @@ class TimelineRecorder {
       includeFocused: true,
     });
     const id = dom.focusedId;
-    if (!id) return null;
+    const node = id ? dom.nodes.get(id) : undefined;
+    if (!id || !node) return `${getImplicitRole(element)} [hidden]`;
     const kept = buildA11yTree(dom.nodes, dom.rootId, id, dom.source).nodes.get(
       id,
     );
-    const node = kept ?? dom.nodes.get(id);
-    if (!node) return null;
-    const text = serializeTabStop(node, { redact: this.options.redact });
-    return kept || exposed(dom, id) ? text : `${text} [hidden]`;
+    const text = serializeTabStop(kept ?? node, {
+      redact: this.options.redact,
+    });
+    const reachable = (kept || exposed(dom, id)) && !this.hiddenAboveRoot();
+    return reachable ? text : `${text} [hidden]`;
+  }
+
+  /** Is the root inside `aria-hidden` or `inert` content? The tree, read
+   *  from the root down, can't see that. */
+  private hiddenAboveRoot(): boolean {
+    for (let el = renderingParent(this.root); el; el = renderingParent(el)) {
+      if (isAriaHiddenValue(safeGetAttribute(el, "aria-hidden"))) return true;
+      if (safeGetAttribute(el, "inert") !== null) return true;
+    }
+    return false;
   }
 
   // ─── live regions ──────────────────────────────────────────────────────────
 
-  /** An announce line for each region the block left holding new text. */
+  /**
+   * An announce line for each region the block left holding new text, at the
+   * last record that wrote to it: the text it prints exists only from there.
+   */
   private announcements(records: MutationRecord[]): Pending[] {
-    const regions = new Map<Element, number>();
-    const restyled = new Map<Element, number>();
-    const touch = (region: Element | null, at: number) => {
-      if (region && !regions.has(region)) regions.set(region, at);
-    };
-    for (const [i, record] of records.entries()) {
-      const at = 2 * i + 1;
-      touch(this.regionHolding(record.target), at);
-      if (record.type === "attributes") {
-        // Walked once per block, however often the page restyled it.
-        const target = record.target as Element;
-        if (!restyled.has(target)) restyled.set(target, at);
-        continue;
-      }
-      for (const node of record.removedNodes) this.forget(node);
-      for (const node of record.addedNodes) {
-        if (safeNodeType(node) !== Node.ELEMENT_NODE) continue;
-        for (const region of this.regionsWithin(node as Element)) {
-          touch(region, at);
-        }
-      }
-    }
-    for (const [element, at] of restyled) {
-      for (const region of this.regionsWithin(element)) touch(region, at);
-    }
+    const touches = this.collect(records);
     const pending: Pending[] = [];
-    for (const [region, at] of regions) {
-      const text = this.announcement(region);
+    for (const [region, at] of touches.written) {
+      const text = this.announcement(region, false);
       if (text) pending.push({ at, text });
     }
+    for (const [region, at] of touches.restyled) {
+      const text = this.announcement(region, true);
+      if (text) pending.push({ at, text });
+    }
+    for (const region of touches.quiet) this.takeInQuietly(region);
     return pending;
   }
 
+  /** Which regions the block wrote to, which it may only have shown or
+   *  hidden from above, and which it changed under `aria-live="off"`. */
+  private collect(records: MutationRecord[]): {
+    written: Map<Element, number>;
+    restyled: Map<Element, number>;
+    quiet: Set<Element>;
+  } {
+    const written = new Map<Element, number>();
+    const quiet = new Set<Element>();
+    const restyledAt = new Map<Element, number>();
+    const removed: Node[] = [];
+    const write = (holder: Holder | null, at: number) => {
+      if (holder?.quiet) quiet.add(holder.region);
+      else if (holder) written.set(holder.region, at);
+    };
+    for (const [i, record] of records.entries()) {
+      const at = 2 * i + 1;
+      if (record.type === "attributes") {
+        // Walked once per block, however often the page restyled it.
+        const target = record.target as Element;
+        if (!restyledAt.has(target)) restyledAt.set(target, at);
+      }
+      if (record.type !== "childList") {
+        write(this.regionHolding(record.target), at);
+        continue;
+      }
+      if (record.removedNodes.length) {
+        write(this.regionHolding(record.target), at);
+        removed.push(...record.removedNodes);
+      }
+      for (const node of record.addedNodes) this.added(node, record, at, write);
+    }
+    // A region moved within the block is still there, holding what it held.
+    for (const node of removed) this.forget(node);
+    const restyled = new Map<Element, number>();
+    for (const [element, at] of restyledAt) {
+      for (const region of this.regionsWithin(element)) {
+        if (!written.has(region) && !restyled.has(region)) {
+          restyled.set(region, at);
+        }
+      }
+    }
+    for (const region of [...written.keys(), ...restyled.keys()]) {
+      quiet.delete(region);
+    }
+    return { written, restyled, quiet };
+  }
+
+  /**
+   * What an added node writes to: a live region of its own (once, not again
+   * as part of a region around it), or else the region it joins, and any
+   * region inside it.
+   */
+  private added(
+    node: Node,
+    record: MutationRecord,
+    at: number,
+    write: (holder: Holder | null, at: number) => void,
+  ): void {
+    const element =
+      safeNodeType(node) === Node.ELEMENT_NODE ? (node as Element) : null;
+    if (element && isLive(regionLevel(element))) {
+      if (this.inRoot(element)) write({ region: element, quiet: false }, at);
+      return;
+    }
+    write(this.regionHolding(record.target), at);
+    if (!element) return;
+    for (const region of this.regionsWithin(element)) {
+      write({ region, quiet: false }, at);
+    }
+  }
+
   /** The nearest live region rendering `node`, if the root holds it. */
-  private regionHolding(node: Node): Element | null {
+  private regionHolding(node: Node): Holder | null {
     let element: Element | null;
     if (safeNodeType(node) === Node.ELEMENT_NODE) element = node as Element;
     else {
       // Text a slot renders belongs to the region around the slot.
       element = (node as Partial<Text>).assignedSlot ?? safeParentElement(node);
     }
+    // The nearest `aria-live` decides: under `off`, the region around still
+    // holds the change, but announces nothing for it.
+    let quiet = false;
     for (let el = element; el; el = renderingParent(el)) {
       const level = regionLevel(el);
-      // The nearest `aria-live` decides: `off` inside a region silences it.
-      if (level === "off") return null;
-      if (level) return this.inRoot(el) ? el : null;
+      if (level === "off") quiet = true;
+      else if (level) return this.inRoot(el) ? { region: el, quiet } : null;
       if (el === this.root) return null;
     }
     return null;
@@ -384,25 +458,26 @@ class TimelineRecorder {
       NodeFilter.SHOW_ELEMENT,
     );
     for (let n: Node | null = scope; n; n = walker.nextNode()) {
-      const level = regionLevel(n as Element);
-      if (level && level !== "off") found.push(n as Element);
+      if (isLive(regionLevel(n as Element))) found.push(n as Element);
     }
     return found;
   }
 
   /**
    * Forget the regions a removal took with it, as emptying one does: put
-   * back holding the same text, a region is announced again.
+   * back holding the same text, a region is announced again. Not one the
+   * block put back already, which only moved.
    */
   private forget(node: Node): void {
     if (safeNodeType(node) !== Node.ELEMENT_NODE) return;
+    if (this.inRoot(node as Element)) return;
     const walker = this.createTreeWalker.call(
       this.doc,
       node,
       NodeFilter.SHOW_ELEMENT,
     );
     for (let n: Node | null = node; n; n = walker.nextNode()) {
-      this.lastText.delete(n as Element);
+      this.forgetRegion(n as Element);
     }
   }
 
@@ -418,29 +493,73 @@ class TimelineRecorder {
   private readBaseline(): void {
     for (const region of this.regionsWithin(this.root)) {
       const text = announcedText(region);
-      if (text) this.lastText.set(region, text);
+      if (text) this.remember(region, text);
     }
   }
 
   /**
    * An announce line for `region`, if it now holds text it didn't hold when it
-   * last announced. Emptied or hidden, it forgets: the same text shown again
-   * is news again.
+   * last announced. Emptied, removed, or hidden by its own `hidden` or
+   * `display`, it forgets, so the same text shown again is news again. Hidden
+   * from assistive tech some other way (`aria-hidden` on an ancestor, as a
+   * modal does to the rest of the page), it keeps its text, and showing it
+   * again announces nothing.
+   *
+   * `restyledOnly` is a region the block reached only through a restyle above
+   * it, which can show or hide it but not change its text: a shown region
+   * whose text differs changed unseen, so it takes the text in quietly.
    */
-  private announcement(region: Element): string | null {
+  private announcement(region: Element, restyledOnly: boolean): string | null {
     const level = this.inRoot(region) ? regionLevel(region) : null;
-    const text = level && level !== "off" ? announcedText(region) : "";
-    if (!level || level === "off" || !text) {
-      this.lastText.delete(region);
+    const text = isLive(level) ? announcedText(region) : "";
+    const last = this.lastText.get(region);
+    if (!isLive(level) || !text) {
+      const held = this.lastHeld.get(region);
+      if (!isLive(level) || held === undefined || heldText(region) !== held) {
+        this.forgetRegion(region);
+      }
       return null;
     }
-    if (this.lastText.get(region) === text) return null;
-    this.lastText.set(region, text);
+    if (last === text) return null;
+    this.remember(region, text);
+    if (restyledOnly && last !== undefined) return null;
     const role = getImplicitRole(region);
     const live = ROLE_LEVELS.get(role) === level ? "" : ` {live=${level}}`;
     const said = redactString(text, this.options.redact);
     return line("announce", `${role} "${said}"${live}`);
   }
+
+  /** A region changed under `aria-live="off"`: what it holds now is said. */
+  private takeInQuietly(region: Element): void {
+    const level = this.inRoot(region) ? regionLevel(region) : null;
+    const text = isLive(level) ? announcedText(region) : "";
+    if (text) this.remember(region, text);
+  }
+
+  /** Note what `region` says now, and what it holds. */
+  private remember(region: Element, text: string): void {
+    this.lastText.set(region, text);
+    this.lastHeld.set(region, heldText(region));
+  }
+
+  private forgetRegion(region: Element): void {
+    this.lastText.delete(region);
+    this.lastHeld.delete(region);
+  }
+}
+
+/** One line of text, its white space collapsed. */
+function oneLine(text: string): string {
+  return text.replace(/[ \t\n\r\f]+/g, " ").trim();
+}
+
+/**
+ * What `region` holds whatever hides it from assistive tech above it: its
+ * text as rendered, `aria-hidden` and ancestors aside. Empty when it is
+ * emptied or hidden by its own `hidden` or `display`.
+ */
+function heldText(region: Element): string {
+  return oneLine(pageText(region, { lines: true }));
 }
 
 /**
@@ -450,9 +569,7 @@ class TimelineRecorder {
  * don't run together, then joined into one line.
  */
 function announcedText(region: Element): string {
-  return pageText(region, { announced: true, lines: true })
-    .replace(/[ \t\n\r\f]+/g, " ")
-    .trim();
+  return oneLine(pageText(region, { announced: true, lines: true }));
 }
 
 /**
@@ -478,16 +595,19 @@ function announcedText(region: Element): string {
  *   `role "name" {states}`, with `[hidden]` when assistive tech can't reach
  *   it. `(none)` means focus rests on `<body>` or `<html>`, or outside the
  *   root. The first line is where focus starts, unless it starts on nothing.
+ *   (In the example, React renders the status after the handler's `focus()`
+ *   has run, so focus lands first.)
  * - An **announce** line is the text a live region gains: an element with
  *   `aria-live="polite"` or `"assertive"`, or a `status` (an `<output>` too),
  *   `alert` or `log`. It names the region's role, and `{live=…}` when
  *   `aria-live` sets a politeness the role doesn't imply. A region emptied
- *   prints nothing, and so does the same text set again; emptied or removed
- *   first, it prints again.
+ *   prints nothing, and so does the same text set again; emptied, removed or
+ *   hidden by its own `hidden` first, it prints again. One hidden by
+ *   `aria-hidden` above it keeps its text.
  * - Lines follow the order the page made its changes. What one synchronous
- *   block of the page's code does renders together, so it is read once: text
- *   set and cleared in it, or focus passing through an element, prints
- *   nothing. Changes across tasks (an `await` between them) are all recorded.
+ *   run of the page's code does is read once: text set and cleared in it, or
+ *   focus passing through an element, prints nothing. Anything an `await`
+ *   separates is read separately, even an `await` of a resolved promise.
  *
  * Only what the root holds is recorded, so pass `document.body` to hear the
  * whole page. Changes inside a shadow root aren't seen: a `MutationObserver`

@@ -182,6 +182,42 @@ describe("recordTimeline", () => {
     `);
   });
 
+  it("keeps a removal, an announcement and a focus move in one block in their order", async () => {
+    const main = draftPage();
+    byId("d").focus();
+    const timeline = recordTimeline(main);
+    byId("d").closest("li")!.remove();
+    byId("s").textContent = "Deleted.";
+    byId("n").focus();
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`
+      focus     button "Delete draft"
+      announce  status "Deleted."
+      focus     button "New draft"
+    `);
+  });
+
+  it("marks focus inside aria-hidden content above the root", () => {
+    document.body.innerHTML = `<div aria-hidden="true"><main><button id="a">A</button></main></div>`;
+    const timeline = recordTimeline(document.querySelector("main")!);
+    byId("a").focus();
+    expect(timeline.stop()).toMatchInlineSnapshot(
+      `focus     button "A" [hidden]`,
+    );
+  });
+
+  it("marks focus on an element the tree doesn't reach, rather than (none)", async () => {
+    document.body.innerHTML = `<main><button id="v">Visible</button><div hidden><button id="h">Hidden</button></div></main>`;
+    const timeline = recordTimeline(document.querySelector("main")!);
+    byId("v").focus();
+    await tick();
+    byId("h").focus();
+    expect(timeline.stop()).toMatchInlineSnapshot(`
+      focus     button "Visible"
+      focus     button [hidden]
+    `);
+  });
+
   it("marks focus that lands where assistive tech can't reach", () => {
     document.body.innerHTML = `<main><div aria-hidden="true"><button id="h">Hidden</button></div></main>`;
     const timeline = recordTimeline(document.querySelector("main")!);
@@ -313,10 +349,66 @@ describe("recordTimeline announcements", () => {
 
   it("stays silent for a change under aria-live=off inside a region", async () => {
     document.body.innerHTML = `<main><div role="status">Total: <span aria-live="off" id="c">1</span></div></main>`;
-    const timeline = recordTimeline(document.querySelector("main")!);
+    const timeline = recordTimeline(document.body);
     byId("c").textContent = "2";
     await tick();
+    // Nor does a later restyle above it bring the silenced change up.
+    document.body.className = "theme-dark";
+    await tick();
     expect(timeline.stop()).toMatchInlineSnapshot(`(nothing recorded)`);
+  });
+
+  it("places text written after a focus move after it", async () => {
+    const main = draftPage();
+    const timeline = recordTimeline(main);
+    byId("s").textContent = "Working";
+    byId("n").focus();
+    byId("s").textContent = "Done";
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`
+      focus     button "New draft"
+      announce  status "Done"
+    `);
+  });
+
+  it("records text an await of a resolved promise separates, as documented", async () => {
+    // A browser would render both writes together; the recorder reads at the
+    // first microtask checkpoint, so it hears the first one.
+    const main = draftPage();
+    const timeline = recordTimeline(main);
+    byId("s").textContent = "Saving…";
+    await Promise.resolve();
+    byId("s").textContent = "";
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`announce  status "Saving…"`);
+  });
+
+  it("doesn't announce a region moved within one block", async () => {
+    const main = draftPage();
+    byId("s").textContent = "Hi";
+    const timeline = recordTimeline(main);
+    main.append(byId("s"));
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`(nothing recorded)`);
+  });
+
+  it("doesn't announce a region again when aria-hidden above it comes off", async () => {
+    // A modal hides the rest of the page this way, and shows it again.
+    document.body.innerHTML = `<div id="app"><p role="status">3 results</p></div>`;
+    const timeline = recordTimeline(document.body);
+    byId("app").setAttribute("aria-hidden", "true");
+    await tick();
+    byId("app").removeAttribute("aria-hidden");
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`(nothing recorded)`);
+  });
+
+  it("announces a region inserted into another once, as itself", async () => {
+    document.body.innerHTML = `<main><div role="log" id="l"></div></main>`;
+    const timeline = recordTimeline(document.querySelector("main")!);
+    byId("l").insertAdjacentHTML("beforeend", `<div role="status">Hi</div>`);
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`announce  status "Hi"`);
   });
 
   it("treats the text a region holds at the start as already said", async () => {

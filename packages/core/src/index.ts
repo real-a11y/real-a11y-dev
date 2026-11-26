@@ -84,7 +84,10 @@ export { ignoresChildText, isTextVisible } from "./extraction/dom-extractor.js";
 // elements are one: the extension's live-region line and field state, and
 // `testing`'s timeline, read the page's text through this one walk.
 export { pageText } from "./extraction/page-text.js";
-export { liveRegionLevel } from "./extraction/overlay-scope.js";
+export {
+  LIVE_REGION_ATTRIBUTES,
+  liveRegionLevel,
+} from "./extraction/overlay-scope.js";
 export {
   flatChildNodes,
   isRenderedInFlatTree,

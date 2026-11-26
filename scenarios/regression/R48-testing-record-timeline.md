@@ -54,7 +54,10 @@ From the packed tarball in a scratch Vitest project (`environment: "jsdom"`,
   ```
   `focus     (none)` is the drop to `<body>` when the focused button was removed,
   which jsdom fires no event for
-- **2** — `(nothing recorded)`: text that never rendered is never announced
+- **2** — `(nothing recorded)`: text set and cleared in one synchronous run
+  never rendered, so it is never announced. (Separated by an `await`, even of a
+  resolved promise, the two writes are read apart and the first prints; the
+  docs say so.)
 - **3** — two `announce  status "Saved."` lines, not three
 - **4** — the three `focus` lines alone, then the two `announce` lines alone
 - **5** — throws a `TypeError` saying it records nothing

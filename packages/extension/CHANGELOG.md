@@ -39,6 +39,7 @@
   field state read the page's text through `pageText` and `liveRegionLevel` in
   `core`, where the reader moved so `@real-a11y-dev/testing`'s timeline can
   share it, instead of a copy of their own.
+  ([#728](https://github.com/real-a11y/real-a11y-dev/pull/728))
 - **The TAB view lists a frame as a tab stop.** An `<iframe>` now appears once,
   where Tab enters it, unless the frame's own stops are listed in its place; the
   key bar's Tab can move focus onto the frame's document. Keyboard-focusable

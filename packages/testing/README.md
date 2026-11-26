@@ -152,7 +152,7 @@ expect(timeline.stop()).toMatchInlineSnapshot(`
 `);
 ```
 
-`focus     (none)` is focus falling to the page when the row was removed, and the last two lines say focus landed before the message arrived: neither shows in a diff of the two ends. Pass `{ announcements: false }` or `{ focus: false }` for one half alone, and `redact` as in the other snapshots. See [Recording what happened in between](https://real-a11y.dev/packages/testing/flow#recording-what-happened-in-between).
+`focus     (none)` is focus falling to the page when the row was removed. The last two lines say focus landed before the message arrived: this is a React component, which renders the status after its handler's `focus()` has run, so a handler that sets the status first still moves focus first. Plain DOM code that does the same prints the announce line first. Neither shows in a diff of the two ends. Pass `{ announcements: false }` or `{ focus: false }` for one half alone, and `redact` as in the other snapshots. See [Recording what happened in between](https://real-a11y.dev/packages/testing/flow#recording-what-happened-in-between).
 
 ## See snapshots as a tree
 

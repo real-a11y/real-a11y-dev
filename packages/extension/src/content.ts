@@ -9,6 +9,7 @@ import {
   getElementRefs,
   getExplicitRole,
   getNodeId,
+  LIVE_REGION_ATTRIBUTES,
   liveRegionLevel,
   pageText,
   renderingParent,
@@ -695,22 +696,6 @@ const onNativePreview = (e: Event) => highlightFromNativeEvent(e, "preview");
 
 // ---- Live region observer (top frame only) ----
 
-/**
- * Attributes that can show or hide a region's content, or make an element a
- * region at all. Revealing a pre-filled `role="alert"` is an attribute change
- * and nothing else, and Chromium announces it.
- */
-const LIVE_REGION_ATTRIBUTES = [
-  "hidden",
-  "inert",
-  "class",
-  "style",
-  "aria-hidden",
-  "open",
-  "role",
-  "aria-live",
-];
-
 if (!isSubFrame) {
   // Through the prototype: a `<form>` whose control is named `isConnected`
   // shadows its own. Core's readers cover the rest. A selector engine is no
@@ -863,7 +848,7 @@ function observeLiveRegions() {
     subtree: true,
     characterData: true,
     attributes: true,
-    attributeFilter: LIVE_REGION_ATTRIBUTES,
+    attributeFilter: [...LIVE_REGION_ATTRIBUTES],
   });
 }
 
