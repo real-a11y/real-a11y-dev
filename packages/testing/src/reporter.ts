@@ -1,8 +1,9 @@
 /**
  * `@real-a11y-dev/testing/reporter` — a Vitest reporter that turns a run's
- * a11y snapshots into one page you can open: each `boxedTreeSnapshot()` and
- * `a11yDiff()` snapshot drawn the way the Semantic Navigator panel draws a
- * tree, with the states, the actions and the change marks its text leaves
+ * a11y snapshots into one page you can open: each boxed snapshot (a
+ * `boxedTreeSnapshot()`, `boxedTabSequenceSnapshot()`, `boxedOutlineSnapshot()`
+ * or `a11yDiff()`) drawn the way the Semantic Navigator panel draws a tree,
+ * with the states, the actions and the change marks its text leaves
  * out. Jest has its own: `@real-a11y-dev/testing/reporter/jest`.
  *
  * ```ts

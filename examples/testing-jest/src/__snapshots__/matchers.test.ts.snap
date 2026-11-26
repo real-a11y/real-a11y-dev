@@ -1,5 +1,11 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
+exports[`boxedOutlineSnapshot under Jest keeps a boxed outline that starts below h1 in toMatchSnapshot() 1`] = `
+  h2 Card
+    h3 Details
+  h2 Next
+`;
+
 exports[`boxedTreeSnapshot serializer under Jest renders the semantic tree into toMatchSnapshot() 1`] = `
 main
   heading "Sign in" (level 1)

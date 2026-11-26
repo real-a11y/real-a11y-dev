@@ -225,6 +225,8 @@ h1 Introduction
 
 Honors `markFocus` (default `true`) — a focused heading is shown with a trailing `[focused]`. See [Focus marker](#focus-marker).
 
+An `outlineSnapshot` string doesn't reach the [snapshot report](#the-snapshot-report). Snapshot [`boxedOutlineSnapshot(root)`](/packages/testing/matchers#boxedtabsequencesnapshot-root-options-and-boxedoutlinesnapshot-root-options) instead: the same text, and the report opens the tree behind it on its headings. Where its first heading is below `h1`, snapshot it with `toMatchSnapshot()`: an inline snapshot doesn't keep its first line's indentation ([why](/packages/testing/matchers#boxedtabsequencesnapshot-root-options-and-boxedoutlinesnapshot-root-options)).
+
 ## `tabSequenceSnapshot(root, options?)`
 
 Returns the tab sequence, one stop per line in Tab order.
@@ -252,6 +254,8 @@ A rich-text editor counts the way Chromium counts it. Each `contenteditable` reg
 Lines carry **no** `NN.` position number: line order already conveys the sequence, and a hard-coded number renumbers every following line the moment one stop is inserted near the top — churning the whole snapshot's diff for one real change. For a human-read listing where an explicit "stop 7" helps, add the numbers at render time with `numberTabStops` from `@real-a11y-dev/testing` (`numberTabStops(tabSequenceSnapshot(root))`); never store the numbered form.
 
 Honors `markFocus` (default `true`) — the currently-focused stop is shown with a trailing `[focused]`. See [Focus marker](#focus-marker).
+
+A `tabSequenceSnapshot` string doesn't reach the [snapshot report](#the-snapshot-report). Snapshot [`boxedTabSequenceSnapshot(root)`](/packages/testing/matchers#boxedtabsequencesnapshot-root-options-and-boxedoutlinesnapshot-root-options) instead: the same text, and the report opens the tree behind it on the TAB view.
 
 ## Focus marker
 
@@ -341,8 +345,9 @@ The page is one self-contained file. It opens from disk, needs no server, and wo
 
 ### What it shows
 
-- **Every boxed snapshot of the run**, by test file and test: each [`boxedTreeSnapshot()`](/packages/testing/matchers#boxedtreesnapshot-root-options-—-snapshot-serializer) and each [`a11yDiff()`](/packages/testing/flow#asserting-what-an-interaction-changed).
+- **Every boxed snapshot of the run**, by test file and test: each [`boxedTreeSnapshot()`](/packages/testing/matchers#boxedtreesnapshot-root-options-—-snapshot-serializer), [`boxedTabSequenceSnapshot()` and `boxedOutlineSnapshot()`](/packages/testing/matchers#boxedtabsequencesnapshot-root-options-and-boxedoutlinesnapshot-root-options), and each [`a11yDiff()`](/packages/testing/flow#asserting-what-an-interaction-changed).
 - **A tree snapshot as a tree** you can open and close, with each row's states and what it takes (`interactive`, `focusable`, `selected`, `invalid`, …), filters for headings, links, buttons, forms and landmarks, and the TAB view: the tab stops in order.
+- **A tab sequence or an outline on its view.** A `boxedTabSequenceSnapshot()` opens its tree on the TAB view, and a `boxedOutlineSnapshot()` on the headings filter, each badged `tabs` or `outline` in the list. The rest of the tree is a click away. A view that wouldn't list exactly what the text printed opens on the tree instead, badged `tree`: an outline of a DOM-view tree that holds headings AT can't reach, which the filter would list, or a record that leaves a stop or a heading out ([What it records](#what-it-records)).
 - **A diff on the tree it describes.** The after tree opens with what changed marked: new rows, changed rows with the field that changed (a description, the order of a row's children and where focus went among them), and a count of rows removed. The before tree is one click away.
 - **The snapshot's text** beside it, as the `.snap` holds it, its `+` added, `-` removed and `~` changed lines coloured.
 
@@ -350,7 +355,7 @@ Its `.snap` text is still what a test asserts. The report only shows a snapshot,
 
 ### What it records
 
-Only a boxed snapshot has a tree behind it. A snapshot of a plain string, such as `expect(treeSnapshot(el)).toMatchSnapshot()`, has none, so it doesn't appear. Snapshot `boxedTreeSnapshot(el)` instead to see it in the report. Each record is named after its test, which the recorder reads from the `expect` you pass to [`registerA11yMatchers(expect)`](/packages/testing/matchers), or from the runner's own `expect` (Vitest's too with `globals` off). Vitest names a test `describe > test`, which the page splits into its describe path and its own name; Jest joins the two with a space, so the page shows the whole name.
+Only a boxed snapshot has a tree behind it. A snapshot of a plain string, such as `expect(treeSnapshot(el)).toMatchSnapshot()`, has none, so it doesn't appear. Snapshot its boxed twin instead to see it in the report: `boxedTreeSnapshot(el)` for `treeSnapshot(el)`, `boxedTabSequenceSnapshot(el)` for `tabSequenceSnapshot(el)`, and `boxedOutlineSnapshot(el)` for `outlineSnapshot(el)`. Each prints the same text. A committed snapshot changes once, when you switch: it loses the quotes a string snapshots inside, and every line stays as it was. A boxed outline whose first heading is below `h1` [takes `toMatchSnapshot()`](/packages/testing/matchers#boxedtabsequencesnapshot-root-options-and-boxedoutlinesnapshot-root-options), not an inline snapshot. Each record is named after its test, which the recorder reads from the `expect` you pass to [`registerA11yMatchers(expect)`](/packages/testing/matchers), or from the runner's own `expect` (Vitest's too with `globals` off). Vitest names a test `describe > test`, which the page splits into its describe path and its own name; Jest joins the two with a space, so the page shows the whole name.
 
 Which tests record:
 
@@ -361,7 +366,8 @@ Which tests record:
 A record carries the tree's states, as the text does, but nothing typed into the page:
 
 - **No field value**, even where the snapshot printed one with [`values: true`](#field-values): the text beside the tree shows it, and the tree holds none. No `a11y.value`, and no `value`, `aria-valuenow` or `aria-valuetext` attribute.
-- **Nothing inside an editor.** A rich-text editor's lines and runs are left out of the record, and the nodes above a field keep their own text but not a preview of the field's.
+- **Nothing inside an editor.** A rich-text editor's lines and runs are left out of the record, and the nodes above a field keep their own text but not a preview of the field's. A tab stop inside an editor, such as a mention chip's link, stays in its place in the TAB view, named `[redacted]` and with no states.
+- **No sensitive field's choice.** The tree already withholds which option of a sensitive field's popup is chosen, and the tab order names its stop `[redacted]`. The record keeps every option of that popup alike, so it can't say which is chosen. The options of a list box or a date grid have no `tabindex` and aren't focusable. Elsewhere in the popup, a chosen item (a pressed button among buttons, a selected tab) reads as the others do. Focus on any of them shows on what the choice is made in: the list box, the grid, or the popup. A tab sequence that printed such a stop opens on the tree.
 - **Sensitive fields are masked** as the extractor reads the page, and [`redactInput: true`](#strict-mode) withholds every value and all editor content from the record as from the text.
 - **A snapshot's [`redact`](#using-redact) patterns**, an `a11yDiff`'s [project defaults](/packages/testing/flow#setting-the-options-once) included, apply to everything in the record the page supplied: names, descriptions, text, and attribute values, the page's own element ids included. They leave alone what the record builds its tree from and what the panel reads as structure: node ids, roles, `tabindex`, a heading's level, and states. So a pattern like `/\d+/` can't merge rows or reorder the tab stops.
 

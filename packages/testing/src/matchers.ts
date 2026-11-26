@@ -39,6 +39,8 @@ import {
 import {
   extract,
   foldTypography,
+  serializeOutline,
+  serializeTabSequence,
   serializeTree,
   type SerializeOptions,
 } from "@real-a11y-dev/serialize";
@@ -58,6 +60,7 @@ import {
   a11ySnapshotSerializer,
   boxSnapshot,
   type A11ySnapshotBox,
+  type SnapshotView,
 } from "./snapshot-box.js";
 import { bindSnapshotRecorder, isRecording } from "./snapshot-record.js";
 import { computedAriaAttributes } from "./validated-attrs.js";
@@ -538,23 +541,77 @@ export function boxedTreeSnapshot(
   root: Element | Tree,
   options?: SerializeOptions,
 ): A11ySnapshotBox {
-  // Anything but a tree or an element goes to `serializeTree` as it came, so
-  // its input check throws the same error with the recorder on as off.
+  return boxPrinted(root, options, {
+    print: serializeTree,
+    mode: options?.mode ?? "a11y",
+  });
+}
+
+/**
+ * `tabSequenceSnapshot` as a box: the same text, byte for byte. What the box
+ * adds is the snapshot report: the record keeps the tree the sequence was
+ * printed from, and opens it on the panel's TAB view. A `tabSequenceSnapshot`
+ * string reaches no report. (A committed string snapshot changes once on the
+ * switch, losing the quotes a string prints with.)
+ */
+export function boxedTabSequenceSnapshot(
+  root: Element | Tree,
+  options?: SerializeOptions,
+): A11ySnapshotBox {
+  return boxPrinted(root, options, {
+    print: serializeTabSequence,
+    mode: "a11y",
+    view: "tab",
+  });
+}
+
+/**
+ * `outlineSnapshot` as a box: the same text, byte for byte. What the box adds
+ * is the snapshot report: the record keeps the tree the outline was printed
+ * from, and opens it on the panel's headings filter. An `outlineSnapshot`
+ * string reaches no report. (A committed string snapshot changes once on the
+ * switch, losing the quotes a string prints with.)
+ */
+export function boxedOutlineSnapshot(
+  root: Element | Tree,
+  options?: SerializeOptions,
+): A11ySnapshotBox {
+  return boxPrinted(root, options, {
+    print: serializeOutline,
+    mode: "a11y",
+    view: "headings",
+  });
+}
+
+/** How a boxed snapshot prints its text, and where its record opens. */
+interface Printing {
+  print: (input: Element | Tree, options?: SerializeOptions) => string;
+  /** The read `print` makes of a root: always `"a11y"` but for a tree's. */
+  mode: "a11y" | "dom";
+  view?: SnapshotView;
+}
+
+function boxPrinted(
+  root: Element | Tree,
+  options: SerializeOptions | undefined,
+  { print, mode, view }: Printing,
+): A11ySnapshotBox {
+  // Anything but a tree or an element goes to `print` as it came, so its
+  // input check throws the same error with the recorder on as off.
   if (!isRecording() || !(isTree(root) || isElement(root))) {
-    return boxSnapshot(serializeTree(root, options));
+    return boxSnapshot(print(root, options));
   }
   // Recording: read the page once, now, and print the text from that read,
   // so the record is the tree the text describes even if the page changes
-  // before the box is snapshotted. The read `serializeTree` makes of a root.
+  // before the box is snapshotted.
   const tree = isTree(root)
     ? root
-    : extract(root, options?.mode ?? "a11y", {
-        redactInput: Boolean(options?.redactInput),
-      });
-  return boxSnapshot(serializeTree(tree, options), () => ({
+    : extract(root, mode, { redactInput: Boolean(options?.redactInput) });
+  return boxSnapshot(print(tree, options), () => ({
     kind: "tree",
     tree,
     redact: options?.redact,
+    ...(view ? { view } : {}),
   }));
 }
 

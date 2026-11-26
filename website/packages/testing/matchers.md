@@ -1,6 +1,6 @@
 ---
 title: "Matchers — @real-a11y-dev/testing"
-description: Custom expect matchers for Vitest and Jest — toHaveNoUnlabeledInteractive, toHaveValidHeadingOrder, toHaveTabSequence, toMatchA11yContract — plus the boxedTreeSnapshot serializer.
+description: Custom expect matchers for Vitest and Jest — toHaveNoUnlabeledInteractive, toHaveValidHeadingOrder, toHaveTabSequence, toMatchA11yContract — plus boxedTreeSnapshot and its tab-sequence and outline twins.
 ---
 
 # Matchers
@@ -314,6 +314,28 @@ When in doubt: `treeSnapshot` for "I need the string," `boxedTreeSnapshot` for "
 ### Modal scoping in snapshots
 
 Because the snapshot reflects the extracted a11y tree, an open dialog **scopes** the snapshot — content behind a modal is inert to assistive tech, so it drops out and the snapshot captures only the dialog. That makes the snapshot a precise regression artifact for the modal state, not just the page.
+
+## `boxedTabSequenceSnapshot(root, options?)` and `boxedOutlineSnapshot(root, options?)`
+
+[`tabSequenceSnapshot`](/packages/testing/snapshots#tabsequencesnapshot-root-options) and [`outlineSnapshot`](/packages/testing/snapshots#outlinesnapshot-root-options) as boxes, the way `boxedTreeSnapshot` boxes `treeSnapshot`. They take the same options and print the same text, byte for byte:
+
+```ts
+import {
+  boxedOutlineSnapshot,
+  boxedTabSequenceSnapshot,
+} from "@real-a11y-dev/testing/matchers";
+
+expect(boxedTabSequenceSnapshot(container)).toMatchSnapshot("tab-sequence");
+expect(boxedOutlineSnapshot(container)).toMatchSnapshot("heading-outline");
+```
+
+What a box adds is the [snapshot report](/packages/testing/snapshots#the-snapshot-report), which only boxed snapshots reach. Each of these records the tree its text was printed from, and the report opens that tree on what the text shows: the TAB view for a tab sequence, the headings filter for an outline. Where that view wouldn't list exactly what the text printed, it opens on the tree ([why](/packages/testing/snapshots#what-it-shows)). A `tabSequenceSnapshot` or `outlineSnapshot` string has no tree behind it, so it never appears there.
+
+Switching a committed snapshot from the string to the box changes it once, in its quotes alone: the serializer prints a box's text as it is, where a string snapshots inside quotes. Every line stays the same. Update the snapshots (`vitest -u` or `jest -u`) and the diff shows only the quotes going.
+
+An outline whose first heading is below `h1` is the exception, inline. Its text starts with indentation (`  h2 Card`), and neither runner keeps a first line's indentation in an inline snapshot. Jest takes it for indentation it added and strips it on reading, so the snapshot it wrote fails on every later run. Vitest drops it on writing, so the stored outline indents that heading as an `h1`'s. Snapshot such an outline with `toMatchSnapshot()`, which keeps every line as printed. The `outlineSnapshot` string is unaffected inline, because its opening quote comes first.
+
+Keep the string where you use it as one, say to split the tab sequence into lines and look for a name that repeats.
 
 ## Rules, contracts, and snapshots — which to reach for
 

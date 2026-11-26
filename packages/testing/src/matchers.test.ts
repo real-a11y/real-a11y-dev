@@ -1,6 +1,15 @@
 import { describe, it, expect, beforeAll } from "vitest";
 
-import { registerA11yMatchers, boxedTreeSnapshot } from "./matchers.js";
+import {
+  registerA11yMatchers,
+  boxedOutlineSnapshot,
+  boxedTabSequenceSnapshot,
+  boxedTreeSnapshot,
+} from "./matchers.js";
+
+import { a11ySnapshotSerializer } from "./matchers.js";
+
+import { outlineSnapshot, tabSequenceSnapshot } from "./index.js";
 
 beforeAll(() => {
   registerA11yMatchers(expect);
@@ -246,8 +255,57 @@ describe("boxedTreeSnapshot serializer", () => {
   });
 });
 
+describe("boxedTabSequenceSnapshot and boxedOutlineSnapshot", () => {
+  const page = `
+    <h1>Book a table</h1>
+    <h2>When</h2>
+    <label>Date <input type="text" value="2030-11-18"></label>
+    <h2>Who</h2>
+    <a href="/terms">Terms</a>
+    <button aria-pressed="true">Window seat</button>`;
+
+  it("print what tabSequenceSnapshot and outlineSnapshot print, byte for byte", () => {
+    const root = mount(page);
+    root.querySelector("input")!.focus();
+    for (const options of [
+      undefined,
+      { values: true },
+      { states: false },
+      { markFocus: false },
+      { redact: [/Window/] },
+    ]) {
+      expect(boxedTabSequenceSnapshot(root, options).text).toBe(
+        tabSequenceSnapshot(root, options),
+      );
+      expect(boxedOutlineSnapshot(root, options).text).toBe(
+        outlineSnapshot(root, options),
+      );
+    }
+  });
+
+  it("render unquoted through the serializer", () => {
+    const root = mount(page);
+    expect(boxedTabSequenceSnapshot(root)).toMatchInlineSnapshot(`
+      textbox "Date"
+      link "Terms"
+      button "Window seat" {pressed}
+    `);
+    expect(boxedOutlineSnapshot(root)).toMatchInlineSnapshot(`
+      h1 Book a table
+        h2 When
+        h2 Who
+    `);
+  });
+
+  it("throw on a root that is neither an element nor a tree, as the strings do", () => {
+    expect(() => boxedTabSequenceSnapshot(null as never)).toThrow(
+      /serializeTabSequence/,
+    );
+    expect(() => boxedOutlineSnapshot(42 as never)).toThrow(/serializeOutline/);
+  });
+});
+
 // Small helper so the redaction test doesn't depend on snapshot internals.
-import { a11ySnapshotSerializer } from "./matchers.js";
 function a11ySnapshotSerializerText(box: unknown): string {
   return a11ySnapshotSerializer.test(box)
     ? a11ySnapshotSerializer.serialize(box)

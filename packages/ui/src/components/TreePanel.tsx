@@ -158,6 +158,13 @@ export interface TreePanelProps {
 
   // ── Settings ────────────────────────────────────────────────────────────────
   /**
+   * The role filter the panel starts on, such as `"heading"` for a list of
+   * the headings. Default none: the whole tree. Read when the panel mounts:
+   * after that it is the user's, from the toolbar. The TAB view clears it,
+   * as it clears any filter.
+   */
+  defaultRoleFilter?: RoleFilter;
+  /**
    * Whether the tree starts out showing names in full, rather than ending a
    * long one in an ellipsis. Default `false`. Read when the panel mounts:
    * after that it is the user's, from the toolbar's Settings.
@@ -198,6 +205,7 @@ export function TreePanel({
   onTogglePickMode,
   pickedNodeId = null,
   onPickedNodeHandled,
+  defaultRoleFilter = null,
   defaultShowFullNames = false,
   showFullNames: shownFullNames,
   onShowFullNamesChange,
@@ -207,7 +215,7 @@ export function TreePanel({
   const instanceId = useInstanceId();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [roleFilter, setRoleFilter] = useState<RoleFilter>(null);
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>(defaultRoleFilter);
   const [ownShowFullNames, setShowFullNames] = useState(defaultShowFullNames);
   const showFullNames = shownFullNames ?? ownShowFullNames;
   // A change always renders again, so a switch whose caller keeps the choice

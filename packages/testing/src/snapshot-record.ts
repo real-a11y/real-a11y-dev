@@ -1,10 +1,11 @@
 /**
  * The snapshot report's recorder. With `REAL_A11Y_TREES_DIR` set — the
  * reporter (`reporter.ts`) sets it for a run — every boxed a11y snapshot a
- * test takes, `boxedTreeSnapshot` or `a11yDiff`, also writes the tree(s) its
- * text was printed from as JSON, so the viewer (`packages/snapshot-viewer`)
- * can draw them with the panel the extension uses: the states, the actions
- * and the change marks the text leaves out.
+ * test takes (`boxedTreeSnapshot`, `boxedTabSequenceSnapshot`,
+ * `boxedOutlineSnapshot` or `a11yDiff`) also writes the tree(s) its text was
+ * printed from as JSON, so the viewer (`packages/snapshot-viewer`) can draw
+ * them with the panel the extension uses: the states, the actions and the
+ * change marks the text leaves out.
  *
  * The `.snap` text stays the assertion. This only ever writes beside it, and
  * never fails a test: a recorder that can't write says so once and stops.
@@ -21,15 +22,27 @@
  * `expect(serializeTree(el)).toMatchSnapshot()`) has no tree to write.
  */
 
-import { toRecordedTree, type RecordedTree } from "./recorded-tree.js";
-import type { A11ySnapshotBox, SnapshotTrees } from "./snapshot-box.js";
+import {
+  listsAsPrinted,
+  toRecordedTree,
+  type RecordedTree,
+} from "./recorded-tree.js";
+import type {
+  A11ySnapshotBox,
+  SnapshotTrees,
+  SnapshotView,
+} from "./snapshot-box.js";
 
 export type { RecordedTree } from "./recorded-tree.js";
 
 /** The directory records go to; recording is off while it is unset. */
 export const TREES_DIR_ENV = "REAL_A11Y_TREES_DIR";
 
-/** Bumped when a record's shape changes; the viewer refuses others. */
+/**
+ * Bumped when a record's shape changes; the viewer refuses others. Not for
+ * a field a viewer can do without: `view` came later, and a viewer that
+ * doesn't read it opens such a record on the tree, as it did before.
+ */
 export const RECORD_VERSION = 2;
 
 /** One boxed snapshot, as the viewer reads it. */
@@ -51,6 +64,10 @@ export interface SnapshotRecord {
   text: string;
   recordedAt: string;
   tree?: RecordedTree;
+  /** The view a tree opens on, for a snapshot of its tab sequence or its
+   *  outline; left out for one of the whole tree, and where that view
+   *  wouldn't list what the text printed (`listsAsPrinted`). */
+  view?: SnapshotView;
   before?: RecordedTree;
   after?: RecordedTree;
   focusBefore?: string | null;
@@ -316,7 +333,14 @@ function toRecord(
     recordedAt: new RealDate().toISOString(),
   } as const;
   if (trees.kind === "tree") {
-    return { ...base, tree: toRecordedTree(trees.tree).recorded };
+    const { recorded } = toRecordedTree(trees.tree);
+    // Opened on its view only where that view lists what the text printed:
+    // otherwise on the tree, the text beside it.
+    const view =
+      trees.view && listsAsPrinted(trees.view, trees.tree, recorded)
+        ? trees.view
+        : undefined;
+    return { ...base, tree: recorded, ...(view ? { view } : {}) };
   }
   const before = toRecordedTree(trees.before);
   const after = toRecordedTree(trees.after);

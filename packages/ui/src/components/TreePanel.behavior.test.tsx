@@ -184,6 +184,25 @@ describe("TreePanel behavior", () => {
     ).toBeNull();
   });
 
+  it("starts on the role filter it is given, and leaves it to the user", async () => {
+    const tree = extractA11yTree(host);
+    panel(tree, { defaultRoleFilter: "button" });
+    await waitFor(container, '[aria-label="button elements"]');
+    const chip = (label: string) =>
+      [...container.querySelectorAll(".sn-filter-btn")].find(
+        (el) => el.textContent === label,
+      ) as HTMLButtonElement;
+    expect(chip("Buttons").getAttribute("aria-pressed")).toBe("true");
+
+    // Read once: a new tree keeps the user's choice, not the default.
+    act(() => chip("Buttons").click());
+    panel(extractA11yTree(host), { defaultRoleFilter: "button" });
+    expect(
+      container.querySelector('[aria-label="button elements"]'),
+    ).toBeNull();
+    expect(container.querySelector('[role="tree"]')).not.toBeNull();
+  });
+
   it("renders an aria-controls jump chip on the trigger", async () => {
     const tree = extractA11yTree(host);
     // Ensure ancestors are expanded so the Open button row is mounted.

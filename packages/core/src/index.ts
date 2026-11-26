@@ -54,6 +54,11 @@ export {
   SENSITIVE_AUTOCOMPLETE_TOKENS,
   VALUELESS_INPUT_TYPES,
 } from "./extraction/sensitivity.js";
+// @internal — the roles a sensitive choice is made in, for a reader of a
+// tree outside core: the snapshot recorder, which keeps a choice's items
+// alike and moves focus on one to its container. Shared policy, not a
+// stable list.
+export { POPUP_CHOICE_ROLES } from "./extraction/sensitivity.js";
 // @internal — strict mode's test for what a user typed in, for a reader of
 // the live page outside core: audit's finding locators.
 export { insideEditor, withholdsState } from "./extraction/strict-mode.js";

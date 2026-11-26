@@ -161,7 +161,7 @@ explains. A name that depends on it differs between the two.
 | **Snapshots** | Deterministic strings of the a11y tree, heading outline, and tab order — diff-friendly, safe to commit. | [Snapshots →](/packages/testing/snapshots) |
 | **Snapshot report** | `@real-a11y-dev/testing/reporter` (Vitest) and `…/reporter/jest` (Jest): reporters that draw every boxed snapshot of a run as a tree, states and changes marked, in one HTML page. | [Snapshot report →](/packages/testing/snapshots#the-snapshot-report) |
 | **Assertions** | `assert*` functions that throw descriptive errors on broken structure. | [Assertions →](/packages/testing/assertions) |
-| **Matchers** | The same checks as ergonomic `expect` matchers, plus the `boxedTreeSnapshot()` serializer. Vitest + Jest. | [Matchers →](/packages/testing/matchers) |
+| **Matchers** | The same checks as ergonomic `expect` matchers, plus the boxed snapshots that reach the snapshot report: `boxedTreeSnapshot()`, `boxedTabSequenceSnapshot()` and `boxedOutlineSnapshot()`. Vitest + Jest. | [Matchers →](/packages/testing/matchers) |
 | **Flow API** | Fluent interaction chains that assert about the tree after each step. | [Flow API →](/packages/testing/flow) |
 | **Playwright adapter** | Run every helper against a real browser page via `attach(page)`. Its `treeSnapshot()` and `tabSequenceSnapshot()` (options: `TabSequenceSnapshotOptions`) take `states` like jsdom's. | [Playwright →](/packages/testing/playwright) |
 

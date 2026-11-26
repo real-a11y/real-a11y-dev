@@ -6,7 +6,10 @@
 // This mirrors a slice of the Vitest example — the runtime matchers are
 // framework-agnostic, so this exists to guard the *Jest* registration and
 // typing path specifically, not to re-test the matcher logic.
-import { boxedTreeSnapshot } from "@real-a11y-dev/testing/matchers";
+import {
+  boxedOutlineSnapshot,
+  boxedTreeSnapshot,
+} from "@real-a11y-dev/testing/matchers";
 
 function mount(html: string): Element {
   document.body.innerHTML = "";
@@ -75,5 +78,17 @@ describe("boxedTreeSnapshot serializer under Jest", () => {
       </main>
     `);
     expect(boxedTreeSnapshot(root)).toMatchSnapshot();
+  });
+});
+
+describe("boxedOutlineSnapshot under Jest", () => {
+  // An outline that starts below h1 starts with indentation, which an
+  // inline snapshot doesn't keep on its first line: Jest strips it on
+  // reading. `toMatchSnapshot()` keeps every line as printed.
+  it("keeps a boxed outline that starts below h1 in toMatchSnapshot()", () => {
+    const root = mount(`<h2>Card</h2><h3>Details</h3><h2>Next</h2>`);
+    const box = boxedOutlineSnapshot(root);
+    expect(box.text).toBe("  h2 Card\n    h3 Details\n  h2 Next");
+    expect(box).toMatchSnapshot();
   });
 });

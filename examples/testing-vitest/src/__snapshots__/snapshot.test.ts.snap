@@ -1,11 +1,19 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
 exports[`outlineSnapshot > formats a nested heading outline 1`] = `
-"h1 Introduction
+h1 Introduction
   h2 Getting started
   h2 Configuration
     h3 Advanced options
-  h2 API reference"
+  h2 API reference
+`;
+
+exports[`tabSequenceSnapshot > lists focusable elements in order 1`] = `
+link "Skip to content"
+link "Home"
+link "About"
+searchbox "Search"
+button "Go"
 `;
 
 exports[`treeSnapshot > captures the full a11y tree of a form 1`] = `

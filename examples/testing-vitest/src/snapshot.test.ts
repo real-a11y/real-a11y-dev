@@ -4,6 +4,10 @@ import {
   outlineSnapshot,
   tabSequenceSnapshot,
 } from "@real-a11y-dev/testing";
+import {
+  boxedOutlineSnapshot,
+  boxedTabSequenceSnapshot,
+} from "@real-a11y-dev/testing/matchers";
 import { fixture, cleanup } from "./fixtures.js";
 
 afterEach(cleanup);
@@ -79,7 +83,9 @@ describe("outlineSnapshot", () => {
     expect(outline).toContain("Introduction");
     expect(outline).toContain("Getting started");
     expect(outline).toContain("Advanced options");
-    expect(outline).toMatchSnapshot();
+    // The same text, boxed: a boxed snapshot is the one the snapshot report
+    // draws, here on the panel's headings filter.
+    expect(boxedOutlineSnapshot(root)).toMatchSnapshot();
   });
 });
 
@@ -104,5 +110,7 @@ describe("tabSequenceSnapshot", () => {
     expect(snapshot).toContain("Home");
     expect(snapshot).toContain("Search");
     expect(snapshot).toContain("Go");
+    // Boxed, it reaches the snapshot report, which opens it on the TAB view.
+    expect(boxedTabSequenceSnapshot(root)).toMatchSnapshot();
   });
 });
