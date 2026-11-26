@@ -467,6 +467,42 @@ describe("recordTimeline announcements", () => {
     expect(timeline.stop()).toMatchInlineSnapshot(`(nothing recorded)`);
   });
 
+  it("announces text a restyle above a shown region reveals in it", async () => {
+    document.body.innerHTML = `<style>.more { display: none } .open .more { display: inline }</style>
+      <main id="m"><p role="status">Saved <span class="more">3 files synced</span></p></main>`;
+    const timeline = recordTimeline(byId("m"));
+    byId("m").className = "open";
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(
+      `announce  status "Saved 3 files synced"`,
+    );
+  });
+
+  it("announces a region inside an inserted region for itself too", async () => {
+    document.body.innerHTML = `<main></main>`;
+    const main = document.querySelector("main")!;
+    const timeline = recordTimeline(main);
+    main.insertAdjacentHTML(
+      "beforeend",
+      `<div role="log">Attempt 1 <p role="alert">Session expired.</p></div>`,
+    );
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`
+      announce  log "Attempt 1 Session expired."
+      announce  alert "Session expired."
+    `);
+  });
+
+  it("forgets a region a silent removal emptied, so the same text is news again", async () => {
+    document.body.innerHTML = `<main><p role="status" id="s"><span aria-live="off" id="o">Saved.</span></p></main>`;
+    const timeline = recordTimeline(document.querySelector("main")!);
+    byId("o").remove();
+    await tick();
+    byId("s").textContent = "Saved.";
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`announce  status "Saved."`);
+  });
+
   it("treats the text a region holds at the start as already said", async () => {
     document.body.innerHTML = `<main><p role="status" id="s">3 results</p></main>`;
     const timeline = recordTimeline(document.querySelector("main")!);

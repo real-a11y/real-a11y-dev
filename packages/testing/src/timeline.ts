@@ -390,12 +390,8 @@ class TimelineRecorder {
   private announcements(records: MutationRecord[]): Pending[] {
     const touches = this.collect(records);
     const pending: Pending[] = [];
-    for (const [region, at] of touches.written) {
-      const text = this.announcement(region, false);
-      if (text) pending.push({ at, text });
-    }
-    for (const [region, at] of touches.restyled) {
-      const text = this.announcement(region, true);
+    for (const [region, at] of [...touches.written, ...touches.restyled]) {
+      const text = this.announcement(region);
       if (text) pending.push({ at, text });
     }
     for (const region of touches.quiet) this.takeInQuietly(region);
@@ -453,8 +449,8 @@ class TimelineRecorder {
 
   /**
    * What an added node writes to: a live region of its own (once, not again
-   * as part of a region around it), or else the region it joins, and any
-   * region inside it.
+   * as part of a region around it), or else the region it joins; and either
+   * way any region inside it, which announces for itself.
    */
   private added(
     node: Node,
@@ -465,7 +461,10 @@ class TimelineRecorder {
     const element =
       safeNodeType(node) === Node.ELEMENT_NODE ? (node as Element) : null;
     if (element && isLive(regionLevel(element))) {
-      if (this.inRoot(element)) write({ region: element, quiet: false }, at);
+      // `regionsWithin` starts at the element itself.
+      for (const region of this.regionsWithin(element)) {
+        write({ region, quiet: false }, at);
+      }
       return;
     }
     // Content that arrives under its own `aria-live="off"` says nothing.
@@ -555,36 +554,43 @@ class TimelineRecorder {
    * from assistive tech some other way (`aria-hidden` on an ancestor, as a
    * modal does to the rest of the page), it keeps its text, and showing it
    * again announces nothing.
-   *
-   * `restyledOnly` is a region the block reached only through a restyle above
-   * it, which can show or hide it but not change its text: a shown region
-   * whose text differs changed unseen, so it takes the text in quietly.
    */
-  private announcement(region: Element, restyledOnly: boolean): string | null {
+  private announcement(region: Element): string | null {
     const level = this.onPage(region) ? regionLevel(region) : null;
     const text = isLive(level) ? announcedText(region) : "";
-    const last = this.lastText.get(region);
     if (!isLive(level) || !text) {
-      const held = this.lastHeld.get(region);
-      if (!isLive(level) || held === undefined || heldText(region) !== held) {
-        this.forgetRegion(region);
-      }
+      this.saysNothing(region, level);
       return null;
     }
-    if (last === text) return null;
+    if (this.lastText.get(region) === text) return null;
     this.remember(region, text);
-    if (restyledOnly && last !== undefined) return null;
     const role = getImplicitRole(region);
     const live = ROLE_LEVELS.get(role) === level ? "" : ` {live=${level}}`;
     const said = redactString(text, this.options.redact);
     return line("announce", `${role} "${said}"${live}`);
   }
 
-  /** A region changed under `aria-live="off"`: what it holds now is said. */
+  /**
+   * A region changed under `aria-live="off"`: what it holds now counts as
+   * said, and emptied, it forgets, as an announcing change would leave it.
+   */
   private takeInQuietly(region: Element): void {
     const level = this.onPage(region) ? regionLevel(region) : null;
     const text = isLive(level) ? announcedText(region) : "";
     if (text) this.remember(region, text);
+    else this.saysNothing(region, level);
+  }
+
+  /**
+   * `region` says nothing now. Emptied, removed or no longer a region, it
+   * forgets; hidden from assistive tech above it with the same text, it
+   * keeps it ({@link heldText}).
+   */
+  private saysNothing(region: Element, level: Level | "off" | null): void {
+    const held = this.lastHeld.get(region);
+    if (!isLive(level) || held === undefined || heldText(region) !== held) {
+      this.forgetRegion(region);
+    }
   }
 
   /** Note what `region` says now, and what it holds. */
