@@ -22,7 +22,7 @@ import { boxSnapshot, type A11ySnapshotBox } from "./snapshot-box.js";
 import {
   alreadySaid,
   announcedRead,
-  audible,
+  audibleRead,
   gains,
   heldFrom,
   hiddenAbove,
@@ -30,7 +30,6 @@ import {
   regionLevel,
   renderedIn,
   ROLE_LEVELS,
-  type RegionRead,
   type Said,
 } from "./timeline-regions.js";
 
@@ -53,11 +52,6 @@ export interface A11yTimeline {
    * `expect(...).toMatchSnapshot()`. Later calls return the same box.
    */
   stop(): A11ySnapshotBox;
-}
-
-/** What `region` said in a read, for placing its line ({@link alreadySaid}). */
-function said(region: Element, read: RegionRead): Said {
-  return { text: read.text, from: audible(region, read.from) };
 }
 
 /** Is `element` inside `node`, across shadow roots and slots? */
@@ -251,7 +245,7 @@ class TimelineRecorder {
     });
     if (!fresh) return last?.said;
     return new Map(
-      this.regionsWithin(this.root).map((r) => [r, said(r, announcedRead(r))]),
+      this.regionsWithin(this.root).map((r) => [r, audibleRead(r)]),
     );
   }
 
@@ -400,11 +394,9 @@ class TimelineRecorder {
    * hadn't rendered.
    */
   private heardAt(region: Element, positions: number[], moves: Move[]): number {
-    const text = this.lastText.get(region);
-    const from = this.lastFrom.get(region);
-    const now = text !== undefined && from && said(region, { text, from });
+    const now = audibleRead(region);
     let first = moves.length;
-    while (first > 0 && now) {
+    while (first > 0) {
       const then = moves[first - 1]!.said?.get(region);
       if (!then || !alreadySaid(then, now)) break;
       first--;

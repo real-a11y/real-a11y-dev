@@ -158,6 +158,8 @@ interface Walk {
   readonly out: TextBuilder;
   /** Where to note each text node the read takes text from, if anywhere. */
   readonly texts: Text[] | undefined;
+  /** Which text nodes to read, if not all. */
+  readonly keep: ((node: Text) => boolean) | undefined;
   /** An explicit stack, not recursion: a page's depth is the page's to choose. */
   readonly stack: Pending[];
 }
@@ -184,7 +186,7 @@ function visit(
 ): void {
   const type = safeNodeType(node);
   if (type === Node.TEXT_NODE) {
-    if (!visible) return;
+    if (!visible || (walk.keep && !walk.keep(node as Text))) return;
     walk.out.textNode((node as Text).data, whiteSpace);
     walk.texts?.push(node as Text);
     return;
@@ -229,6 +231,9 @@ function visit(
  * pushed onto that array: which nodes a region's text comes from, so a
  * reader can tell text shown anew from text it already showed.
  *
+ * With `keep`, only the text nodes it accepts: the read leaves the others
+ * out but keeps the page's layout, its line and word breaks, around them.
+ *
  * @internal For reads of a page's text outside core: the extension's
  * live-region line and field state, and `testing`'s timeline. Not a
  * stability promise.
@@ -239,7 +244,13 @@ export function pageText(
     announced = false,
     lines = false,
     texts,
-  }: { announced?: boolean; lines?: boolean; texts?: Text[] } = {},
+    keep,
+  }: {
+    announced?: boolean;
+    lines?: boolean;
+    texts?: Text[];
+    keep?: (node: Text) => boolean;
+  } = {},
 ): string {
   const rootStyle = getComputedStyle(root);
   const unread = announced
@@ -251,6 +262,7 @@ export function pageText(
     announced,
     lines,
     texts,
+    keep,
     out: new TextBuilder(lines),
     stack: [],
   };

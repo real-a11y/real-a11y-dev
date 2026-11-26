@@ -68,6 +68,19 @@ describe("pageText", () => {
     expect(texts.map((t) => t.data)).toEqual(["Hi ", "there", "✓"]);
   });
 
+  it("reads only the text nodes keep accepts, layout kept", () => {
+    const root = mount(`<p>Saved <span id="n">1</span> files</p><p>Done</p>`);
+    const n = document.getElementById("n")!.firstChild;
+    const texts: Text[] = [];
+    const text = pageText(root, {
+      lines: true,
+      texts,
+      keep: (node) => node !== n,
+    });
+    expect(text).toBe("Saved files\nDone");
+    expect(texts.map((t) => t.data)).toEqual(["Saved ", " files", "Done"]);
+  });
+
   it("reads slotted content where the shadow tree renders it", () => {
     const root = mount(`<div id="host"><span>middle</span></div>`);
     const shadow = document

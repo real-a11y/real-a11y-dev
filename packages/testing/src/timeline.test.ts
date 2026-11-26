@@ -679,6 +679,32 @@ describe("recordTimeline announcements", () => {
     `);
   });
 
+  it("places text that only becomes audible after a focus move after it", async () => {
+    document.body.innerHTML = `<main><button id="b">Done</button><p role="status" id="s"></p></main>`;
+    const timeline = recordTimeline(document.querySelector("main")!);
+    byId("s").innerHTML = `<span aria-live="off">Saved</span>`;
+    byId("b").focus();
+    byId("s").innerHTML = "<span>Saved</span>";
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`
+      focus     button "Done"
+      announce  status "Saved"
+    `);
+  });
+
+  it("keeps a line before a focus move that a silent edit and a re-render follow", async () => {
+    document.body.innerHTML = `<main><button id="b">Done</button><p role="status" id="s"></p></main>`;
+    const timeline = recordTimeline(document.querySelector("main")!);
+    byId("s").innerHTML = `<span>Saved </span><span aria-live="off">1</span>`;
+    byId("b").focus();
+    byId("s").innerHTML = `<span>Saved </span><span aria-live="off">2</span>`;
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`
+      announce  status "Saved 2"
+      focus     button "Done"
+    `);
+  });
+
   it("places slotted text changed before a focus move before it", async () => {
     document.body.innerHTML = `<div id="host"><span id="t" slot="msg"></span></div>`;
     const shadow = byId("host").attachShadow({ mode: "open" });

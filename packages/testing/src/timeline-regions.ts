@@ -121,27 +121,31 @@ export function gains(
   return false;
 }
 
-/**
- * The text nodes `region` says aloud, in reading order: its text without
- * what sits under an `aria-live="off"` inside it, and without nodes of white
- * space alone.
- */
-export function audible(
-  region: Element,
-  from: Map<Text, string>,
-): Map<Text, string> {
-  const said = new Map<Text, string>();
-  for (const [node, data] of from) {
-    if (/\S/.test(data) && !silentIn(node, region)) said.set(node, data);
-  }
-  return said;
-}
-
-/** What a region said at one moment: its text as rendered, on one line,
- *  and the text nodes it says aloud ({@link audible}). */
+/** What a region said aloud at one moment: its rendered text on one line,
+ *  and the text nodes that text comes from. */
 export interface Said {
   text: string;
   from: Map<Text, string>;
+}
+
+/**
+ * What `region` says aloud now, for placing its line: {@link announcedRead}
+ * without what sits under an `aria-live="off"` inside it, so a silent edit
+ * reads as nothing said and silenced text as not said yet, with the page's
+ * word and line breaks kept around it. Nodes of white space alone aside.
+ */
+export function audibleRead(region: Element): Said {
+  const texts: Text[] = [];
+  const text = pageText(region, {
+    announced: true,
+    lines: true,
+    texts,
+    keep: (node) => !silentIn(node, region),
+  });
+  return {
+    text: oneLine(text),
+    from: dataOf(texts.filter((node) => /\S/.test(node.data))),
+  };
 }
 
 /**
