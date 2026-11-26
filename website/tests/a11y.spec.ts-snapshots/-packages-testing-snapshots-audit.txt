@@ -766,7 +766,10 @@ main
   paragraph
     text "Only a boxed snapshot has a tree behind it. A snapshot of a plain string, such as"
     code "expect(treeSnapshot(el)).toMatchSnapshot()"
-    text ", has none, so it doesn't appear. Snapshot its boxed twin instead to see it in the report:"
+    text ", has none, so it doesn't appear, and neither does a"
+    link "recordTimeline"
+      code "recordTimeline"
+    text "box yet. Snapshot its boxed twin instead to see it in the report:"
     code "boxedTreeSnapshot(el)"
     text "for"
     code "treeSnapshot(el)"

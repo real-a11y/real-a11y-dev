@@ -10,6 +10,8 @@ h1 Flow API
     h3 Style A — capture + a11yDiff (imperative, inline snapshot)
     h3 Style B — flow().expectChanges (fluent, structured)
     h3 Setting the options once
+  h2 Recording what happened in between
+    h3 recordTimeline(root, options?)
   h2 flow(root, options?)
   h2 Utilities
     h3 waitForMutations(root, options?)
