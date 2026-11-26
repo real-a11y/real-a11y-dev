@@ -14,8 +14,9 @@ docs: <https://real-a11y.dev/packages/testing/snapshots#the-snapshot-report>.
 ## How it works
 
 1. **Recording.** While `REAL_A11Y_TREES_DIR` is set (the reporter sets it for
-   its run), every boxed snapshot a test takes (`boxedTreeSnapshot` or
-   `a11yDiff`) also writes the tree it was printed from to
+   its run), every boxed snapshot a test takes (`boxedTreeSnapshot`,
+   `boxedTabSequenceSnapshot`, `boxedOutlineSnapshot` or `a11yDiff`) also
+   writes the tree it was printed from to
    `<dir>/<test file>/<test name>-<n>.json`. A diff saves both the before and
    the after tree. See `packages/testing/src/snapshot-record.ts`.
 2. **Viewing.** The app lists every record by test file and draws the selected

@@ -50,6 +50,7 @@ export {
   isChoiceState,
   isSensitiveField,
   isSensitiveFieldAttributes,
+  POPUP_CHOICE_ROLES,
   REDACTED_VALUE,
   SENSITIVE_AUTOCOMPLETE_TOKENS,
   VALUELESS_INPUT_TYPES,

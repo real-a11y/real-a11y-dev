@@ -44,7 +44,8 @@ Tests:
 3. Select the **diff** record, then **Before**, then the TAB view
 4. `grep -r "VALUE-SENTINEL\|PW-SENTINEL\|4821-7730" a11y-snapshots/`
    - _(testing ≥ the first release after 0.1.0-beta.24)_ Then select the
-     **tabs** record, then the **outline** record, then the A11Y view on it
+     **tabs** record, then the **outline** record, then switch its Headings
+     filter off
 5. In watch mode (`vitest`), edit the **tree** test's file so it reruns alone
 6. Jest: add `reporters: ["default", "@real-a11y-dev/testing/reporter/jest"]`
    and run `jest`, then again with two test files and `--maxWorkers=2`, then

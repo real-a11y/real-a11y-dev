@@ -5,16 +5,18 @@
  * it holds none, whatever the snapshot's text printed.
  *
  * Nor does it say which choice a sensitive field holds. The tree withholds
- * that choice's states and marks each option it is made among
- * (`a11y.choiceWithheld`), and the tab order names the one stop among them
+ * that choice's states and marks the options it is made among
+ * (`a11y.choiceWithheld`), and the tab order names a stop among them
  * `[redacted]` (`getTabSequence`), since the stop of a roving-tabindex list
  * is its chosen option. A record would still say which: by that option's
- * `tabindex`, and by focus on it. So it keeps every such option alike.
+ * `tabindex`, by focus on it, and by the mark itself where the chosen option
+ * is the only one marked. So it keeps every option of a choice alike.
  */
 
 import {
   getOutline,
   getTabSequence,
+  POPUP_CHOICE_ROLES,
   REDACTED_VALUE,
   type ExtractionResult,
   type SemanticNode,
@@ -45,7 +47,8 @@ const NATIVE_EDITOR_ROLES = new Set(["textbox", "searchbox", "generic"]);
  * mention chip's link, in a `contenteditable="false"` island): each stays,
  * nameless, as a child of the editor, so the TAB view keeps every stop in
  * its place. A focus inside an editor is on that stop, or on the editor; a
- * focus on an option of a sensitive choice is on what holds the options.
+ * focus on an option of a sensitive choice is on what the choice is made in
+ * (`choiceItems`).
  */
 export function toRecordedTree(tree: ExtractionResult): {
   recorded: RecordedTree;
@@ -54,6 +57,7 @@ export function toRecordedTree(tree: ExtractionResult): {
   const inside = insideEditors(tree);
   const above = aboveFields(tree, inside);
   const stops = editorStops(tree, inside);
+  const items = choiceItems(tree);
   const stopOf = new Map<string, string>();
   for (const [editor, ids] of stops)
     for (const id of ids) stopOf.set(id, editor);
@@ -63,16 +67,16 @@ export function toRecordedTree(tree: ExtractionResult): {
     if (editor !== undefined) {
       nodes.push([id, nameless(node, tree.nodes.get(editor)!)]);
     } else if (!inside.has(id)) {
-      nodes.push([id, kept(node, above.has(id), stops.get(id))]);
+      nodes.push([id, kept(node, above.has(id), stops.get(id), items.get(id))]);
     }
   }
   const shown = (id: string): boolean =>
-    stopOf.has(id) ||
-    (!inside.has(id) && !tree.nodes.get(id)?.a11y.choiceWithheld);
+    stopOf.has(id) || (!inside.has(id) && !items.has(id));
   const shownAs = <T extends string | null | undefined>(id: T): T => {
     let at: string | null | undefined = id;
     while (at && !shown(at)) {
-      at = inside.get(at) ?? tree.nodes.get(at)?.parentId;
+      at =
+        inside.get(at) ?? items.get(at)?.within ?? tree.nodes.get(at)?.parentId;
     }
     return at as T;
   };
@@ -146,6 +150,102 @@ function editorStops(
 }
 
 /**
+ * How a record keeps an option of a sensitive choice (`a11y.choiceWithheld`):
+ * what the choice is made in (`within`), where a focus on the option shows;
+ * and an option of the same choice the tree left unmarked (`like`), which it
+ * reads as. With none, every option of the choice is marked, and each reads
+ * as no tab stop.
+ */
+interface ChoiceItem {
+  within: string | undefined;
+  like: SemanticNode | undefined;
+}
+
+/**
+ * Each option of a sensitive choice, and how a record keeps it. The tree
+ * marks every option in a choice container (a list box, a grid, a radio
+ * group: `POPUP_CHOICE_ROLES`), but elsewhere in a sensitive field's popup
+ * only the one whose own choice state it withheld: of three buttons in a
+ * dialog, the pressed one. The ones it left unmarked say how that one reads,
+ * unchosen.
+ *
+ * A choice is made in the nearest choice container above its option, else
+ * the nearest node above it that holds another node of its role, else its
+ * parent. Not merely the nearest unmarked node above it: a date grid's day
+ * button sits in a cell of its own, which would say the day.
+ */
+function choiceItems(tree: ExtractionResult): Map<string, ChoiceItem> {
+  const items = new Map<string, ChoiceItem>();
+  const likes = new Map<string, SemanticNode | undefined>();
+  for (const node of tree.nodes.values()) {
+    if (!node.a11y.choiceWithheld) continue;
+    const within = choiceContainer(tree, node);
+    const key = `${within ?? ""}\n${node.a11y.role}`;
+    if (!likes.has(key)) likes.set(key, unmarkedPeer(tree, within, node));
+    items.set(node.id, { within, like: likes.get(key) });
+  }
+  return items;
+}
+
+/** What `node`'s choice is made in ({@link choiceItems}). */
+function choiceContainer(
+  tree: ExtractionResult,
+  node: SemanticNode,
+): string | undefined {
+  const above = (id: string | null) =>
+    id === null ? undefined : tree.nodes.get(id);
+  for (let at = above(node.parentId); at; at = above(at.parentId)) {
+    if (POPUP_CHOICE_ROLES.has(at.a11y.role)) return at.id;
+  }
+  let from = node.id;
+  for (let at = above(node.parentId); at; at = above(at.parentId)) {
+    const passed = from;
+    const peer = at.childIds.some(
+      (id) => id !== passed && holdsRole(tree, id, node.a11y.role),
+    );
+    if (peer) return at.id;
+    from = at.id;
+  }
+  return node.parentId ?? undefined;
+}
+
+/** Whether the node `id`, or one below it, is in `role`. */
+function holdsRole(tree: ExtractionResult, id: string, role: string): boolean {
+  const node = tree.nodes.get(id);
+  if (!node) return false;
+  return (
+    node.a11y.role === role ||
+    node.childIds.some((child) => holdsRole(tree, child, role))
+  );
+}
+
+/**
+ * The first node below `within`, in document order, in `node`'s role and
+ * left unmarked: how `node` reads, unchosen.
+ */
+function unmarkedPeer(
+  tree: ExtractionResult,
+  within: string | undefined,
+  node: SemanticNode,
+): SemanticNode | undefined {
+  const pending = within === undefined ? [] : [within];
+  for (let id = pending.shift(); id !== undefined; id = pending.shift()) {
+    const at = tree.nodes.get(id);
+    if (!at) continue;
+    if (
+      at.id !== node.id &&
+      at.id !== within &&
+      at.a11y.role === node.a11y.role &&
+      !at.a11y.choiceWithheld
+    ) {
+      return at;
+    }
+    pending.unshift(...at.childIds);
+  }
+  return undefined;
+}
+
+/**
  * A tab stop inside `editor` as a record keeps it: a child of the editor,
  * named `[redacted]`, with no description, value, state, text or attribute
  * but the ones that place it as a stop. What it is a stop for is the editor's
@@ -194,10 +294,12 @@ const STOP_ATTRIBUTES = ["tabindex", "role", "type"];
  * listed of `tree`, in the same order: the same tab stops, or the same
  * headings. The panel's headings filter lists every heading it is given,
  * where the outline leaves out those AT can't reach (a DOM-view tree keeps
- * them), and the record leaves out the stop a sensitive choice's option
- * makes. Nor can it list a heading inside an editor as printed: the record
- * drops it, or keeps it as a nameless stop with no level. A record opens on
- * its view only where the view shows what the text printed.
+ * them). Nor can the TAB view list a stop the text named `[redacted]`, an
+ * option of a sensitive choice, as printed: the record keeps it as the
+ * choice's other options read, by its own name or as no stop. Nor a heading
+ * inside an editor: the record drops it, or keeps it as a nameless stop with
+ * no level. A record opens on its view only where the view shows what the
+ * text printed.
  */
 export function listsAsPrinted(
   view: SnapshotView,
@@ -208,10 +310,10 @@ export function listsAsPrinted(
     ...recorded,
     nodes: new Map(recorded.nodes),
   };
+  const stops = view === "tab" ? getTabSequence(tree) : [];
+  if (stops.some((n) => n.a11y.choiceWithheld)) return false;
   const printed =
-    view === "tab"
-      ? getTabSequence(tree).map((n) => n.id)
-      : getOutline(tree).map((e) => e.id);
+    view === "tab" ? stops.map((n) => n.id) : getOutline(tree).map((e) => e.id);
   if (view === "headings") {
     const inside = insideEditors(tree);
     if (printed.some((id) => inside.has(id))) return false;
@@ -261,35 +363,54 @@ function aboveFields(
  * children but its tab stops (`stops`); a node above a field (`aboveField`)
  * loses only `descendantText`.
  *
- * An option a sensitive choice is made among (`a11y.choiceWithheld`) keeps
- * nothing that would single it out from the others: no `tabindex`, no focus
- * and no mark, so a record says neither which option is the tab stop nor
- * which was marked. Its name stays, beside the others', as in the tree.
+ * An option a sensitive choice is made among (`a11y.choiceWithheld`, `item`)
+ * loses its mark, and reads as the choice's other options do (`unsingled`).
+ * Its name stays, beside the others', as in the tree.
  */
 function kept(
   node: SemanticNode,
   aboveField: boolean,
   stops: string[] = [],
+  item?: ChoiceItem,
 ): SemanticNode {
   const { ui: _ui, ...rest } = node;
-  const { value: _value, choiceWithheld, ...a11y } = node.a11y;
+  const { value: _value, choiceWithheld: _held, ...a11y } = node.a11y;
   const out: SemanticNode = { ...rest, a11y };
   const field = isField(node);
   if (isEditor(node)) out.childIds = stops;
-  if (choiceWithheld && node.interaction) {
-    out.interaction = {
-      ...node.interaction,
-      isFocusable: false,
-      actions: node.interaction.actions.filter((a) => a !== "focus"),
-    };
-  }
   if (node.dom) {
     const attributes = { ...node.dom.attributes };
     for (const name of VALUE_ATTRIBUTES) delete attributes[name];
-    if (choiceWithheld) delete attributes.tabindex;
     out.dom = { ...node.dom, attributes };
     if (field) out.dom.textContent = null;
     if (field || aboveField) out.dom.descendantText = "";
+  }
+  return item ? unsingled(out, item) : out;
+}
+
+/**
+ * `out`, an option of a sensitive choice, with nothing that would single it
+ * out from the choice's other options, so a record says neither which is the
+ * tab stop nor which the tree marked: the focusability and `tabindex` of an
+ * option the tree left unmarked (`item.like`), or where it marked every one,
+ * none.
+ */
+function unsingled(out: SemanticNode, item: ChoiceItem): SemanticNode {
+  const { like } = item;
+  if (like) {
+    if (like.interaction) out.interaction = { ...like.interaction };
+    else delete out.interaction;
+  } else if (out.interaction) {
+    out.interaction = {
+      ...out.interaction,
+      isFocusable: false,
+      actions: out.interaction.actions.filter((a) => a !== "focus"),
+    };
+  }
+  if (out.dom) {
+    const tabindex = like?.dom?.attributes.tabindex;
+    if (tabindex === undefined) delete out.dom.attributes.tabindex;
+    else out.dom.attributes.tabindex = tabindex;
   }
   return out;
 }

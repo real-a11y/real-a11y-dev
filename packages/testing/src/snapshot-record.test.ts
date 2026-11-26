@@ -223,6 +223,132 @@ describe("snapshot recorder", () => {
       }
     });
 
+    /** Three choices in a dialog a card-expiry field controls. */
+    const popup = (items: string) =>
+      `<input role="combobox" aria-label="Month" aria-expanded="true" aria-controls="pop" autocomplete="cc-exp-month">` +
+      `<div role="dialog" id="pop" aria-label="Months">${items}</div>`;
+
+    // Outside a list box or a grid, the tree marks only the chosen item: the
+    // one whose own choice state it withheld.
+    const onlyChosenMarked = [
+      {
+        role: "button",
+        html: popup(
+          `<button id="c1" aria-pressed="true">01</button><button id="c2">02</button><button id="c3">03</button>`,
+        ),
+        choose: (el: Element, on: boolean) =>
+          on
+            ? el.setAttribute("aria-pressed", "true")
+            : el.removeAttribute("aria-pressed"),
+      },
+      {
+        role: "tab",
+        html: popup(
+          `<div role="tablist" aria-label="Months">` +
+            `<div role="tab" id="c1" tabindex="0" aria-selected="true">01</div>` +
+            `<div role="tab" id="c2" tabindex="-1">02</div>` +
+            `<div role="tab" id="c3" tabindex="-1">03</div></div>`,
+        ),
+        choose: (el: Element, on: boolean) => {
+          el.setAttribute("tabindex", on ? "0" : "-1");
+          if (on) el.setAttribute("aria-selected", "true");
+          else el.removeAttribute("aria-selected");
+        },
+      },
+      {
+        role: "link",
+        html: popup(
+          `<a id="c1" href="#" aria-current="true">01</a><a id="c2" href="#">02</a><a id="c3" href="#">03</a>`,
+        ),
+        choose: (el: Element, on: boolean) =>
+          on
+            ? el.setAttribute("aria-current", "true")
+            : el.removeAttribute("aria-current"),
+      },
+    ];
+
+    for (const { role, html, choose } of onlyChosenMarked) {
+      it(`keeps a chosen ${role} that alone is marked as its siblings read, on both sides of a diff`, () => {
+        const root = mount(html);
+        const marked = [...extract(root).nodes.values()]
+          .filter((n) => n.a11y.choiceWithheld)
+          .map((n) => n.a11y.name);
+        expect(marked).toEqual(["01"]);
+
+        const read = (
+          record: SnapshotRecord,
+          side: "tree" | "before" | "after",
+          name: string,
+        ) => {
+          const node = record[side]!.nodes.find(
+            ([, n]) => n.a11y.role === role && n.a11y.name === name,
+          )![1];
+          const { id: _id, ...attributes } = node.dom!.attributes;
+          return {
+            states: node.a11y.states,
+            interaction: node.interaction,
+            attributes,
+          };
+        };
+
+        a11ySnapshotSerializer.serialize(boxedTreeSnapshot(root));
+        const before = capture(root);
+        choose(root.querySelector("#c1")!, false);
+        choose(root.querySelector("#c3")!, true);
+        const diff = a11yDiff(before, root);
+        expect(diff.text).toBe("(no changes)");
+        a11ySnapshotSerializer.serialize(diff);
+
+        const [tree, change] = records();
+        for (const name of ["01", "03"]) {
+          expect(read(tree!, "tree", name)).toEqual(read(tree!, "tree", "02"));
+        }
+        // What the text calls no change, the viewer marks as none: every
+        // item reads the same before as after.
+        for (const name of ["01", "02", "03"]) {
+          expect(read(change!, "before", name)).toEqual(
+            read(change!, "after", name),
+          );
+        }
+      });
+    }
+
+    it("opens a tab sequence on the tree when it printed a stop as [redacted]", () => {
+      const root = mount(onlyChosenMarked[0]!.html);
+      const box = boxedTabSequenceSnapshot(root);
+      expect(box.text).toContain('button "[redacted]"');
+      a11ySnapshotSerializer.serialize(box);
+      // The record keeps that stop by its name, as the other buttons read.
+      expect(records()[0]).not.toHaveProperty("view");
+    });
+
+    it("moves focus on a date grid's day to the grid, not the day's cell", () => {
+      const root = mount(
+        `<input role="combobox" aria-label="Expiry" aria-expanded="true" aria-controls="cal" autocomplete="cc-exp">` +
+          `<table role="grid" id="cal" aria-label="Days"><tbody><tr>` +
+          `<td><button id="d14" tabindex="-1">14</button></td>` +
+          `<td><button id="d15" tabindex="0" aria-pressed="true">15</button></td>` +
+          `<td><button id="d16" tabindex="-1">16</button></td>` +
+          `</tr></tbody></table>`,
+      );
+      const roleOf = (
+        nodes: SnapshotRecord["tree"],
+        id: string | null | undefined,
+      ) => new Map(nodes!.nodes).get(id!)?.a11y.role;
+
+      root.querySelector<HTMLElement>("#d15")!.focus();
+      a11ySnapshotSerializer.serialize(boxedTreeSnapshot(root));
+      const before = capture(root);
+      root.querySelector<HTMLElement>("#d16")!.focus();
+      a11ySnapshotSerializer.serialize(a11yDiff(before, root));
+
+      const [tree, diff] = records();
+      expect(roleOf(tree!.tree, tree!.tree!.focusedId)).toBe("grid");
+      expect(roleOf(diff!.before, diff!.focusBefore)).toBe("grid");
+      expect(roleOf(diff!.after, diff!.focusAfter)).toBe("grid");
+      expect(diff!.focusBefore).toBe(diff!.focusAfter);
+    });
+
     it("keeps the stops of an editor the tab order lists, and no other", () => {
       // A DOM-view read keeps a hidden button, which the tab order skips; a
       // tabindex out of range reads as none, so that button is a stop.

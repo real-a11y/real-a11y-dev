@@ -546,6 +546,18 @@ main
     text "or"
     code "jest -u"
     text ") and the diff shows only the quotes going."
+  paragraph
+    text "An outline whose first heading is below"
+    code "h1"
+    text "is the exception, inline. Its text starts with indentation ("
+    code "h2 Card"
+    text "), and neither runner keeps a first line's indentation in an inline snapshot. Jest takes it for indentation it added and strips it on reading, so the snapshot it wrote fails on every later run. Vitest drops it on writing, so the stored outline indents that heading as an"
+    code "h1"
+    text "'s. Snapshot such an outline with"
+    code "toMatchSnapshot()"
+    text ", which keeps every line as printed. The"
+    code "outlineSnapshot"
+    text "string is unaffected inline, because its opening quote comes first."
   paragraph "Keep the string where you use it as one, say to split the tab sequence into lines and look for a name that repeats."
   heading "Rules, contracts, and snapshots — which to reach for" (level 2)
   paragraph "Three of these matchers assert about the same tree but answer different questions, so it's worth being precise about when each earns its place."

@@ -333,6 +333,8 @@ What a box adds is the [snapshot report](/packages/testing/snapshots#the-snapsho
 
 Switching a committed snapshot from the string to the box changes it once, in its quotes alone: the serializer prints a box's text as it is, where a string snapshots inside quotes. Every line stays the same. Update the snapshots (`vitest -u` or `jest -u`) and the diff shows only the quotes going.
 
+An outline whose first heading is below `h1` is the exception, inline. Its text starts with indentation (`  h2 Card`), and neither runner keeps a first line's indentation in an inline snapshot. Jest takes it for indentation it added and strips it on reading, so the snapshot it wrote fails on every later run. Vitest drops it on writing, so the stored outline indents that heading as an `h1`'s. Snapshot such an outline with `toMatchSnapshot()`, which keeps every line as printed. The `outlineSnapshot` string is unaffected inline, because its opening quote comes first.
+
 Keep the string where you use it as one, say to split the tab sequence into lines and look for a name that repeats.
 
 ## Rules, contracts, and snapshots — which to reach for
