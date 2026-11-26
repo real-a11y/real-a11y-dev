@@ -659,6 +659,26 @@ describe("recordTimeline announcements", () => {
     `);
   });
 
+  it("keeps a line before a focus move when the same message re-renders as plain text", async () => {
+    document.body.innerHTML = `<main><button id="a">Done</button><button id="b">Close</button><div role="status" id="s"></div></main>`;
+    const timeline = recordTimeline(document.querySelector("main")!);
+    // Words apart by a space-only node, then by a block edge.
+    byId("s").innerHTML = "<span>Draft</span> <span>saved</span>";
+    byId("a").focus();
+    byId("s").textContent = "Draft saved";
+    await tick();
+    byId("s").innerHTML = "<p>Sync</p><p>done</p>";
+    byId("b").focus();
+    byId("s").textContent = "Sync done";
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`
+      announce  status "Draft saved"
+      focus     button "Done"
+      announce  status "Sync done"
+      focus     button "Close"
+    `);
+  });
+
   it("places slotted text changed before a focus move before it", async () => {
     document.body.innerHTML = `<div id="host"><span id="t" slot="msg"></span></div>`;
     const shadow = byId("host").attachShadow({ mode: "open" });

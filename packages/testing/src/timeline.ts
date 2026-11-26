@@ -30,6 +30,8 @@ import {
   regionLevel,
   renderedIn,
   ROLE_LEVELS,
+  type RegionRead,
+  type Said,
 } from "./timeline-regions.js";
 
 export interface RecordTimelineOptions {
@@ -51,6 +53,11 @@ export interface A11yTimeline {
    * `expect(...).toMatchSnapshot()`. Later calls return the same box.
    */
   stop(): A11ySnapshotBox;
+}
+
+/** What `region` said in a read, for placing its line ({@link alreadySaid}). */
+function said(region: Element, read: RegionRead): Said {
+  return { text: read.text, from: audible(region, read.from) };
 }
 
 /** Is `element` inside `node`, across shadow roots and slots? */
@@ -95,7 +102,7 @@ interface Pending {
 interface Move {
   at: number;
   to: Element | null;
-  said?: Map<Element, Map<Text, string>>;
+  said?: Map<Element, Said>;
 }
 
 class TimelineRecorder {
@@ -230,7 +237,7 @@ class TimelineRecorder {
    * around the root since the last move's read; otherwise that read stands,
    * or, with none, the regions still say what they said before the block.
    */
-  private saidNow(): Map<Element, Map<Text, string>> | undefined {
+  private saidNow(): Map<Element, Said> | undefined {
     if (!this.options.announcements) return undefined;
     const last = this.moves[this.moves.length - 1];
     // In the root as rendered, so light-DOM text a slot in the root renders
@@ -244,10 +251,7 @@ class TimelineRecorder {
     });
     if (!fresh) return last?.said;
     return new Map(
-      this.regionsWithin(this.root).map((r) => [
-        r,
-        audible(r, announcedRead(r).from),
-      ]),
+      this.regionsWithin(this.root).map((r) => [r, said(r, announcedRead(r))]),
     );
   }
 
@@ -396,8 +400,9 @@ class TimelineRecorder {
    * hadn't rendered.
    */
   private heardAt(region: Element, positions: number[], moves: Move[]): number {
+    const text = this.lastText.get(region);
     const from = this.lastFrom.get(region);
-    const now = from && audible(region, from);
+    const now = text !== undefined && from && said(region, { text, from });
     let first = moves.length;
     while (first > 0 && now) {
       const then = moves[first - 1]!.said?.get(region);

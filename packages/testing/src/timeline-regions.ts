@@ -137,33 +137,34 @@ export function audible(
   return said;
 }
 
+/** What a region said at one moment: its text as rendered, on one line,
+ *  and the text nodes it says aloud ({@link audible}). */
+export interface Said {
+  text: string;
+  from: Map<Text, string>;
+}
+
 /**
  * Had a region that said `then` already said `now`? It had if the two read
- * the same, white space aside, whichever nodes carry the words; or if all it
- * did since was lose text nodes: what it shows now, it showed then, the same
- * nodes with the same data in the same order, as a log trimmed of an old
- * entry. Words put in a new order, or new text that only reads like part of
- * the old, are new. Linear in the region's text nodes.
+ * the same as rendered, word and block breaks kept, whichever nodes carry the
+ * words; or if all it did since was lose text nodes it says aloud: what it
+ * says now, it said then, the same nodes with the same data in the same
+ * order, as a log trimmed of an old entry or an edit under `aria-live="off"`
+ * leaves it. Words put in a new order, or new text that only reads like part
+ * of the old, are new. Linear in the region's text nodes.
  */
-export function alreadySaid(
-  then: Map<Text, string>,
-  now: Map<Text, string>,
-): boolean {
-  if (readAs(then) === readAs(now)) return true;
-  const order = new Map([...then.keys()].map((node, i) => [node, i]));
+export function alreadySaid(then: Said, now: Said): boolean {
+  if (then.text === now.text) return true;
+  const order = new Map([...then.from.keys()].map((node, i) => [node, i]));
   let last = -1;
-  for (const [node, data] of now) {
+  for (const [node, data] of now.from) {
     const at = order.get(node);
-    if (at === undefined || at < last || then.get(node) !== data) return false;
+    if (at === undefined || at < last || then.from.get(node) !== data) {
+      return false;
+    }
     last = at;
   }
   return true;
-}
-
-/** The text of `nodes` read as one line, its white space collapsed but kept
- *  as a word boundary. */
-function readAs(nodes: Map<Text, string>): string {
-  return [...nodes.values()].join("").replace(/\s+/g, " ").trim();
 }
 
 /** Is `node` under an `aria-live="off"` inside `region`? The nearest
