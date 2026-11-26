@@ -21,6 +21,9 @@
 
 ### Patch Changes
 
+- **Internal refactor, no behaviour change.** `dispatchNative` in `native-core.ts`
+  is split into smaller helpers
+  ([#734](https://github.com/real-a11y/real-a11y-dev/pull/734)).
 - **Internal refactor, no behaviour change.** The raw accessibility-tree
   withholding helpers moved out of `native-core.ts` into their own module
   ([#730](https://github.com/real-a11y/real-a11y-dev/pull/730)).
