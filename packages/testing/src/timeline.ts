@@ -15,19 +15,18 @@ import {
   safeContains,
   safeNodeType,
   safeOwnerDocument,
-  safeParentElement,
 } from "@real-a11y-dev/core";
 import { redactString, serializeTabStop } from "@real-a11y-dev/serialize";
 
 import { boxSnapshot, type A11ySnapshotBox } from "./snapshot-box.js";
 import {
   announcedRead,
-  announcedText,
   gains,
   heldFrom,
   hiddenAbove,
   isLive,
   regionLevel,
+  renderedIn,
   ROLE_LEVELS,
 } from "./timeline-regions.js";
 
@@ -90,11 +89,11 @@ interface Pending {
 
 /** A focus event: before which record it happened, where focus went (null
  *  while it is leaving), and, if the block had changed the page by then,
- *  what each region said there ({@link TimelineRecorder.heardAt}). */
+ *  the text nodes each region showed there ({@link TimelineRecorder.heardAt}). */
 interface Move {
   at: number;
   to: Element | null;
-  said?: Map<Element, string>;
+  said?: Map<Element, Map<Text, string>>;
 }
 
 class TimelineRecorder {
@@ -229,18 +228,21 @@ class TimelineRecorder {
    * around the root since the last move's read; otherwise that read stands,
    * or, with none, the regions still say what they said before the block.
    */
-  private saidNow(): Map<Element, string> | undefined {
+  private saidNow(): Map<Element, Map<Text, string>> | undefined {
     if (!this.options.announcements) return undefined;
     const last = this.moves[this.moves.length - 1];
-    const fresh = this.records
-      .slice(last?.at ?? 0)
-      .some(
-        ({ target }) =>
-          safeContains(this.root, target) || safeContains(target, this.root),
-      );
+    // In the root as rendered, so light-DOM text a slot in the root renders
+    // counts, as it does for the regions that hold it.
+    const fresh = this.records.slice(last?.at ?? 0).some(({ target }) => {
+      const el =
+        safeNodeType(target) === Node.ELEMENT_NODE
+          ? (target as Element)
+          : renderedIn(target);
+      return (el !== null && this.inRoot(el)) || holds(target, this.root);
+    });
     if (!fresh) return last?.said;
     return new Map(
-      this.regionsWithin(this.root).map((r) => [r, announcedText(r)]),
+      this.regionsWithin(this.root).map((r) => [r, announcedRead(r).from]),
     );
   }
 
@@ -379,16 +381,21 @@ class TimelineRecorder {
 
   /**
    * Where in the block `region` came to say what it now says: at its last
-   * change, unless it already said that at a focus move and at every move
-   * after. Then at its last change before the first of those moves, so a
-   * change after it that left the text alone, such as a restyle that shows
-   * nothing, can't carry the line past the move. What a region said at a move
-   * only places a line, and is never printed: the block hadn't rendered.
+   * change, unless it already showed all of that at a focus move and at every
+   * move after ({@link gains}). Then at its last change before the first of
+   * those moves, so a change after it that announces nothing, such as a
+   * restyle that shows nothing or an edit under `aria-live="off"`, can't
+   * carry the line past the move. What a region showed at a move only places
+   * a line, and is never printed: the block hadn't rendered.
    */
   private heardAt(region: Element, positions: number[], moves: Move[]): number {
-    const text = this.lastText.get(region);
+    const now = this.lastFrom.get(region);
     let from = moves.length;
-    while (from > 0 && moves[from - 1]!.said?.get(region) === text) from--;
+    while (from > 0) {
+      const then = moves[from - 1]!.said;
+      if (!now || !then || gains(region, now, then.get(region))) break;
+      from--;
+    }
     const before = from < moves.length ? 2 * moves[from]!.at : Infinity;
     const earlier = positions.filter((at) => at < before);
     return Math.max(...(earlier.length ? earlier : positions));
@@ -474,7 +481,7 @@ class TimelineRecorder {
     if (safeNodeType(node) === Node.ELEMENT_NODE) element = node as Element;
     else {
       // Text a slot renders belongs to the region around the slot.
-      element = (node as Partial<Text>).assignedSlot ?? safeParentElement(node);
+      element = renderedIn(node);
     }
     for (let el = element; el; el = renderingParent(el)) {
       if (isLive(regionLevel(el))) return this.inRoot(el) ? el : null;
@@ -544,11 +551,11 @@ class TimelineRecorder {
    * last read ({@link gains}): text written or inserted, or a part a restyle
    * reveals, but not text a removal or a restyle only takes away, nor a
    * change under an `aria-live="off"` inside it. The same text again says
-   * nothing. Emptied, removed, or hidden by its own `hidden` or `display`,
-   * it forgets, so the same text shown again is news again. Hidden from
-   * assistive tech above it (`aria-hidden` on an ancestor, as a modal does
-   * to the rest of the page), it keeps what it showed: shown again, it
-   * announces only text it gained meanwhile.
+   * nothing. Emptied, removed, or hidden by its own `hidden`, `display` or
+   * `aria-hidden`, it forgets, so the same text shown again is news again.
+   * Hidden from assistive tech above it (`aria-hidden` on an ancestor, as a
+   * modal does to the rest of the page), it keeps what it showed: shown
+   * again, it announces only text it gained meanwhile.
    */
   private announcement(region: Element): string | null {
     const level = this.onPage(region) ? regionLevel(region) : null;
@@ -609,8 +616,8 @@ class TimelineRecorder {
  *   `alert` or `log`. It names the region's role, and `{live=…}` when
  *   `aria-live` sets a politeness the role doesn't imply. A region emptied
  *   prints nothing, and so does the same text set again; emptied, removed or
- *   hidden by its own `hidden` first, it prints again. One hidden by
- *   `aria-hidden` above it keeps its text.
+ *   hidden by its own `hidden` or `aria-hidden` first, it prints again. One
+ *   hidden by `aria-hidden` above it keeps its text.
  * - Lines follow the order the page made its changes. What one synchronous
  *   run of the page's code does is read once: text set and cleared in it, or
  *   focus passing through an element, prints nothing. Anything an `await`

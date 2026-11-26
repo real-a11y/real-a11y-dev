@@ -549,6 +549,60 @@ describe("recordTimeline announcements", () => {
     );
   });
 
+  it("announces a region that drops its own aria-hidden, as one revealed", async () => {
+    document.body.innerHTML = `<main><p role="alert" id="a" aria-hidden="true">Name is required.</p></main>`;
+    const timeline = recordTimeline(document.querySelector("main")!);
+    byId("a").removeAttribute("aria-hidden");
+    await tick();
+    byId("a").setAttribute("aria-hidden", "true");
+    await tick();
+    byId("a").removeAttribute("aria-hidden");
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`
+      announce  alert "Name is required."
+      announce  alert "Name is required."
+    `);
+  });
+
+  it("stays silent for text straight under an aria-live=off host's shadow root", async () => {
+    document.body.innerHTML = `<main><p role="status" id="s">Total</p></main>`;
+    const timeline = recordTimeline(document.querySelector("main")!);
+    const host = document.createElement("span");
+    host.setAttribute("aria-live", "off");
+    host.attachShadow({ mode: "open" }).textContent = " 2 items";
+    byId("s").append(host);
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`(nothing recorded)`);
+  });
+
+  it("keeps a line before a focus move that only a silent change follows", async () => {
+    document.body.innerHTML = `<main><button id="b">Done</button><p role="status"><span id="m"></span> <span aria-live="off" id="c">1</span></p></main>`;
+    const timeline = recordTimeline(document.querySelector("main")!);
+    byId("m").textContent = "Saved";
+    byId("b").focus();
+    byId("c").textContent = "2";
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`
+      announce  status "Saved 2"
+      focus     button "Done"
+    `);
+  });
+
+  it("places slotted text changed before a focus move before it", async () => {
+    document.body.innerHTML = `<div id="host"><span id="t" slot="msg"></span></div>`;
+    const shadow = byId("host").attachShadow({ mode: "open" });
+    shadow.innerHTML = `<main id="m"><button id="b">Sync</button><p role="status"><slot name="msg"></slot></p></main>`;
+    const timeline = recordTimeline(shadow.getElementById("m")!);
+    byId("t").textContent = "Saved";
+    (shadow.getElementById("b") as HTMLElement).focus();
+    byId("t").style.backgroundColor = "white";
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`
+      announce  status "Saved"
+      focus     button "Sync"
+    `);
+  });
+
   it("prints nothing for text a restyle or a removal takes away", async () => {
     document.body.innerHTML = `<style>.more { display: none } .open .more { display: inline }</style>
       <main id="m" class="open">

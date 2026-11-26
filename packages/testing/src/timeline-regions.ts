@@ -9,6 +9,7 @@ import {
   pageText,
   renderingParent,
   safeGetAttribute,
+  safeNodeType,
   safeParentElement,
 } from "@real-a11y-dev/core";
 
@@ -67,13 +68,9 @@ export interface RegionRead {
  * What a screen reader could say for `region`: core's read of a live region
  * (never raw `textContent`, which also holds a `<textarea>`'s markup default
  * and hidden text), line by line as the page lays it out, so two paragraphs
- * don't run together, then joined into one line.
+ * don't run together, then joined into one line; and the text nodes it
+ * comes from.
  */
-export function announcedText(region: Element): string {
-  return oneLine(pageText(region, { announced: true, lines: true }));
-}
-
-/** {@link announcedText}, and the text nodes it comes from. */
 export function announcedRead(region: Element): RegionRead {
   const texts: Text[] = [];
   const text = pageText(region, { announced: true, lines: true, texts });
@@ -84,9 +81,15 @@ export function announcedRead(region: Element): RegionRead {
  * The text nodes `region` holds whatever hides it from assistive tech above
  * it (a modal's `aria-hidden` on the page behind it, or a hidden ancestor):
  * what it would say once shown, nothing `aria-hidden` inside it included.
- * None when it is emptied, or hidden by its own `hidden` or `display`.
+ * None when it is emptied, or hidden by its own `hidden`, `display` or
+ * `aria-hidden`.
  */
 export function heldFrom(region: Element): Map<Text, string> {
+  // Its own `aria-hidden` hides it as its own `hidden` does: shown again, its
+  // text is news.
+  if (isAriaHiddenValue(safeGetAttribute(region, "aria-hidden"))) {
+    return new Map();
+  }
   const texts: Text[] = [];
   pageText(region, { texts });
   return dataOf(
@@ -123,12 +126,26 @@ export function gains(
 }
 
 /** The elements from `node`'s parent up to `region`, not including it, as
- *  rendered: text a slot renders is inside the slot. */
+ *  rendered: text a slot renders is inside the slot, and text straight under
+ *  a shadow root inside its host. */
 function between(node: Text, region: Element): Element[] {
   const path: Element[] = [];
-  let el = node.assignedSlot ?? safeParentElement(node);
+  let el = renderedIn(node);
   for (; el && el !== region; el = renderingParent(el)) path.push(el);
   return path;
+}
+
+/** The element `node` renders inside: its slot, its parent, or the host of
+ *  the shadow root it sits directly under. */
+export function renderedIn(node: Node): Element | null {
+  const slot = (node as Partial<Text>).assignedSlot;
+  if (slot) return slot;
+  const parent = safeParentElement(node);
+  if (parent) return parent;
+  const root = node.parentNode;
+  return root && safeNodeType(root) === Node.DOCUMENT_FRAGMENT_NODE
+    ? ((root as Partial<ShadowRoot>).host ?? null)
+    : null;
 }
 
 function dataOf(texts: Text[]): Map<Text, string> {
