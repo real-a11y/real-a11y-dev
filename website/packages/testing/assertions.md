@@ -27,7 +27,7 @@ Each `Finding` carries:
 | Field | Meaning |
 | --- | --- |
 | `rule` | Which rule fired — one of `ALL_RULES` (below). |
-| `severity` | `"error"` blocks use (unlabeled controls, unlabeled dialogs); `"warning"` is triage-later (heading order, a missing main landmark, duplicate landmarks, images missing alt, form controls labeled only by `title`). |
+| `severity` | `"error"` blocks use (unlabeled controls, unnamed tree items, tooltips, meters and progress bars, unlabeled dialogs); `"warning"` is triage-later (heading order, a missing main landmark, duplicate landmarks, images missing alt, form controls labeled only by `title`). |
 | `message` | Self-contained description of the problem. |
 | `role` / `name` / `tagName` | The offending node, when the finding is node-scoped. |
 | `locator` | Best-effort CSS selector path, so the element is findable. |
@@ -59,7 +59,7 @@ console.log(listByRole(document.body, "image"));
 
 ## `assertNoUnlabeledInteractive(root)`
 
-Throws if any interactive element (button, link, textbox, combobox, checkbox, radio, etc.) has an empty accessible name. A glyph, emoji, or `title=` on a button is a **non-empty** name (what a screen reader announces) and does **not** fail this assertion — same as axe-core `button-name`. Form controls labeled only by `title` are a separate warning, `label-title-only`, via `collectFindings` / `assertRules`, not this helper.
+Throws if any interactive element (button, link, textbox, combobox, checkbox, radio, etc.), or any `treeitem`, `tooltip`, `meter` or `progressbar` (WAI-ARIA 1.2 requires a name for these), has an empty accessible name. A glyph, emoji, or `title=` on a button is a **non-empty** name (what a screen reader announces) and does **not** fail this assertion — same as axe-core `button-name`. Form controls labeled only by `title` are a separate warning, `label-title-only`, via `collectFindings` / `assertRules`, not this helper.
 
 ```ts
 import { assertNoUnlabeledInteractive } from "@real-a11y-dev/testing";

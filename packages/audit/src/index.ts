@@ -42,6 +42,14 @@ export const INTERACTIVE_ROLES: ReadonlySet<string> = new Set([
   "tab",
 ]);
 
+/** Non-interactive roles WAI-ARIA 1.2 requires a name for; apart from the public `INTERACTIVE_ROLES`. */
+const NAME_REQUIRED_ROLES: ReadonlySet<string> = new Set([
+  "treeitem",
+  "tooltip",
+  "meter",
+  "progressbar",
+]);
+
 class A11yAssertionError extends Error {
   constructor(message: string) {
     super(message);
@@ -428,13 +436,14 @@ function landmarkStructureFindings(
   }
 }
 
-/** `no-unlabeled-interactive`: an interactive role with no accessible name. Appends to `findings`. */
+/** `no-unlabeled-interactive`: an interactive or name-required role with no accessible name. Appends to `findings`. */
 function unlabeledInteractiveFindings(
   tree: ExtractionResult,
   findings: Finding[],
 ): void {
   for (const node of linearize(tree)) {
-    if (!INTERACTIVE_ROLES.has(node.a11y.role)) continue;
+    const interactive = INTERACTIVE_ROLES.has(node.a11y.role);
+    if (!interactive && !NAME_REQUIRED_ROLES.has(node.a11y.role)) continue;
     if (node.a11y.name.trim().length > 0) continue;
     // `dom` is absent on native-produced trees; the finding degrades to
     // role-only wording rather than printing `<undefined>` (RFC v3 R5).
@@ -444,9 +453,11 @@ function unlabeledInteractiveFindings(
       severity: "error",
       role: node.a11y.role,
       ...(tag ? { tagName: tag } : {}),
-      message: tag
-        ? `Unlabeled interactive element: ${node.a11y.role} <${tag}>`
-        : `Unlabeled interactive element: ${node.a11y.role}`,
+      message: `${
+        interactive ? "Unlabeled interactive element" : "Unnamed element"
+      }: ${node.a11y.role}${tag ? ` <${tag}>` : ""}${
+        interactive ? "" : " (this role requires an accessible name)"
+      }`,
       ...locate(node, tree),
     });
   }

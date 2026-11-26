@@ -29,7 +29,7 @@
   {
     "name": "@real-a11y-dev/testing (esm)",
     "path": "packages/testing/dist/index.js",
-    "limit": "30.6 KB",
+    "limit": "30.7 KB",
     "gzip": true
   },
   {
@@ -55,7 +55,7 @@
   {
     "name": "@real-a11y-dev/browser (page-bundle IIFE)",
     "path": "packages/browser/dist/page-bundle.iife.global.js",
-    "limit": "25.2 KB",
+    "limit": "25.3 KB",
     "gzip": true
   }
 ]
