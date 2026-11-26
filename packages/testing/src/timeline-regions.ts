@@ -122,38 +122,48 @@ export function gains(
 }
 
 /**
- * What `region` says aloud, in reading order, a text node at a time: its
- * text without what sits under an `aria-live="off"` inside it, and without
- * white space, which a restyle can move.
+ * The text nodes `region` says aloud, in reading order: its text without
+ * what sits under an `aria-live="off"` inside it, and without nodes of white
+ * space alone.
  */
-export function audible(region: Element, from: Map<Text, string>): string[] {
-  const said: string[] = [];
+export function audible(
+  region: Element,
+  from: Map<Text, string>,
+): Map<Text, string> {
+  const said = new Map<Text, string>();
   for (const [node, data] of from) {
-    const text = data.replace(/\s+/g, "");
-    if (text && !silentIn(node, region)) said.push(text);
+    if (/\S/.test(data) && !silentIn(node, region)) said.set(node, data);
   }
   return said;
 }
 
 /**
- * Had a region that said `then` already said `now`? It had if `now` reads as
- * `then` with some of its pieces taken away, the rest in the same order: the
- * same words in other nodes, or a log trimmed of an old entry, say nothing
- * new, however the words that stay are now split into text nodes. Words put
- * in a new order are new.
+ * Had a region that said `then` already said `now`? It had if the two read
+ * the same, white space aside, whichever nodes carry the words; or if all it
+ * did since was lose text nodes: what it shows now, it showed then, the same
+ * nodes with the same data in the same order, as a log trimmed of an old
+ * entry. Words put in a new order, or new text that only reads like part of
+ * the old, are new. Linear in the region's text nodes.
  */
-export function alreadySaid(then: string[], now: string[]): boolean {
-  const said = now.join("");
-  // Where in `said` the pieces of `then` kept so far can reach.
-  let reached = new Set([0]);
-  for (const piece of then) {
-    const next = new Set(reached);
-    for (const at of reached) {
-      if (said.startsWith(piece, at)) next.add(at + piece.length);
-    }
-    reached = next;
+export function alreadySaid(
+  then: Map<Text, string>,
+  now: Map<Text, string>,
+): boolean {
+  if (readAs(then) === readAs(now)) return true;
+  const order = new Map([...then.keys()].map((node, i) => [node, i]));
+  let last = -1;
+  for (const [node, data] of now) {
+    const at = order.get(node);
+    if (at === undefined || at < last || then.get(node) !== data) return false;
+    last = at;
   }
-  return reached.has(said.length);
+  return true;
+}
+
+/** The text of `nodes` read as one line, its white space collapsed but kept
+ *  as a word boundary. */
+function readAs(nodes: Map<Text, string>): string {
+  return [...nodes.values()].join("").replace(/\s+/g, " ").trim();
 }
 
 /** Is `node` under an `aria-live="off"` inside `region`? The nearest

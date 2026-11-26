@@ -281,6 +281,7 @@ Pass `{ announcements: false }` for a focus-only timeline, so a copy change in a
 - **Only what the root holds** is recorded. Pass `document.body` to hear the whole page, including a toast portaled outside your component.
 - **Changes inside a shadow root** aren't heard: a `MutationObserver` doesn't reach them. Focus inside an open shadow root is.
 - **`aria-atomic`, `aria-relevant` and `aria-busy`** aren't read: an announce line is always the region's whole text.
+- **Order around a focus move within one step is best-effort.** An announce line goes before a focus move made in the same synchronous run when the region already said its final text at the move, or that text with some of its elements removed since. A run that rewrites the region into new elements after the move and drops part of it places the line after the move, though the words that stay were there before.
 - **A region inserted already holding its text** prints like any other. Most screen readers don't announce one, `role="alert"` being the usual exception, so a line for a `status` that arrived with its message may be a message nobody hears.
 - **No strict mode.** There is no `redactInput` here yet, so a timeline can't promise what [strict mode](/packages/testing/snapshots#strict-mode) does for the other snapshots: a focused name built from typed text, or an editor inside a live region, prints as it is.
 - **jsdom only.** The [Playwright adapter](/packages/testing/playwright) has no timeline yet, and the [snapshot report](/packages/testing/snapshots#the-snapshot-report) doesn't draw one.

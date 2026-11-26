@@ -627,7 +627,9 @@ describe("recordTimeline announcements", () => {
     `);
   });
 
-  it("keeps a log's new entry before a focus move whatever re-renders it after", async () => {
+  it("places a trimmed entry re-rendered after a focus move after it, as documented", async () => {
+    // Pins a limitation: the surviving entry is now a new node, so the region
+    // no longer only lost text nodes since the move, and its line goes after.
     document.body.innerHTML = `<main><button id="b">Continue</button><div role="log" id="l"><p id="old">Connecting</p></div></main>`;
     const timeline = recordTimeline(document.querySelector("main")!);
     byId("l").insertAdjacentHTML(
@@ -639,8 +641,21 @@ describe("recordTimeline announcements", () => {
     byId("new").textContent = "Connected";
     await tick();
     expect(timeline.stop()).toMatchInlineSnapshot(`
-      announce  log "Connected"
       focus     button "Continue"
+      announce  log "Connected"
+    `);
+  });
+
+  it("places new words that only read like part of the old after a focus move", async () => {
+    document.body.innerHTML = `<main><button id="b">Done</button><p role="status" id="s"></p></main>`;
+    const timeline = recordTimeline(document.querySelector("main")!);
+    byId("s").innerHTML = "<span>1</span> failed, <span>2</span> pending";
+    byId("b").focus();
+    byId("s").textContent = "12 pending";
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`
+      focus     button "Done"
+      announce  status "12 pending"
     `);
   });
 

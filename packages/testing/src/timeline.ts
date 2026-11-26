@@ -95,7 +95,7 @@ interface Pending {
 interface Move {
   at: number;
   to: Element | null;
-  said?: Map<Element, string[]>;
+  said?: Map<Element, Map<Text, string>>;
 }
 
 class TimelineRecorder {
@@ -230,7 +230,7 @@ class TimelineRecorder {
    * around the root since the last move's read; otherwise that read stands,
    * or, with none, the regions still say what they said before the block.
    */
-  private saidNow(): Map<Element, string[]> | undefined {
+  private saidNow(): Map<Element, Map<Text, string>> | undefined {
     if (!this.options.announcements) return undefined;
     const last = this.moves[this.moves.length - 1];
     // In the root as rendered, so light-DOM text a slot in the root renders
