@@ -124,7 +124,7 @@ await flow(container)
   });
 ```
 
-See the [Flow docs](https://real-a11y.dev/packages/testing/flow#asserting-what-an-interaction-changed) for both styles. `a11yDiff(before, after, { childIds: false })` leaves out a container's `childIds` count line when its `+`/`-` lines already explain it; a move or reorder still prints it.
+See the [Flow docs](https://real-a11y.dev/packages/testing/flow#asserting-what-an-interaction-changed) for both styles. `a11yDiff(before, after, { childIds: false })` leaves out a container's `childIds` count line when its `+`/`-` lines already explain it; a move or reorder still prints it. A text change that is also the element's name change, such as a `status` message, prints once, as its `a11y.name` line.
 
 To set `childIds`, `values` and `redact` once for the whole project, pass them to `registerA11yMatchers` in the setup file, or call `configureA11y` from `@real-a11y-dev/testing` where no matchers are registered. A call's own options still win, key by key, and `flow().expectChanges("…")` strings compare against the same text:
 

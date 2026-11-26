@@ -169,6 +169,14 @@ expect(a11yDiff(before, document.body, { childIds: false })).toMatchInlineSnapsh
 
 A move, where a node changes container without a `+`/`-` line, and a reorder still print their `childIds` lines.
 
+A text change prints once. When an element's text is its name before and after, as with a `status` message or a paragraph, the diff prints the `a11y.name` line and leaves out the `dom.textContent` line that would repeat the same two strings:
+
+```
+~ status "That hour is closed.": a11y.name "" → "That hour is closed."
+```
+
+When the two differ, both lines print. A button whose `aria-label` stays put while its text changes prints only its `dom.textContent` line.
+
 ### Style B — `flow().expectChanges` (fluent, structured)
 
 Inside a flow, `expectChanges` diffs everything since the chain's first action (or the previous `expectChanges`, which resets the window):

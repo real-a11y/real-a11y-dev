@@ -77,6 +77,25 @@ describe("a11yDiff", () => {
     );
   });
 
+  it("prints a text change once when it is also the name change", () => {
+    const root = mount(
+      `<main><p role="status"></p><p>Pending</p><button aria-label="Save">Old</button></main>`,
+    );
+    const before = capture(root);
+    root.querySelector("[role=status]")!.textContent = "That hour is closed.";
+    root.querySelectorAll("p")[1]!.textContent = "Cancelled";
+    root.querySelector("button")!.textContent = "New";
+
+    // The button's name stays "Save", so its text change is news of its own.
+    expect(a11yDiff(before, root).text).toBe(
+      [
+        '~ status "That hour is closed.": a11y.name "" → "That hour is closed."',
+        '~ paragraph "Cancelled": a11y.name "Pending" → "Cancelled"',
+        '~ button "Save": dom.textContent "Old" → "New"',
+      ].join("\n"),
+    );
+  });
+
   it("(no changes) when the tree is untouched", () => {
     const root = mount(`<main><button>Go</button></main>`);
     const before = capture(root);
