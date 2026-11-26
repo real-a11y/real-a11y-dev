@@ -219,14 +219,29 @@ class TimelineRecorder {
   private moved(to: Element | null): void {
     if (this.box) return;
     for (const record of this.observer.takeRecords()) this.records.push(record);
-    const said =
-      this.options.announcements && this.records.length
-        ? new Map(
-            this.regionsWithin(this.root).map((r) => [r, announcedText(r)]),
-          )
-        : undefined;
-    this.moves.push({ at: this.records.length, to, said });
+    this.moves.push({ at: this.records.length, to, said: this.saidNow() });
     this.schedule();
+  }
+
+  /**
+   * What each region in the root says at a focus move, to place lines by
+   * ({@link heardAt}). Read only when the block changed something in or
+   * around the root since the last move's read; otherwise that read stands,
+   * or, with none, the regions still say what they said before the block.
+   */
+  private saidNow(): Map<Element, string> | undefined {
+    if (!this.options.announcements) return undefined;
+    const last = this.moves[this.moves.length - 1];
+    const fresh = this.records
+      .slice(last?.at ?? 0)
+      .some(
+        ({ target }) =>
+          safeContains(this.root, target) || safeContains(target, this.root),
+      );
+    if (!fresh) return last?.said;
+    return new Map(
+      this.regionsWithin(this.root).map((r) => [r, announcedText(r)]),
+    );
   }
 
   /**
