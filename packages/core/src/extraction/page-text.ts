@@ -189,9 +189,10 @@ function visit(
     if (!visible) return;
     const data = (node as Text).data;
     if (walk.keep && !walk.keep(node as Text)) {
-      // Its words left out, its white space kept: the words either side of
-      // it stay apart, as the page shows them.
-      walk.out.textNode(data.replace(/\S+/g, ""), whiteSpace);
+      // Its words left out, the white space at its edges kept: the words
+      // either side of it stay apart, as the page shows them, and the space
+      // between its own words goes with them.
+      walk.out.textNode(data.replace(/\S([^]*\S)?/, ""), whiteSpace);
       return;
     }
     walk.out.textNode(data, whiteSpace);
@@ -239,8 +240,8 @@ function visit(
  * reader can tell text shown anew from text it already showed.
  *
  * With `keep`, only the text nodes it accepts: the read leaves the others'
- * words out but keeps the page's layout, its line breaks and the white space
- * between words, around and in them.
+ * words out but keeps the page's layout around them, its line breaks and the
+ * white space at their edges that keeps the words either side apart.
  *
  * @internal For reads of a page's text outside core: the extension's
  * live-region line and field state, and `testing`'s timeline. Not a

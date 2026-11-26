@@ -91,6 +91,12 @@ describe("pageText", () => {
     expect(texts.map((t) => t.data)).toEqual(["Draft", "saved"]);
   });
 
+  it("drops the space between a left-out node's own words", () => {
+    const root = mount(`Saved<span id="n">2 files</span>.`);
+    const n = document.getElementById("n")!.firstChild;
+    expect(pageText(root, { keep: (node) => node !== n })).toBe("Saved.");
+  });
+
   it("reads slotted content where the shadow tree renders it", () => {
     const root = mount(`<div id="host"><span>middle</span></div>`);
     const shadow = document

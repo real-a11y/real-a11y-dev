@@ -719,6 +719,19 @@ describe("recordTimeline announcements", () => {
     `);
   });
 
+  it("ignores a silenced detail's own spaces when placing a line", async () => {
+    document.body.innerHTML = `<main><button id="b">Done</button><p role="status" id="s"></p></main>`;
+    const timeline = recordTimeline(document.querySelector("main")!);
+    byId("s").innerHTML = `Saved<span aria-live="off">2 files</span>.`;
+    byId("b").focus();
+    byId("s").textContent = "Saved.";
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`
+      announce  status "Saved."
+      focus     button "Done"
+    `);
+  });
+
   it("places slotted text changed before a focus move before it", async () => {
     document.body.innerHTML = `<div id="host"><span id="t" slot="msg"></span></div>`;
     const shadow = byId("host").attachShadow({ mode: "open" });
