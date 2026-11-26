@@ -33,10 +33,14 @@ interface Side {
   focus: SemanticNode | null | undefined;
 }
 
+/** `typeof` first: where there is no DOM, a bare `Element` reference throws,
+ *  and diffing two trees needs none. */
+function isElement(input: unknown): input is Element {
+  return typeof Element !== "undefined" && input instanceof Element;
+}
+
 function sideOf(input: A11yCapture | ExtractionResult | Element): Side {
-  // `typeof` first: where there is no DOM, a bare `Element` reference throws,
-  // and two trees need none.
-  if (typeof Element !== "undefined" && input instanceof Element) {
+  if (isElement(input)) {
     const cap = capture(input);
     return { tree: cap.tree, focus: cap.focus };
   }
