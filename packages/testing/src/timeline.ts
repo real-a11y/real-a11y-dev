@@ -21,6 +21,7 @@ import { redactString, serializeTabStop } from "@real-a11y-dev/serialize";
 import { boxSnapshot, type A11ySnapshotBox } from "./snapshot-box.js";
 import {
   announcedRead,
+  audible,
   gains,
   heldFrom,
   hiddenAbove,
@@ -89,11 +90,11 @@ interface Pending {
 
 /** A focus event: before which record it happened, where focus went (null
  *  while it is leaving), and, if the block had changed the page by then,
- *  the text nodes each region showed there ({@link TimelineRecorder.heardAt}). */
+ *  what each region said aloud there ({@link TimelineRecorder.heardAt}). */
 interface Move {
   at: number;
   to: Element | null;
-  said?: Map<Element, Map<Text, string>>;
+  said?: Map<Element, string>;
 }
 
 class TimelineRecorder {
@@ -228,7 +229,7 @@ class TimelineRecorder {
    * around the root since the last move's read; otherwise that read stands,
    * or, with none, the regions still say what they said before the block.
    */
-  private saidNow(): Map<Element, Map<Text, string>> | undefined {
+  private saidNow(): Map<Element, string> | undefined {
     if (!this.options.announcements) return undefined;
     const last = this.moves[this.moves.length - 1];
     // In the root as rendered, so light-DOM text a slot in the root renders
@@ -242,7 +243,10 @@ class TimelineRecorder {
     });
     if (!fresh) return last?.said;
     return new Map(
-      this.regionsWithin(this.root).map((r) => [r, announcedRead(r).from]),
+      this.regionsWithin(this.root).map((r) => [
+        r,
+        audible(r, announcedRead(r).from),
+      ]),
     );
   }
 
@@ -381,22 +385,22 @@ class TimelineRecorder {
 
   /**
    * Where in the block `region` came to say what it now says: at its last
-   * change, unless it already showed all of that at a focus move and at every
-   * move after ({@link gains}). Then at its last change before the first of
-   * those moves, so a change after it that announces nothing, such as a
-   * restyle that shows nothing or an edit under `aria-live="off"`, can't
-   * carry the line past the move. What a region showed at a move only places
-   * a line, and is never printed: the block hadn't rendered.
+   * change, unless it already said the same aloud at a focus move and at
+   * every move after ({@link audible}). Then at its last change before the
+   * first of those moves, so a change after it that says nothing new, such
+   * as a restyle that shows nothing, an edit under `aria-live="off"`, or the
+   * same words re-rendered, can't carry the line past the move. Words put in
+   * a new order after the move are new. What a region said at a move only
+   * places a line, and is never printed: the block hadn't rendered.
    */
   private heardAt(region: Element, positions: number[], moves: Move[]): number {
-    const now = this.lastFrom.get(region);
-    let from = moves.length;
-    while (from > 0) {
-      const then = moves[from - 1]!.said;
-      if (!now || !then || gains(region, now, then.get(region))) break;
-      from--;
+    const from = this.lastFrom.get(region);
+    const now = from && audible(region, from);
+    let first = moves.length;
+    while (first > 0 && now && moves[first - 1]!.said?.get(region) === now) {
+      first--;
     }
-    const before = from < moves.length ? 2 * moves[from]!.at : Infinity;
+    const before = first < moves.length ? 2 * moves[first]!.at : Infinity;
     const earlier = positions.filter((at) => at < before);
     return Math.max(...(earlier.length ? earlier : positions));
   }

@@ -116,13 +116,32 @@ export function gains(
 ): boolean {
   for (const [node, data] of now) {
     if (before?.get(node) === data || !/\S/.test(data)) continue;
-    // The nearest `aria-live` decides.
-    const level = between(node, region)
-      .map(regionLevel)
-      .find((l) => l !== null);
-    if (level !== "off") return true;
+    if (!silentIn(node, region)) return true;
   }
   return false;
+}
+
+/**
+ * What `region` says aloud, in reading order: its text without what sits
+ * under an `aria-live="off"` inside it, and without white space, which a
+ * restyle can move. Two reads that say the same are the same message,
+ * whichever nodes carry it.
+ */
+export function audible(region: Element, from: Map<Text, string>): string {
+  let said = "";
+  for (const [node, data] of from) {
+    if (!silentIn(node, region)) said += data;
+  }
+  return said.replace(/\s+/g, "");
+}
+
+/** Is `node` under an `aria-live="off"` inside `region`? The nearest
+ *  `aria-live` decides. */
+function silentIn(node: Text, region: Element): boolean {
+  const level = between(node, region)
+    .map(regionLevel)
+    .find((l) => l !== null);
+  return level === "off";
 }
 
 /** The elements from `node`'s parent up to `region`, not including it, as
