@@ -24,6 +24,10 @@ link "matchers"
 button "Copy Code"
 generic
 link "which is a different type surface"
+link "a11yDiff"
+button "Copy Code"
+generic
+link "Setting the options once"
 link "Playwright adapter"
 link "Peer dependencies"
 link "accessible names"

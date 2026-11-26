@@ -9,6 +9,7 @@ h1 Flow API
   h2 Asserting what an interaction changed
     h3 Style A — capture + a11yDiff (imperative, inline snapshot)
     h3 Style B — flow().expectChanges (fluent, structured)
+    h3 Setting the options once
   h2 flow(root, options?)
   h2 Utilities
     h3 waitForMutations(root, options?)

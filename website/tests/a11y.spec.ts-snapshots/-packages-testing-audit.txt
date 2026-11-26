@@ -113,6 +113,23 @@ main
     link "which is a different type surface"
     text "."
   paragraph
+    text "The setup file is also where the project's diff options go, once rather than in every"
+    link "a11yDiff"
+      code "a11yDiff"
+    text "call. A call's own options still win:"
+  button "Copy Code"
+  code "registerA11yMatchers(expect, { diff: { childIds: false } });"
+  paragraph
+    text "Without the matchers,"
+    code "configureA11y({ diff: { childIds: false } })"
+    text "from"
+    code "@real-a11y-dev/testing"
+    text "sets the same defaults. The type of its argument is"
+    code "A11yConfig"
+    text ". See"
+    link "Setting the options once"
+    text "."
+  paragraph
     text "Auditing a"
     strong "real browser page"
     text "instead of jsdom? That path skips all of the above — see the"
