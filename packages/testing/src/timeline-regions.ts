@@ -122,17 +122,33 @@ export function gains(
 }
 
 /**
- * What `region` says aloud, in reading order: its text without what sits
- * under an `aria-live="off"` inside it, and without white space, which a
- * restyle can move. Two reads that say the same are the same message,
- * whichever nodes carry it.
+ * What `region` says aloud, in reading order, a text node at a time: its
+ * text without what sits under an `aria-live="off"` inside it, and without
+ * white space, which a restyle can move.
  */
-export function audible(region: Element, from: Map<Text, string>): string {
-  let said = "";
+export function audible(region: Element, from: Map<Text, string>): string[] {
+  const said: string[] = [];
   for (const [node, data] of from) {
-    if (!silentIn(node, region)) said += data;
+    const text = data.replace(/\s+/g, "");
+    if (text && !silentIn(node, region)) said.push(text);
   }
-  return said.replace(/\s+/g, "");
+  return said;
+}
+
+/**
+ * Had a region that said `then` already said `now`? It had if the two read
+ * the same, whichever nodes carry the words, or if `now` is `then` with some
+ * of it taken away, the rest in the same order: a log trimmed of an old
+ * entry says nothing new. Words put in a new order are new.
+ */
+export function alreadySaid(then: string[], now: string[]): boolean {
+  if (then.join("") === now.join("")) return true;
+  let i = 0;
+  for (const part of now) {
+    while (i < then.length && then[i] !== part) i++;
+    if (i++ === then.length) return false;
+  }
+  return true;
 }
 
 /** Is `node` under an `aria-live="off"` inside `region`? The nearest

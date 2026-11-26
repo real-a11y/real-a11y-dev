@@ -614,6 +614,19 @@ describe("recordTimeline announcements", () => {
     `);
   });
 
+  it("keeps a log's new entry before a focus move that a trim follows", async () => {
+    document.body.innerHTML = `<main><button id="b">Continue</button><div role="log" id="l"><p id="old">Connecting</p></div></main>`;
+    const timeline = recordTimeline(document.querySelector("main")!);
+    byId("l").insertAdjacentHTML("beforeend", "<p>Connected</p>");
+    byId("b").focus();
+    byId("old").remove();
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`
+      announce  log "Connected"
+      focus     button "Continue"
+    `);
+  });
+
   it("places slotted text changed before a focus move before it", async () => {
     document.body.innerHTML = `<div id="host"><span id="t" slot="msg"></span></div>`;
     const shadow = byId("host").attachShadow({ mode: "open" });

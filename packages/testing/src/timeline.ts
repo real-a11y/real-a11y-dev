@@ -20,6 +20,7 @@ import { redactString, serializeTabStop } from "@real-a11y-dev/serialize";
 
 import { boxSnapshot, type A11ySnapshotBox } from "./snapshot-box.js";
 import {
+  alreadySaid,
   announcedRead,
   audible,
   gains,
@@ -94,7 +95,7 @@ interface Pending {
 interface Move {
   at: number;
   to: Element | null;
-  said?: Map<Element, string>;
+  said?: Map<Element, string[]>;
 }
 
 class TimelineRecorder {
@@ -229,7 +230,7 @@ class TimelineRecorder {
    * around the root since the last move's read; otherwise that read stands,
    * or, with none, the regions still say what they said before the block.
    */
-  private saidNow(): Map<Element, string> | undefined {
+  private saidNow(): Map<Element, string[]> | undefined {
     if (!this.options.announcements) return undefined;
     const last = this.moves[this.moves.length - 1];
     // In the root as rendered, so light-DOM text a slot in the root renders
@@ -385,19 +386,22 @@ class TimelineRecorder {
 
   /**
    * Where in the block `region` came to say what it now says: at its last
-   * change, unless it already said the same aloud at a focus move and at
-   * every move after ({@link audible}). Then at its last change before the
+   * change, unless it had already said it aloud at a focus move and at every
+   * move after ({@link alreadySaid}). Then at its last change before the
    * first of those moves, so a change after it that says nothing new, such
-   * as a restyle that shows nothing, an edit under `aria-live="off"`, or the
-   * same words re-rendered, can't carry the line past the move. Words put in
-   * a new order after the move are new. What a region said at a move only
-   * places a line, and is never printed: the block hadn't rendered.
+   * as a restyle that shows nothing, an edit under `aria-live="off"`, the
+   * same words re-rendered or an old entry trimmed, can't carry the line past
+   * the move. Words put in a new order after the move are new. What a region
+   * said at a move only places a line, and is never printed: the block
+   * hadn't rendered.
    */
   private heardAt(region: Element, positions: number[], moves: Move[]): number {
     const from = this.lastFrom.get(region);
     const now = from && audible(region, from);
     let first = moves.length;
-    while (first > 0 && now && moves[first - 1]!.said?.get(region) === now) {
+    while (first > 0 && now) {
+      const then = moves[first - 1]!.said?.get(region);
+      if (!then || !alreadySaid(then, now)) break;
       first--;
     }
     const before = first < moves.length ? 2 * moves[first]!.at : Infinity;
