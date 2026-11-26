@@ -124,7 +124,7 @@ main
       row
         cell "toHaveNoUnlabeledInteractive()"
           code "toHaveNoUnlabeledInteractive()"
-        cell "Every interactive node has a non-empty accessible name."
+        cell "Every interactive node, and every treeitem, tooltip, meter and progressbar, has a non-empty accessible name."
       row
         cell "toHaveValidHeadingOrder()"
           code "toHaveValidHeadingOrder()"
