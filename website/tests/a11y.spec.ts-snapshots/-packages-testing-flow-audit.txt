@@ -622,6 +622,9 @@ main
         code "aria-busy"
       text "aren't read: an announce line is always the region's whole text."
     listitem
+      strong "Order around a focus move within one step is best-effort."
+      text "An announce line goes before a focus move made in the same synchronous run when the region already said its final text at the move, or that text with some of its elements removed since. A run that rewrites the region into new elements after the move and drops part of it places the line after the move, though the words that stay were there before."
+    listitem
       strong "A region inserted already holding its text"
       text "prints like any other. Most screen readers don't announce one,"
       code "role="alert""
