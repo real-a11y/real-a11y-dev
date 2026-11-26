@@ -705,6 +705,20 @@ describe("recordTimeline announcements", () => {
     `);
   });
 
+  it("keeps a word break a silenced space makes when placing a line", async () => {
+    document.body.innerHTML = `<main><button id="b">Done</button><p role="status" id="s"></p></main>`;
+    const timeline = recordTimeline(document.querySelector("main")!);
+    byId("s").innerHTML =
+      `<span>Draft</span><span aria-live="off"> </span><span>saved</span>`;
+    byId("b").focus();
+    byId("s").textContent = "Draft saved";
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`
+      announce  status "Draft saved"
+      focus     button "Done"
+    `);
+  });
+
   it("places slotted text changed before a focus move before it", async () => {
     document.body.innerHTML = `<div id="host"><span id="t" slot="msg"></span></div>`;
     const shadow = byId("host").attachShadow({ mode: "open" });

@@ -81,6 +81,16 @@ describe("pageText", () => {
     expect(texts.map((t) => t.data)).toEqual(["Saved ", " files", "Done"]);
   });
 
+  it("keeps a left-out node's white space between the words around it", () => {
+    const root = mount(`Draft<span id="gap"> </span>saved`);
+    const gap = document.getElementById("gap")!.firstChild;
+    const texts: Text[] = [];
+    expect(pageText(root, { texts, keep: (node) => node !== gap })).toBe(
+      "Draft saved",
+    );
+    expect(texts.map((t) => t.data)).toEqual(["Draft", "saved"]);
+  });
+
   it("reads slotted content where the shadow tree renders it", () => {
     const root = mount(`<div id="host"><span>middle</span></div>`);
     const shadow = document

@@ -186,8 +186,15 @@ function visit(
 ): void {
   const type = safeNodeType(node);
   if (type === Node.TEXT_NODE) {
-    if (!visible || (walk.keep && !walk.keep(node as Text))) return;
-    walk.out.textNode((node as Text).data, whiteSpace);
+    if (!visible) return;
+    const data = (node as Text).data;
+    if (walk.keep && !walk.keep(node as Text)) {
+      // Its words left out, its white space kept: the words either side of
+      // it stay apart, as the page shows them.
+      walk.out.textNode(data.replace(/\S+/g, ""), whiteSpace);
+      return;
+    }
+    walk.out.textNode(data, whiteSpace);
     walk.texts?.push(node as Text);
     return;
   }
@@ -231,8 +238,9 @@ function visit(
  * pushed onto that array: which nodes a region's text comes from, so a
  * reader can tell text shown anew from text it already showed.
  *
- * With `keep`, only the text nodes it accepts: the read leaves the others
- * out but keeps the page's layout, its line and word breaks, around them.
+ * With `keep`, only the text nodes it accepts: the read leaves the others'
+ * words out but keeps the page's layout, its line breaks and the white space
+ * between words, around and in them.
  *
  * @internal For reads of a page's text outside core: the extension's
  * live-region line and field state, and `testing`'s timeline. Not a

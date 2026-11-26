@@ -394,11 +394,15 @@ class TimelineRecorder {
    * hadn't rendered.
    */
   private heardAt(region: Element, positions: number[], moves: Move[]): number {
-    const now = audibleRead(region);
+    // Read only once a move has something to compare: a block with no focus
+    // move, or none since the region changed, places by its last change.
+    let now: Said | undefined;
     let first = moves.length;
     while (first > 0) {
       const then = moves[first - 1]!.said?.get(region);
-      if (!then || !alreadySaid(then, now)) break;
+      if (!then) break;
+      now ??= audibleRead(region);
+      if (!alreadySaid(then, now)) break;
       first--;
     }
     const before = first < moves.length ? 2 * moves[first]!.at : Infinity;
