@@ -439,6 +439,81 @@ describe("recordTimeline announcements", () => {
     expect(timeline.stop()).toMatchInlineSnapshot(`(nothing recorded)`);
   });
 
+  it("doesn't replay a silent change made while hidden from above", async () => {
+    document.body.innerHTML = `<div id="app"><p role="status" id="s">Total: <span aria-live="off" id="o">1</span></p></div>`;
+    const timeline = recordTimeline(document.body);
+    byId("app").setAttribute("aria-hidden", "true");
+    await tick();
+    byId("o").textContent = "2";
+    await tick();
+    byId("app").removeAttribute("aria-hidden");
+    await tick();
+    byId("s").append(" items");
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(
+      `announce  status "Total: 2 items"`,
+    );
+  });
+
+  it("treats text a region hidden from above holds at the start as already said", async () => {
+    document.body.innerHTML = `<div id="app" inert><p role="status">3 results</p></div>`;
+    const timeline = recordTimeline(document.body);
+    byId("app").removeAttribute("inert");
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`(nothing recorded)`);
+  });
+
+  it("still announces what a restyle reveals behind text hidden inside a region", async () => {
+    document.body.innerHTML = `<style>.more { display: none } .open .more { display: inline }</style>
+      <main id="m"><p role="status"><span aria-hidden="true">✓</span> <span class="more">Saved</span></p></main>`;
+    const timeline = recordTimeline(byId("m"));
+    byId("m").className = "open";
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`announce  status "Saved"`);
+  });
+
+  it("stays silent for a change under aria-live=off made with a restyle above it", async () => {
+    document.body.innerHTML = `<main id="m"><p role="status">Total: <span aria-live="off" id="o">1</span></p></main>`;
+    const timeline = recordTimeline(byId("m"));
+    byId("m").className = "busy";
+    byId("o").textContent = "2";
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`(nothing recorded)`);
+  });
+
+  it("places text a restyle reveals after a focus move made before it", async () => {
+    document.body.innerHTML = `<style>.more { display: none } .open .more { display: inline }</style>
+      <main id="m"><button id="b">Sync</button><p role="status">Saved <span class="more">3 files synced</span></p></main>`;
+    const timeline = recordTimeline(byId("m"));
+    byId("m").className = "busy";
+    byId("b").focus();
+    byId("m").className = "open";
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`
+      focus     button "Sync"
+      announce  status "Saved 3 files synced"
+    `);
+  });
+
+  it("prints nothing for text a restyle or a removal takes away", async () => {
+    document.body.innerHTML = `<style>.more { display: none } .open .more { display: inline }</style>
+      <main id="m" class="open">
+        <p role="status">Saved<span class="more">, 3 files synced</span></p>
+        <div role="log"><p id="first">Sam joined.</p><p>Jo <b id="b">left</b></p></div>
+      </main>`;
+    const timeline = recordTimeline(byId("m"));
+    byId("m").className = "";
+    byId("first").remove();
+    byId("b").remove();
+    await tick();
+    // Shown again, the text is news again.
+    byId("m").className = "open";
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(
+      `announce  status "Saved, 3 files synced"`,
+    );
+  });
+
   it("announces a region inserted into another once, as itself", async () => {
     document.body.innerHTML = `<main><div role="log" id="l"></div></main>`;
     const timeline = recordTimeline(document.querySelector("main")!);

@@ -96,6 +96,33 @@ function exposed(tree: ExtractionResult, id: string): boolean {
   return true;
 }
 
+/** Note a change to a region: where, and whether it added text. */
+type Write = (holder: Holder | null, at: number, adds: boolean) => void;
+
+/**
+ * Is `now` what `before` was with some of its text taken out? Then it gained
+ * nothing. White space aside, since a restyle can move a line break.
+ */
+function onlyLost(now: string, before: string): boolean {
+  const from = before.replace(/\s+/g, "");
+  let i = 0;
+  for (const char of now.replace(/\s+/g, "")) {
+    i = from.indexOf(char, i);
+    if (i < 0) return false;
+    i += char.length;
+  }
+  return true;
+}
+
+/** Is `element` inside `aria-hidden` or `inert` content? */
+function hiddenAbove(element: Element): boolean {
+  for (let el = renderingParent(element); el; el = renderingParent(el)) {
+    if (isAriaHiddenValue(safeGetAttribute(el, "aria-hidden"))) return true;
+    if (safeGetAttribute(el, "inert") !== null) return true;
+  }
+  return false;
+}
+
 /** Is `node` an element under its own `aria-live="off"`? */
 function isSilent(node: Node): boolean {
   return (
@@ -156,6 +183,9 @@ class TimelineRecorder {
   private readonly lastText = new WeakMap<Element, string>();
   /** What it held then, `aria-hidden` above it aside ({@link heldText}). */
   private readonly lastHeld = new WeakMap<Element, string>();
+  /** Regions hidden from assistive tech above them, holding text that counts
+   *  as said though they never said it ({@link holdWhileHidden}). */
+  private readonly quietWhileHidden = new WeakSet<Element>();
   private readonly doc: Document;
   private readonly observer: MutationObserver;
   /** What the page changed since the block last settled, in order. */
@@ -374,11 +404,7 @@ class TimelineRecorder {
   /** Is the root inside `aria-hidden` or `inert` content? The tree, read
    *  from the root down, can't see that. */
   private hiddenAboveRoot(): boolean {
-    for (let el = renderingParent(this.root); el; el = renderingParent(el)) {
-      if (isAriaHiddenValue(safeGetAttribute(el, "aria-hidden"))) return true;
-      if (safeGetAttribute(el, "inert") !== null) return true;
-    }
-    return false;
+    return hiddenAbove(this.root);
   }
 
   // ─── live regions ──────────────────────────────────────────────────────────
@@ -390,61 +416,73 @@ class TimelineRecorder {
   private announcements(records: MutationRecord[]): Pending[] {
     const touches = this.collect(records);
     const pending: Pending[] = [];
-    for (const [region, at] of [...touches.written, ...touches.restyled]) {
-      const text = this.announcement(region);
+    for (const [region, at] of touches.changed) {
+      const text = this.announcement(region, touches.added.has(region));
       if (text) pending.push({ at, text });
     }
     for (const region of touches.quiet) this.takeInQuietly(region);
     return pending;
   }
 
-  /** Which regions the block wrote to, which it may only have shown or
-   *  hidden from above, and which it changed under `aria-live="off"`. */
+  /**
+   * Which regions the block changed, and where it last did; which of them it
+   * added text to (written or inserted), since a removal or a restyle is news
+   * only for the text it reveals; and which it changed only under
+   * `aria-live="off"`.
+   */
   private collect(records: MutationRecord[]): {
-    written: Map<Element, number>;
-    restyled: Map<Element, number>;
+    changed: Map<Element, number>;
+    added: Set<Element>;
     quiet: Set<Element>;
   } {
-    const written = new Map<Element, number>();
+    const changed = new Map<Element, number>();
+    const added = new Set<Element>();
     const quiet = new Set<Element>();
     const restyledAt = new Map<Element, number>();
     const removed: Node[] = [];
-    const write = (holder: Holder | null, at: number) => {
+    const write: Write = (holder, at, adds) => {
       if (holder?.quiet) quiet.add(holder.region);
-      else if (holder) written.set(holder.region, at);
+      else if (holder) {
+        changed.set(holder.region, at);
+        if (adds) added.add(holder.region);
+      }
     };
     for (const [i, record] of records.entries()) {
       const at = 2 * i + 1;
+      const target = record.target;
       if (record.type === "attributes") {
-        // Walked once per block, however often the page restyled it.
-        const target = record.target as Element;
-        if (!restyledAt.has(target)) restyledAt.set(target, at);
-      }
-      if (record.type !== "childList") {
-        write(this.regionHolding(record.target), at);
-        continue;
-      }
-      if (record.removedNodes.length) {
-        const silent = [...record.removedNodes].every(isSilent);
-        write(quieted(this.regionHolding(record.target), silent), at);
-        removed.push(...record.removedNodes);
-      }
-      for (const node of record.addedNodes) this.added(node, record, at, write);
-    }
-    // A region moved within the block is still there, holding what it held.
-    for (const node of removed) this.forget(node);
-    const restyled = new Map<Element, number>();
-    for (const [element, at] of restyledAt) {
-      for (const region of this.regionsWithin(element)) {
-        if (!written.has(region) && !restyled.has(region)) {
-          restyled.set(region, at);
+        // Walked once per block, at the last time the page restyled it.
+        restyledAt.set(target as Element, at);
+        write(this.regionHolding(target), at, false);
+      } else if (record.type === "characterData") {
+        write(this.regionHolding(target), at, true);
+      } else {
+        if (record.removedNodes.length) {
+          const silent = [...record.removedNodes].every(isSilent);
+          write(quieted(this.regionHolding(target), silent), at, false);
+          removed.push(...record.removedNodes);
+        }
+        for (const node of record.addedNodes) {
+          this.added(node, record, at, write);
         }
       }
     }
-    for (const region of [...written.keys(), ...restyled.keys()]) {
-      quiet.delete(region);
+    // A region moved within the block is still there, holding what it held.
+    for (const node of removed) this.forget(node);
+    for (const [element, at] of restyledAt) {
+      for (const region of this.regionsWithin(element)) {
+        if (!added.has(region)) {
+          changed.set(region, Math.max(changed.get(region) ?? -1, at));
+        }
+      }
     }
-    return { written, restyled, quiet };
+    // An announcing addition outweighs a silenced change; a silenced change
+    // outweighs a removal or restyle, which reveals nothing it didn't hide.
+    for (const region of quiet) {
+      if (added.has(region)) quiet.delete(region);
+      else changed.delete(region);
+    }
+    return { changed, added, quiet };
   }
 
   /**
@@ -456,22 +494,22 @@ class TimelineRecorder {
     node: Node,
     record: MutationRecord,
     at: number,
-    write: (holder: Holder | null, at: number) => void,
+    write: Write,
   ): void {
     const element =
       safeNodeType(node) === Node.ELEMENT_NODE ? (node as Element) : null;
     if (element && isLive(regionLevel(element))) {
       // `regionsWithin` starts at the element itself.
       for (const region of this.regionsWithin(element)) {
-        write({ region, quiet: false }, at);
+        write({ region, quiet: false }, at, true);
       }
       return;
     }
     // Content that arrives under its own `aria-live="off"` says nothing.
-    write(quieted(this.regionHolding(record.target), isSilent(node)), at);
+    write(quieted(this.regionHolding(record.target), isSilent(node)), at, true);
     if (!element) return;
     for (const region of this.regionsWithin(element)) {
-      write({ region, quiet: false }, at);
+      write({ region, quiet: false }, at, true);
     }
   }
 
@@ -544,6 +582,7 @@ class TimelineRecorder {
     for (const region of this.regionsWithin(this.root)) {
       const text = announcedText(region);
       if (text) this.remember(region, text);
+      else this.holdWhileHidden(region);
     }
   }
 
@@ -554,16 +593,26 @@ class TimelineRecorder {
    * from assistive tech some other way (`aria-hidden` on an ancestor, as a
    * modal does to the rest of the page), it keeps its text, and showing it
    * again announces nothing.
+   *
+   * `added` is a region the block wrote or inserted text into, where any
+   * difference is news. A removal or a restyle only takes text away or shows
+   * it: news only for text the region gained, as a screen reader announces
+   * additions and not removals.
    */
-  private announcement(region: Element): string | null {
+  private announcement(region: Element, added: boolean): string | null {
     const level = this.onPage(region) ? regionLevel(region) : null;
     const text = isLive(level) ? announcedText(region) : "";
     if (!isLive(level) || !text) {
       this.saysNothing(region, level);
       return null;
     }
-    if (this.lastText.get(region) === text) return null;
+    const last = this.lastText.get(region);
+    const silenced = this.quietWhileHidden.delete(region) && !added;
+    if (last === text) return null;
     this.remember(region, text);
+    if (silenced || (!added && last !== undefined && onlyLost(text, last))) {
+      return null;
+    }
     const role = getImplicitRole(region);
     const live = ROLE_LEVELS.get(role) === level ? "" : ` {live=${level}}`;
     const said = redactString(text, this.options.redact);
@@ -578,7 +627,22 @@ class TimelineRecorder {
     const level = this.onPage(region) ? regionLevel(region) : null;
     const text = isLive(level) ? announcedText(region) : "";
     if (text) this.remember(region, text);
-    else this.saysNothing(region, level);
+    else if (!isLive(level) || !this.holdWhileHidden(region)) {
+      this.saysNothing(region, level);
+    }
+  }
+
+  /**
+   * Hidden from assistive tech above it, as a modal hides the page behind it,
+   * `region` still holds text it can't say: count that as said once it shows
+   * again. Not for text hidden inside it, which a restyle can reveal as news.
+   */
+  private holdWhileHidden(region: Element): boolean {
+    const held = hiddenAbove(region) ? heldText(region) : "";
+    if (!held) return false;
+    this.lastHeld.set(region, held);
+    this.quietWhileHidden.add(region);
+    return true;
   }
 
   /**
@@ -597,11 +661,13 @@ class TimelineRecorder {
   private remember(region: Element, text: string): void {
     this.lastText.set(region, text);
     this.lastHeld.set(region, heldText(region));
+    this.quietWhileHidden.delete(region);
   }
 
   private forgetRegion(region: Element): void {
     this.lastText.delete(region);
     this.lastHeld.delete(region);
+    this.quietWhileHidden.delete(region);
   }
 }
 
