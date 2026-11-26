@@ -56,6 +56,18 @@ describe("pageText", () => {
     expect(pageText(root, { lines: true })).toBe("a  b\n c");
   });
 
+  it("notes the text nodes it read, when asked", () => {
+    const root = mount(
+      `Hi <b>there</b><span hidden>x</span><span aria-hidden="true">✓</span>`,
+    );
+    const texts: Text[] = [];
+    pageText(root, { announced: true, texts });
+    expect(texts.map((t) => t.data)).toEqual(["Hi ", "there"]);
+    texts.length = 0;
+    pageText(root, { texts });
+    expect(texts.map((t) => t.data)).toEqual(["Hi ", "there", "✓"]);
+  });
+
   it("reads slotted content where the shadow tree renders it", () => {
     const root = mount(`<div id="host"><span>middle</span></div>`);
     const shadow = document

@@ -9,7 +9,7 @@ import {
   pageText,
   renderingParent,
   safeGetAttribute,
-  safeNodeType,
+  safeParentElement,
 } from "@real-a11y-dev/core";
 
 export type Level = "polite" | "assertive";
@@ -20,13 +20,6 @@ export const ROLE_LEVELS: ReadonlyMap<string, Level> = new Map([
   ["status", "polite"],
   ["log", "polite"],
 ]);
-
-/** The live region a change belongs to, and whether a nested
- *  `aria-live="off"` silenced it on the way there. */
-export interface Holder {
-  region: Element;
-  quiet: boolean;
-}
 
 /**
  * How `el` announces: a politeness, `"off"` when its `aria-live` switches
@@ -44,21 +37,6 @@ export function regionLevel(el: Element): Level | "off" | null {
     : null;
 }
 
-/**
- * Is `now` what `before` was with some of its text taken out? Then it gained
- * nothing. White space aside, since a restyle can move a line break.
- */
-export function onlyLost(now: string, before: string): boolean {
-  const from = before.replace(/\s+/g, "");
-  let i = 0;
-  for (const char of now.replace(/\s+/g, "")) {
-    i = from.indexOf(char, i);
-    if (i < 0) return false;
-    i += char.length;
-  }
-  return true;
-}
-
 /** Is `element` inside `aria-hidden` or `inert` content? */
 export function hiddenAbove(element: Element): boolean {
   for (let el = renderingParent(element); el; el = renderingParent(el)) {
@@ -66,19 +44,6 @@ export function hiddenAbove(element: Element): boolean {
     if (safeGetAttribute(el, "inert") !== null) return true;
   }
   return false;
-}
-
-/** Is `node` an element under its own `aria-live="off"`? */
-export function isSilent(node: Node): boolean {
-  return (
-    safeNodeType(node) === Node.ELEMENT_NODE &&
-    regionLevel(node as Element) === "off"
-  );
-}
-
-/** `holder`, silenced when `silent`. */
-export function quieted(holder: Holder | null, silent: boolean): Holder | null {
-  return holder && silent ? { ...holder, quiet: true } : holder;
 }
 
 /** Is `region`'s level one that announces? */
@@ -91,13 +56,11 @@ function oneLine(text: string): string {
   return text.replace(/[ \t\n\r\f]+/g, " ").trim();
 }
 
-/**
- * What `region` holds whatever hides it from assistive tech above it: its
- * text as rendered, `aria-hidden` and ancestors aside. Empty when it is
- * emptied or hidden by its own `hidden` or `display`.
- */
-export function heldText(region: Element): string {
-  return oneLine(pageText(region, { lines: true }));
+/** A region's text, and the text nodes it comes from, with each one's data
+ *  as read. */
+export interface RegionRead {
+  text: string;
+  from: Map<Text, string>;
 }
 
 /**
@@ -108,4 +71,66 @@ export function heldText(region: Element): string {
  */
 export function announcedText(region: Element): string {
   return oneLine(pageText(region, { announced: true, lines: true }));
+}
+
+/** {@link announcedText}, and the text nodes it comes from. */
+export function announcedRead(region: Element): RegionRead {
+  const texts: Text[] = [];
+  const text = pageText(region, { announced: true, lines: true, texts });
+  return { text: oneLine(text), from: dataOf(texts) };
+}
+
+/**
+ * The text nodes `region` holds whatever hides it from assistive tech above
+ * it (a modal's `aria-hidden` on the page behind it, or a hidden ancestor):
+ * what it would say once shown, nothing `aria-hidden` inside it included.
+ * None when it is emptied, or hidden by its own `hidden` or `display`.
+ */
+export function heldFrom(region: Element): Map<Text, string> {
+  const texts: Text[] = [];
+  pageText(region, { texts });
+  return dataOf(
+    texts.filter(
+      (node) =>
+        /\S/.test(node.data) &&
+        !between(node, region).some((el) =>
+          isAriaHiddenValue(safeGetAttribute(el, "aria-hidden")),
+        ),
+    ),
+  );
+}
+
+/**
+ * Does `region` show text `before` didn't: a text node new to it, or one
+ * whose data changed? Not white space alone, and not text under an
+ * `aria-live="off"` inside it, a change it announces nothing for. Text a
+ * removal or a restyle only takes away, or shows again unchanged, is no gain.
+ */
+export function gains(
+  region: Element,
+  now: Map<Text, string>,
+  before: Map<Text, string> | undefined,
+): boolean {
+  for (const [node, data] of now) {
+    if (before?.get(node) === data || !/\S/.test(data)) continue;
+    // The nearest `aria-live` decides.
+    const level = between(node, region)
+      .map(regionLevel)
+      .find((l) => l !== null);
+    if (level !== "off") return true;
+  }
+  return false;
+}
+
+/** The elements from `node`'s parent up to `region`, not including it, as
+ *  rendered: text a slot renders is inside the slot. */
+function between(node: Text, region: Element): Element[] {
+  const path: Element[] = [];
+  let el = node.assignedSlot ?? safeParentElement(node);
+  for (; el && el !== region; el = renderingParent(el)) path.push(el);
+  return path;
+}
+
+function dataOf(texts: Text[]): Map<Text, string> {
+  return new Map(texts.map((node) => [node, node.data]));
 }

@@ -156,6 +156,8 @@ interface Walk {
   readonly announced: boolean;
   readonly lines: boolean;
   readonly out: TextBuilder;
+  /** Where to note each text node the read takes text from, if anywhere. */
+  readonly texts: Text[] | undefined;
   /** An explicit stack, not recursion: a page's depth is the page's to choose. */
   readonly stack: Pending[];
 }
@@ -182,7 +184,9 @@ function visit(
 ): void {
   const type = safeNodeType(node);
   if (type === Node.TEXT_NODE) {
-    if (visible) walk.out.textNode((node as Text).data, whiteSpace);
+    if (!visible) return;
+    walk.out.textNode((node as Text).data, whiteSpace);
+    walk.texts?.push(node as Text);
     return;
   }
   if (type !== Node.ELEMENT_NODE) return;
@@ -221,6 +225,10 @@ function visit(
  * an editor's text for an edit box that keeps line breaks; read without
  * `lines`, its paragraphs run together: `Dear Sam,Thanks!`.
  *
+ * With `texts`, also every text node the read takes text from, in order,
+ * pushed onto that array: which nodes a region's text comes from, so a
+ * reader can tell text shown anew from text it already showed.
+ *
  * @internal For reads of a page's text outside core: the extension's
  * live-region line and field state, and `testing`'s timeline. Not a
  * stability promise.
@@ -230,7 +238,8 @@ export function pageText(
   {
     announced = false,
     lines = false,
-  }: { announced?: boolean; lines?: boolean } = {},
+    texts,
+  }: { announced?: boolean; lines?: boolean; texts?: Text[] } = {},
 ): string {
   const rootStyle = getComputedStyle(root);
   const unread = announced
@@ -241,6 +250,7 @@ export function pageText(
   const walk: Walk = {
     announced,
     lines,
+    texts,
     out: new TextBuilder(lines),
     stack: [],
   };

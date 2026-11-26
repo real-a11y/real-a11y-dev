@@ -516,6 +516,39 @@ describe("recordTimeline announcements", () => {
     `);
   });
 
+  it("announces text a change reveals alongside a silent one", async () => {
+    document.body.innerHTML = `<main><p role="status">Total: <span aria-live="off" id="o">1</span><span id="r" hidden> results loaded</span></p></main>`;
+    const timeline = recordTimeline(document.querySelector("main")!);
+    byId("o").textContent = "2";
+    byId("r").hidden = false;
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(
+      `announce  status "Total: 2 results loaded"`,
+    );
+  });
+
+  it("announces a message shown in place of another, though shorter", async () => {
+    document.body.innerHTML = `<main><p role="status"><span id="i">Upload incomplete</span><span id="c" hidden>Upload complete</span></p></main>`;
+    const timeline = recordTimeline(document.querySelector("main")!);
+    byId("i").hidden = true;
+    byId("c").hidden = false;
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(
+      `announce  status "Upload complete"`,
+    );
+  });
+
+  it("announces what a region shown from behind inert gains as it shows", async () => {
+    document.body.innerHTML = `<section id="sec" inert><p role="status">Saved<span id="d" hidden>, 3 files synced</span></p></section>`;
+    const timeline = recordTimeline(document.body);
+    byId("sec").removeAttribute("inert");
+    byId("d").hidden = false;
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(
+      `announce  status "Saved, 3 files synced"`,
+    );
+  });
+
   it("prints nothing for text a restyle or a removal takes away", async () => {
     document.body.innerHTML = `<style>.more { display: none } .open .more { display: inline }</style>
       <main id="m" class="open">
