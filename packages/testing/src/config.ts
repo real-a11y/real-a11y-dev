@@ -5,8 +5,9 @@ import type { A11yDiffOptions } from "./diff.js";
 /** Project-wide defaults, set once with {@link configureA11y}. */
 export interface A11yConfig {
   /**
-   * Defaults for every diff this package prints: `a11yDiff`, and the text
-   * `flow().expectChanges` compares a string against. A call's own options
+   * Defaults for every diff this package prints: `a11yDiff`, the text
+   * `flow().expectChanges` compares a string against, and the diff a
+   * `ChangeSpec` failure ends with. A call's own options
    * win key by key, so `{ childIds: true }` in one call keeps the project's
    * `redact`. A call's `redact` replaces the project's list; `redact: []`
    * turns it off for that call.
@@ -42,7 +43,7 @@ const config = (): A11yConfig =>
  * calls this with its second argument.
  */
 export function configureA11y(next: A11yConfig): void {
-  if (!("diff" in next)) return;
+  if (!next || !("diff" in next)) return;
   const diff = next.diff;
   // A copy: a pattern list the caller changes later doesn't move the defaults.
   config().diff = diff && {

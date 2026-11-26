@@ -217,7 +217,8 @@ In a suite that doesn't register the matchers, `configureA11y({ diff: { … } })
 
 - **A call's options win key by key.** A key the call leaves out, or passes as `undefined`, takes the project's value, then the built-in default.
 - **A call's `redact` replaces the project's list** rather than adding to it. `redact: []` turns redaction off for that call.
-- **Each `configureA11y` call replaces the diff defaults**, so the last one wins. `{ diff: {} }` clears them.
+- **Each call that passes `diff` replaces the diff defaults**, so the last one wins. `{ diff: {} }` clears them; `registerA11yMatchers(expect)` with no second argument leaves them as they are.
+- **They hold for the rest of the test file.** Set them in the setup file. A test that changes them for itself should put them back afterwards, or every later test in the file prints its way; under Vitest's `isolate: false`, so do later files.
 - **They apply to every diff this package prints for a test:** `a11yDiff`, the text a `flow().expectChanges("…")` string is compared against, and the diff a `ChangeSpec` failure ends with. The [snapshot report](/packages/testing/snapshots#the-snapshot-report) redacts an `a11yDiff` record with the same patterns as its text.
 
 ## `flow(root, options?)`

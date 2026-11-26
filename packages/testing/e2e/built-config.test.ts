@@ -21,10 +21,12 @@ import type * as Matchers from "../src/matchers.js";
 
 const require = createRequire(import.meta.url);
 
-// `a11yDiff` checks `instanceof Element` before treating its input as a tree;
-// Node has no DOM, and the trees below need none.
-const g = globalThis as { Element?: unknown };
-g.Element ??= class Element {};
+// Node has no DOM: `a11yDiff` takes the plain trees below without one.
+test("there is no DOM here", () => {
+  expect(typeof (globalThis as { Element?: unknown }).Element).toBe(
+    "undefined",
+  );
+});
 
 /** A list `L` holding `items`, as a plain `ExtractionResult`. */
 function list(items: string[]): Index.ExtractionResult {
