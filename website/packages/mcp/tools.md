@@ -162,7 +162,7 @@ The reason the server exists. Both tools report violations a screen reader would
 
 *Read-only · whole-document · the primary tool.*
 
-Run the accessibility rules against the current page and return every violation — unlabeled interactive controls, form controls labeled only by title or aria-describedby, images missing alt text, skipped/missing/duplicate heading levels, unlabeled dialogs, and broken landmark structure. Findings come back grouped and counted (so "17 unlabeled links" is one row, each with its CSS locator) plus a machine-readable JSON block.
+Run the accessibility rules against the current page and return every violation — unlabeled interactive controls (and unnamed tree items, tooltips, meters and progress bars), form controls labeled only by title or aria-describedby, images missing alt text, skipped/missing/duplicate heading levels, unlabeled dialogs, and broken landmark structure. Findings come back grouped and counted (so "17 unlabeled links" is one row, each with its CSS locator) plus a machine-readable JSON block.
 
 Parameters:
 
