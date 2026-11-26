@@ -152,9 +152,10 @@ function editorStops(
 /**
  * How a record keeps an option of a sensitive choice (`a11y.choiceWithheld`):
  * what the choice is made in (`within`), where a focus on the option shows;
- * and an option of the same choice the tree left unmarked (`like`), which it
- * reads as. With none, every option of the choice is marked, and each reads
- * as no tab stop.
+ * and the node whose focusability and `tabindex` it takes (`like`): an
+ * option of the same choice the tree left unmarked, or the option itself
+ * where that would make it a tab stop it isn't. With none, every option of
+ * the choice is marked, and each reads as no tab stop.
  */
 interface ChoiceItem {
   within: string | undefined;
@@ -167,38 +168,70 @@ interface ChoiceItem {
  * group: `POPUP_CHOICE_ROLES`), but elsewhere in a sensitive field's popup
  * only the one whose own choice state it withheld: of three buttons in a
  * dialog, the pressed one. The ones it left unmarked say how that one reads,
- * unchosen.
+ * unchosen: as most of them do, a tab stop or not ({@link typicalPeer}).
  *
- * A choice is made in the nearest choice container above its option, else
- * the nearest node above it that holds another node of its role, else its
- * parent. Not merely the nearest unmarked node above it: a date grid's day
- * button sits in a cell of its own, which would say the day.
+ * Never as a stop it isn't, though. Where focus has left a roving list's
+ * chosen tab, the stop is the focused one, unmarked, and the chosen one is
+ * no stop; made one, it would be a stop the text didn't print.
+ *
+ * A choice is made in its popup: the nearest node above its option that a
+ * field controls (`aria-controls`). Within that, in the nearest choice
+ * container, else the nearest node that holds another node of its role,
+ * else the popup itself. Not merely the nearest unmarked node above it: a
+ * date grid's day button sits in a cell of its own, which would say the
+ * day. Nor anything around the popup, as a data grid whose cell holds the
+ * field and its popup is. With no popup found, the same search runs to the
+ * root, and falls back on the option's parent.
  */
 function choiceItems(tree: ExtractionResult): Map<string, ChoiceItem> {
   const items = new Map<string, ChoiceItem>();
+  const marked = [...tree.nodes.values()].filter((n) => n.a11y.choiceWithheld);
+  if (marked.length === 0) return items;
+  const stops = new Set(getTabSequence(tree).map((n) => n.id));
+  const popups = controlledIds(tree);
   const likes = new Map<string, SemanticNode | undefined>();
-  for (const node of tree.nodes.values()) {
-    if (!node.a11y.choiceWithheld) continue;
-    const within = choiceContainer(tree, node);
+  for (const node of marked) {
+    const within = choiceContainer(tree, node, popups);
     const key = `${within ?? ""}\n${node.a11y.role}`;
-    if (!likes.has(key)) likes.set(key, unmarkedPeer(tree, within, node));
-    items.set(node.id, { within, like: likes.get(key) });
+    if (!likes.has(key)) {
+      likes.set(key, typicalPeer(unmarkedPeers(tree, within, node), stops));
+    }
+    const peer = likes.get(key);
+    const promotes = peer && stops.has(peer.id) && !stops.has(node.id);
+    items.set(node.id, { within, like: promotes ? node : peer });
   }
   return items;
+}
+
+/** The element ids some node's `aria-controls` names: what fields control. */
+function controlledIds(tree: ExtractionResult): Set<string> {
+  const ids = new Set<string>();
+  for (const node of tree.nodes.values()) {
+    const named = node.dom?.attributes["aria-controls"];
+    for (const id of named?.split(/\s+/) ?? []) if (id) ids.add(id);
+  }
+  return ids;
 }
 
 /** What `node`'s choice is made in ({@link choiceItems}). */
 function choiceContainer(
   tree: ExtractionResult,
   node: SemanticNode,
+  popups: ReadonlySet<string>,
 ): string | undefined {
   const above = (id: string | null) =>
     id === null ? undefined : tree.nodes.get(id);
+  // The nodes above `node`, up to its popup.
+  const path: SemanticNode[] = [];
   for (let at = above(node.parentId); at; at = above(at.parentId)) {
-    if (POPUP_CHOICE_ROLES.has(at.a11y.role)) return at.id;
+    path.push(at);
+    const id = at.dom?.attributes.id;
+    if (id !== undefined && popups.has(id)) break;
   }
+  const container = path.find((at) => POPUP_CHOICE_ROLES.has(at.a11y.role));
+  if (container) return container.id;
   let from = node.id;
-  for (let at = above(node.parentId); at; at = above(at.parentId)) {
+  for (const at of path) {
     const passed = from;
     const peer = at.childIds.some(
       (id) => id !== passed && holdsRole(tree, id, node.a11y.role),
@@ -206,7 +239,11 @@ function choiceContainer(
     if (peer) return at.id;
     from = at.id;
   }
-  return node.parentId ?? undefined;
+  const top = path[path.length - 1];
+  const id = top?.dom?.attributes.id;
+  return top && id !== undefined && popups.has(id)
+    ? top.id
+    : (node.parentId ?? undefined);
 }
 
 /** Whether the node `id`, or one below it, is in `role`. */
@@ -220,14 +257,15 @@ function holdsRole(tree: ExtractionResult, id: string, role: string): boolean {
 }
 
 /**
- * The first node below `within`, in document order, in `node`'s role and
- * left unmarked: how `node` reads, unchosen.
+ * The nodes below `within`, in document order, in `node`'s role and left
+ * unmarked: how `node` reads, unchosen.
  */
-function unmarkedPeer(
+function unmarkedPeers(
   tree: ExtractionResult,
   within: string | undefined,
   node: SemanticNode,
-): SemanticNode | undefined {
+): SemanticNode[] {
+  const peers: SemanticNode[] = [];
   const pending = within === undefined ? [] : [within];
   for (let id = pending.shift(); id !== undefined; id = pending.shift()) {
     const at = tree.nodes.get(id);
@@ -238,11 +276,25 @@ function unmarkedPeer(
       at.a11y.role === node.a11y.role &&
       !at.a11y.choiceWithheld
     ) {
-      return at;
+      peers.push(at);
     }
     pending.unshift(...at.childIds);
   }
-  return undefined;
+  return peers;
+}
+
+/**
+ * The first of `peers` that reads as most of them do: a tab stop, or not,
+ * on a tie not. A roving list's one stop, or a disabled button among
+ * enabled ones, is the odd one out, not how an item reads.
+ */
+function typicalPeer(
+  peers: SemanticNode[],
+  stops: ReadonlySet<string>,
+): SemanticNode | undefined {
+  const asStops = peers.filter((p) => stops.has(p.id));
+  const rest = peers.filter((p) => !stops.has(p.id));
+  return asStops.length > rest.length ? asStops[0] : (rest[0] ?? asStops[0]);
 }
 
 /**

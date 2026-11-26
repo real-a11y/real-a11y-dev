@@ -349,6 +349,79 @@ describe("snapshot recorder", () => {
       expect(diff!.focusBefore).toBe(diff!.focusAfter);
     });
 
+    it("makes no tab stop of a chosen tab that focus has left", () => {
+      // Manual activation: the arrow keys moved focus, and the stop, to 02,
+      // while 01 stays selected.
+      const root = mount(
+        popup(
+          `<div role="tablist" aria-label="Months">` +
+            `<div role="tab" id="c1" tabindex="-1" aria-selected="true">01</div>` +
+            `<div role="tab" id="c2" tabindex="0">02</div>` +
+            `<div role="tab" id="c3" tabindex="-1">03</div></div>`,
+        ),
+      );
+      root.querySelector<HTMLElement>("#c2")!.focus();
+      const box = boxedTabSequenceSnapshot(root);
+      a11ySnapshotSerializer.serialize(box);
+
+      const [record] = records();
+      const tree: ExtractionResult = {
+        ...record!.tree!,
+        nodes: new Map(record!.tree!.nodes),
+      };
+      const nameOf = (id: string) => tree.nodes.get(id)!.a11y.name;
+      expect(getTabSequence(tree).map((n) => nameOf(n.id))).toEqual(
+        getTabSequence(extract(root)).map((n) => n.a11y.name),
+      );
+      expect(record).toMatchObject({ view: "tab" });
+      const tab = (name: string) =>
+        [...tree.nodes.values()].find(
+          (n) => n.a11y.role === "tab" && n.a11y.name === name,
+        )!;
+      expect(tab("01").dom!.attributes.tabindex).toBe("-1");
+      expect(tab("01").interaction).toEqual(tab("03").interaction);
+    });
+
+    it("keeps a chosen button as most of its siblings read, not as a disabled one", () => {
+      a11ySnapshotSerializer.serialize(
+        boxedTreeSnapshot(
+          mount(
+            popup(
+              `<button disabled>00</button><button aria-pressed="true">01</button><button>02</button><button>03</button>`,
+            ),
+          ),
+        ),
+      );
+      const nodes = records()[0]!.tree!.nodes.map(([, n]) => n);
+      const button = (name: string) =>
+        nodes.find((n) => n.a11y.role === "button" && n.a11y.name === name)!;
+      expect(button("01").interaction).toEqual(button("02").interaction);
+      expect(button("01").interaction?.isFocusable).toBe(true);
+    });
+
+    it("moves focus on a choice in a popup to the popup, not a grid around it", () => {
+      // A saved-cards grid holds the expiry field and its popup in one cell.
+      const root = mount(
+        `<table role="grid" aria-label="Cards"><tbody><tr><td>` +
+          `<input id="exp" role="combobox" aria-label="Month" aria-expanded="true" aria-controls="months" autocomplete="cc-exp-month">` +
+          `<div role="dialog" id="months" aria-label="Months">` +
+          `<button id="m3" aria-pressed="true">03</button><button>Cancel</button></div>` +
+          `</td></tr></tbody></table>`,
+      );
+      root.querySelector<HTMLElement>("#exp")!.focus();
+      const before = capture(root);
+      root.querySelector<HTMLElement>("#m3")!.focus();
+      a11ySnapshotSerializer.serialize(a11yDiff(before, root));
+      a11ySnapshotSerializer.serialize(boxedTreeSnapshot(root));
+
+      const [diff, tree] = records();
+      const roleOf = (side: SnapshotRecord["tree"], id?: string | null) =>
+        new Map(side!.nodes).get(id!)?.a11y.role;
+      expect(roleOf(diff!.before, diff!.focusBefore)).toBe("combobox");
+      expect(roleOf(diff!.after, diff!.focusAfter)).toBe("dialog");
+      expect(roleOf(tree!.tree, tree!.tree!.focusedId)).toBe("dialog");
+    });
+
     it("keeps the stops of an editor the tab order lists, and no other", () => {
       // A DOM-view read keeps a hidden button, which the tab order skips; a
       // tabindex out of range reads as none, so that button is a stop.
