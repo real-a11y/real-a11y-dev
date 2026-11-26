@@ -6854,3 +6854,43 @@ describe("withheldFields", () => {
     ]).toEqual(["n1", "n2", "n9", "n8"]);
   });
 });
+
+describe("readNativeTree's file input", () => {
+  const input = (
+    id: string,
+    name: string,
+    step: Record<string, string>,
+  ): RawNativeAXNode =>
+    ({
+      nodeId: id,
+      backendDOMNodeId: Number(id),
+      role: { value: "button" },
+      name: {
+        value: name,
+        sources: [{ ...step, value: { type: "computedString", value: name } }],
+      },
+    }) as RawNativeAXNode;
+  const raw: RawNativeAXNode[] = [
+    {
+      nodeId: "1",
+      backendDOMNodeId: 1,
+      role: { value: "RootWebArea" },
+      childIds: ["2", "3"],
+    },
+    input("2", "Choose File", { type: "contents", attribute: "value" }),
+    input("3", "Upload CV", { type: "attribute", attribute: "aria-label" }),
+  ];
+
+  it("reads the browser's own button text as no name, and keeps a page's", async () => {
+    const t = new FakeTransport((method) =>
+      method === "Accessibility.getFullAXTree" ? { nodes: raw } : {},
+    );
+    const res = await readNativeTree(t);
+    expect(findNative(res.nodes, "button", "Upload CV")).toBeDefined();
+    expect(findNative(res.nodes, "button", "Choose File")).toBeUndefined();
+    const names = new Set(
+      res.nodes.filter((n) => n.role === "button").map((n) => n.name),
+    );
+    expect(names).toEqual(new Set(["", "Upload CV"]));
+  });
+});

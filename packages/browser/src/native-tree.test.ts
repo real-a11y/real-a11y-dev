@@ -3346,3 +3346,66 @@ describe("readFrames — which frames a read follows", () => {
     expect(await readFrames(client, payloadOf([{ backend: 1 }]))).toEqual([]);
   });
 });
+
+describe("an unlabeled file input", () => {
+  /** Chromium's trace for a name: one winning step. */
+  const sources = (step: Record<string, string>, text: string) => [
+    { ...step, value: { type: "computedString", value: text } },
+  ];
+  const fileInput = (
+    id: string,
+    name: string,
+    step: Record<string, string>,
+    extra: Record<string, unknown> = {},
+  ) => ({
+    nodeId: id,
+    backendDOMNodeId: Number(id),
+    role: { type: "role", value: "button" },
+    name: { type: "computedString", value: name, sources: sources(step, name) },
+    ...extra,
+  });
+  const nodes = [
+    {
+      nodeId: "1",
+      backendDOMNodeId: 1,
+      role: { type: "role", value: "RootWebArea" },
+      name: { type: "computedString", value: "" },
+      childIds: ["2", "3"],
+    },
+    fileInput("2", "Choose File", { type: "contents", attribute: "value" }),
+    fileInput(
+      "3",
+      "Upload CV",
+      { type: "attribute", attribute: "aria-label" },
+      { value: { type: "string", value: "report.pdf" } },
+    ),
+  ] as RawNodes;
+  const dom = new Map<number, NativeDomInfo>([
+    [2, domOf("input", { type: "file", id: "bare" })],
+    [3, domOf("input", { type: "file", id: "labelled" })],
+  ]);
+
+  for (const redactInput of [false, true]) {
+    it(`reads as button "" with redactInput ${redactInput}, and a labelled one is unchanged`, () => {
+      const tree = buildNativeTree(nodes, dom, "157", { redactInput });
+      const byId = new Map(
+        nodesOf(tree).map((n) => [n.dom?.attributes["id"], n.a11y]),
+      );
+      expect(byId.get("bare")).toMatchObject({ role: "button", name: "" });
+      expect(byId.get("labelled")).toMatchObject({
+        role: "button",
+        name: "Upload CV",
+      });
+      // The chosen file's name is still withheld in strict mode only.
+      expect(byId.get("labelled")?.value).toBe(
+        redactInput ? undefined : "report.pdf",
+      );
+      expect(
+        collectFindings(tree, ["no-unlabeled-interactive"]).map((f) => [
+          f.role,
+          f.tagName,
+        ]),
+      ).toEqual([["button", "input"]]);
+    });
+  }
+});

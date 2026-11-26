@@ -250,6 +250,21 @@ test.describe("native tree", () => {
     expect(domSnap).not.toContain("slider");
   });
 
+  test("assertNoUnlabeledInteractive reports an unlabeled file input", async ({
+    page,
+  }) => {
+    // Chromium names it "Choose File" itself; the native tree reads no name.
+    await page.setContent("<main><h1>t</h1><input id=f type=file></main>");
+    const sn = await attach(page, { tree: "native" });
+    await expect(sn.assertNoUnlabeledInteractive()).rejects.toThrow();
+    await page.setContent(
+      '<main><h1>t</h1><input id=f type=file aria-label="Upload CV"></main>',
+    );
+    await expect(
+      (await attach(page, { tree: "native" })).assertNoUnlabeledInteractive(),
+    ).resolves.toBeUndefined();
+  });
+
   test("outlineSnapshot captures heading structure", async ({ page }) => {
     const sn = await attach(page, { tree: "native" });
     const outline = await sn.outlineSnapshot();
