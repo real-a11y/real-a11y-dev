@@ -28,6 +28,10 @@ export { capture } from "./capture.js";
 export type { A11yCapture } from "./capture.js";
 export { a11yDiff } from "./diff.js";
 export type { A11yDiffOptions } from "./diff.js";
+// Project-wide defaults (today, for diffs), set once from a setup file.
+// `registerA11yMatchers(expect, config)` calls this with its second argument.
+export { configureA11y } from "./config.js";
+export type { A11yConfig } from "./config.js";
 export type { ChangeSpec, NodeMatcher, ChangedMatcher } from "./change-spec.js";
 
 // Audit engine — the canonical home is @real-a11y-dev/audit; re-exported here

@@ -126,6 +126,12 @@ await flow(container)
 
 See the [Flow docs](https://real-a11y.dev/packages/testing/flow#asserting-what-an-interaction-changed) for both styles. `a11yDiff(before, after, { childIds: false })` leaves out a container's `childIds` count line when its `+`/`-` lines already explain it; a move or reorder still prints it.
 
+To set `childIds`, `values` and `redact` once for the whole project, pass them to `registerA11yMatchers` in the setup file, or call `configureA11y` from `@real-a11y-dev/testing` where no matchers are registered. A call's own options still win, key by key, and `flow().expectChanges("…")` strings compare against the same text:
+
+```ts
+registerA11yMatchers(expect, { diff: { childIds: false, redact: [/\d{2}:\d{2}/] } });
+```
+
 ## See snapshots as a tree
 
 A snapshot's text leaves out states, descriptions and what each element takes. Add the snapshot reporter to Vitest or Jest, and after every run `a11y-snapshots/index.html` draws each `boxedTreeSnapshot()` and `a11yDiff()` snapshot the way the Semantic Navigator panel does, with a diff's changes marked on its tree:

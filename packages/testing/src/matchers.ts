@@ -48,6 +48,7 @@ import {
   type ValidatedNode,
 } from "@real-a11y-dev/validate";
 
+import { configureA11y, type A11yConfig } from "./config.js";
 import {
   contractWrites,
   verifyContract,
@@ -598,8 +599,19 @@ interface ExpectApi {
  * which has its own type surface a `namespace jest` merge does not reach.
  * Import the one matching your runner; importing more than one is redundant
  * but harmless.
+ *
+ * `config`, when given, sets the project's defaults, as `configureA11y` from
+ * `@real-a11y-dev/testing` does:
+ *
+ * ```ts
+ * registerA11yMatchers(expect, { diff: { childIds: false } });
+ * ```
  */
-export function registerA11yMatchers(expect: ExpectApi): void {
+export function registerA11yMatchers(
+  expect: ExpectApi,
+  config?: A11yConfig,
+): void {
+  if (config) configureA11y(config);
   expect.extend(a11yMatchers);
   expect.addSnapshotSerializer?.(a11ySnapshotSerializer);
   // Where the snapshot viewer's recorder (off unless REAL_A11Y_TREES_DIR is

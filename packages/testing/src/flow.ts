@@ -14,6 +14,7 @@ import {
 
 import { capture, type A11yCapture } from "./capture.js";
 import { checkChangeSpec, type ChangeSpec } from "./change-spec.js";
+import { diffOptions } from "./config.js";
 import { dispatch } from "./dispatch.js";
 import { waitForMutations } from "./wait.js";
 
@@ -220,7 +221,8 @@ export class FlowChain implements PromiseLike<void> {
    *   })
    *   ```
    * - **`string`** — trim-compared against the `serializeTreeDiff` output
-   *   (mirrors `expectTree`; includes the `focus:` line).
+   *   (mirrors `expectTree`; includes the `focus:` line), printed with the
+   *   project's diff defaults (`configureA11y({ diff })`), as `a11yDiff` is.
    * - **predicate** — `(diff) => void`, the escape hatch (throw to fail).
    *
    * Throws if no action has run yet. A `ChangeSpec` failure ends with the
@@ -240,6 +242,7 @@ export class FlowChain implements PromiseLike<void> {
       const diff = diffTrees(this.baseline.tree, now.tree);
       const render = () =>
         serializeTreeDiff(diff, {
+          ...diffOptions(),
           focusBefore: this.baseline?.focus,
           focusAfter: now.focus,
         });

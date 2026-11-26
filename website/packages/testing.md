@@ -132,6 +132,18 @@ The second import is types-only, and there is one per runner: `./matchers/vitest
 `./matchers/jest` for Jest's global `expect`, and `./matchers/jest-globals` if you
 `import { expect } from "@jest/globals"` — [which is a different type surface](/packages/testing/matchers#vitest-vs-jest-type-augmentation).
 
+The setup file is also where the project's diff options go, once rather than in
+every [`a11yDiff`](/packages/testing/flow#asserting-what-an-interaction-changed)
+call. A call's own options still win:
+
+```ts
+registerA11yMatchers(expect, { diff: { childIds: false } });
+```
+
+Without the matchers, `configureA11y({ diff: { childIds: false } })` from
+`@real-a11y-dev/testing` sets the same defaults. The type of its argument is
+`A11yConfig`. See [Setting the options once](/packages/testing/flow#setting-the-options-once).
+
 Auditing a **real browser page** instead of jsdom? That path skips all of the
 above — see the [Playwright adapter](/packages/testing/playwright). Peer-version
 specifics for React, Testing Library and Playwright live in

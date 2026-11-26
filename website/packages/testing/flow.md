@@ -190,12 +190,35 @@ await flow(document.body)
 Three forms:
 
 - **`ChangeSpec`** — the ergonomic default. `added` / `removed` / `changed` are matched by `role` + optional `name` (string = case-, whitespace-, and typography-normalized exact; RegExp = tested against the folded name). A `ChangedMatcher` may list `changes` (dot-paths that must appear). **Subset by default** — resilient to incidental changes; `exact: true` asserts nothing else changed. Two kinds of change never count as an extra on their own: a `childIds`-only change on a container (the structural shadow of an add/remove), and an `a11y.value`-only change (a field whose contents a `type` step changed). Assert a value change explicitly with `changes: ["a11y.value"]`.
-- **`string`** — trim-compared against the `serializeTreeDiff` output, like `expectTree`. Includes the `focus:` line. (This whole-diff text form compares literally — unlike the `ChangeSpec` name match, it is **not** typography-folded, so it stays a faithful snapshot.)
+- **`string`** — trim-compared against the `serializeTreeDiff` output, like `expectTree`. Includes the `focus:` line, and follows the project's [diff defaults](#setting-the-options-once). (This whole-diff text form compares literally — unlike the `ChangeSpec` name match, it is **not** typography-folded, so it stays a faithful snapshot.)
 - **`(diff) => void`** — the escape hatch; throw to fail.
 
 Calling `expectChanges` before any action throws. A `ChangeSpec` failure ends with the rendered diff, so "what *did* change?" is always answered. A string-form mismatch, like `expectTree`, names the first differing line instead of dumping both full texts.
 
 Under the hood both styles are the engine's [`diffTrees`](/packages/testing#queries) rendered by `serializeTreeDiff` — an **in-realm** comparison keyed on node identity (a live before/after in one document), distinct from the [CLI's](/packages/cli) cross-process artifact diff.
+
+### Setting the options once
+
+A suite usually wants `childIds`, `values` and `redact` the same way in every test. Set them once, in the setup file that registers the matchers, and a call you forget to pass them to still prints the project's way:
+
+```ts
+// vitest.setup.ts
+registerA11yMatchers(expect, {
+  diff: { childIds: false, redact: [/\d{2}:\d{2}/] },
+});
+```
+
+```ts
+expect(a11yDiff(before, root)).toMatchSnapshot();                    // childIds: false, times redacted
+expect(a11yDiff(before, root, { childIds: true })).toMatchSnapshot(); // this call only; times still redacted
+```
+
+In a suite that doesn't register the matchers, `configureA11y({ diff: { … } })` from `@real-a11y-dev/testing` does the same; `registerA11yMatchers` calls it with its second argument.
+
+- **A call's options win key by key.** A key the call leaves out, or passes as `undefined`, takes the project's value, then the built-in default.
+- **A call's `redact` replaces the project's list** rather than adding to it. `redact: []` turns redaction off for that call.
+- **Each `configureA11y` call replaces the diff defaults**, so the last one wins. `{ diff: {} }` clears them.
+- **They apply to every diff this package prints for a test:** `a11yDiff`, the text a `flow().expectChanges("…")` string is compared against, and the diff a `ChangeSpec` failure ends with. The [snapshot report](/packages/testing/snapshots#the-snapshot-report) redacts an `a11yDiff` record with the same patterns as its text.
 
 ## `flow(root, options?)`
 

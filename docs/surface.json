@@ -111,6 +111,7 @@
           "subpath": ".",
           "types": [
             "A11yCapture",
+            "A11yConfig",
             "A11yDiffOptions",
             "A11yRule",
             "ActionResult",
@@ -145,6 +146,7 @@
             "assertRules",
             "capture",
             "collectFindings",
+            "configureA11y",
             "diffTrees",
             "dispatch",
             "extract",
