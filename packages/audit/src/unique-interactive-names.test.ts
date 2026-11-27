@@ -239,6 +239,16 @@ describe("unique-interactive-names — links", () => {
     expect(JSON.stringify(findings)).not.toMatch(/abc123|def456/);
   });
 
+  it("prints an href without the credentials in it", () => {
+    const root = mount(`
+      <a href="https://ann:s3cret@a.example/x">Files</a>
+      <a href="https://b.example/x">Files</a>`);
+    expect(unique(root).map((f) => f.context)).toEqual([
+      'href="https://a.example/x"',
+      'href="https://b.example/x"',
+    ]);
+  });
+
   it("counts a link with no href as a destination of its own", () => {
     const root = mount(
       `<span role="link" tabindex="0">Next</span><span role="link" tabindex="0">Next</span>`,

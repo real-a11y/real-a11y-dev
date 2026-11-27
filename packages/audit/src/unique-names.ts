@@ -242,7 +242,9 @@ function clip(text: string): string {
  */
 function contextOf({ node, landmark }: Candidate): string | undefined {
   const bits: string[] = [];
-  const href = node.dom?.attributes["href"]?.replace(/[?#].*$/s, "");
+  const href = node.dom?.attributes["href"]
+    ?.replace(/[?#].*$/s, "")
+    .replace(/^([a-z][a-z\d+.-]*:)?\/\/[^/@]*@/i, "$1//");
   if (href) bits.push(`href="${clip(href)}"`);
   if (landmark) {
     const name = landmark.a11y.name.trim();
