@@ -189,6 +189,26 @@ describe("startTimeline", () => {
     expect(runs).toEqual([["focus"], ["announce"]]);
   });
 
+  it("hands onEvents every run though a call throws after stopping with a change unread", () => {
+    document.body.innerHTML = `<main><p role="status" id="s"></p><p role="alert" id="t"></p></main>`;
+    const runs: string[][] = [];
+    let inner: readonly TimelineEvent[] | undefined;
+    const recording = startTimeline(document.querySelector("main")!, {
+      onEvents: (events) => {
+        runs.push(events.map((e) => (e.kind === "announce" ? e.text : "")));
+        if (runs.length > 1) return;
+        byId("t").textContent = "Offline.";
+        inner = recording.stop();
+        throw new Error("the bridge is gone");
+      },
+    });
+    byId("s").textContent = "Saved.";
+    expect(() => recording.stop()).toThrow("the bridge is gone");
+    expect(runs).toEqual([["Saved."], ["Offline."]]);
+    expect(recording.stop()).toBe(inner);
+    expect(inner).toHaveLength(2);
+  });
+
   it("never calls onEvents before startTimeline returns", async () => {
     document.body.innerHTML = `<main><button id="a">A</button></main>`;
     byId("a").focus();

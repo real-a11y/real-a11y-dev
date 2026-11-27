@@ -19,6 +19,7 @@ import { asStop } from "../query/tab-sequence.js";
 import type { ExtractionResult } from "../types.js";
 
 import {
+  freeze,
   timelineProblem,
   type TimelineAnnounceEvent,
   type TimelineEvent,
@@ -56,17 +57,6 @@ function exposed(tree: ExtractionResult, id: string): boolean {
     n = n.parentId === null ? undefined : tree.nodes.get(n.parentId);
   }
   return true;
-}
-
-/** `event`, and the stop it names, made read-only: `stop()` and `onEvents`
- *  hand out the same events, which no reader can then change for another. */
-function freeze(event: TimelineEvent): TimelineEvent {
-  if (event.kind === "focus" && event.stop) {
-    Object.freeze(event.stop.states);
-    Object.freeze(event.stop.properties);
-    Object.freeze(event.stop);
-  }
-  return Object.freeze(event);
 }
 
 /** Note a change to the regions at a point in their block. */
@@ -193,7 +183,8 @@ class TimelineRecorder {
       this.observer.disconnect();
       for (const target of [this.doc, ...this.shadowRoots])
         this.listen(target, this.removeListener);
-      this.done = Object.freeze([...this.events]);
+      // Kept when a call `onEvents` was handed stopped it first.
+      this.done ??= Object.freeze([...this.events]);
     }
     return this.done;
   }
@@ -201,21 +192,25 @@ class TimelineRecorder {
   /**
    * Add a run of events, and hand `onEvents` every one it hasn't had. Never
    * from inside a call to it: what a call's `stop()` settles is the next
-   * run, handed over once that call returns.
+   * run, handed over once that call returns, though that call threw. The
+   * first throw is rethrown once every run is out.
    */
   private emit(events: TimelineEvent[]): void {
     for (const event of events) this.events.push(freeze(event));
     if (this.delivering) return;
     this.delivering = true;
-    try {
-      while (this.sent < this.events.length) {
-        const run = this.events.slice(this.sent);
-        this.sent = this.events.length;
+    const errors: unknown[] = [];
+    while (this.sent < this.events.length) {
+      const run = this.events.slice(this.sent);
+      this.sent = this.events.length;
+      try {
         this.options.onEvents?.(run);
+      } catch (error) {
+        errors.push(error);
       }
-    } finally {
-      this.delivering = false;
     }
+    this.delivering = false;
+    if (errors.length) throw errors[0];
   }
 
   /**

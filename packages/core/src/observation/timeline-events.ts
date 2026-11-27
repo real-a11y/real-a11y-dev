@@ -84,6 +84,17 @@ export interface TimelineRecording {
   stop(): readonly TimelineEvent[];
 }
 
+/** `event`, and the stop it names, made read-only: `stop()` and `onEvents`
+ *  hand out the same events, which no reader can then change for another. */
+export function freeze(event: TimelineEvent): TimelineEvent {
+  if (event.kind === "focus" && event.stop) {
+    Object.freeze(event.stop.states);
+    Object.freeze(event.stop.properties);
+    Object.freeze(event.stop);
+  }
+  return Object.freeze(event);
+}
+
 /** The stop of a focused element the tree doesn't walk at all: its role,
  *  and nothing assistive tech could say of it. */
 export function unreached(role: string): Omit<A11yInfo, "value"> {
