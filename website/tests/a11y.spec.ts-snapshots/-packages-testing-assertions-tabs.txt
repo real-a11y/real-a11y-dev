@@ -4,6 +4,7 @@ link "assertNoUnlabeledInteractive(root)"
 link "assertHeadingOrder(root)"
 link "assertDialogsLabeled(root)"
 link "assertLandmarkStructure(root)"
+link "assertUniqueInteractiveNames(root)"
 link "A11yAssertionError"
 link "See also"
 link "@real-a11y-dev/testing"
@@ -11,6 +12,10 @@ link "Matchers"
 button "Copy Code"
 generic
 table
+button "Copy Code"
+generic
+button "Copy Code"
+generic
 button "Copy Code"
 generic
 button "Copy Code"

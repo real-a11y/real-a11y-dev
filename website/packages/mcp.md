@@ -237,12 +237,13 @@ different jobs.
 
 ## Limitations
 
-- **Scope.** It runs six rules today — unlabeled interactive elements, form
+- **Scope.** It runs seven rules today — unlabeled interactive elements, form
   controls labeled only by `title` / `aria-describedby`, images missing alt
-  text, heading order, dialog labeling, and landmark structure — plus the full
-  semantic tree. It is not a complete WCAG or axe-core suite; it is
-  semantic-tree-based and tuned to "what a screen reader announces," with
-  `label-title-only` as the one axe-aligned best-practice extra. For contrast,
+  text, heading order, dialog labeling, landmark structure, and controls that
+  share an accessible name — plus the full semantic tree. It is not a complete
+  WCAG or axe-core suite; it is semantic-tree-based and tuned to "what a screen
+  reader announces," with `label-title-only` and `unique-interactive-names` as
+  its best-practice extras. For contrast,
   focus visibility, and other rendered/interactive checks, pair it with
   [axe-core](https://github.com/dequelabs/axe-core) and manual testing.
 - **Fidelity follows the engine.** The tree is a reimplementation of

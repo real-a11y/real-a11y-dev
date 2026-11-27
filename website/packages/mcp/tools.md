@@ -162,11 +162,11 @@ The reason the server exists. Both tools report violations a screen reader would
 
 *Read-only · whole-document · the primary tool.*
 
-Run the accessibility rules against the current page and return every violation — unlabeled interactive controls (and unnamed tree items, tooltips, meters and progress bars), form controls labeled only by title or aria-describedby, images missing alt text, skipped/missing/duplicate heading levels, unlabeled dialogs, and broken landmark structure. Findings come back grouped and counted (so "17 unlabeled links" is one row, each with its CSS locator) plus a machine-readable JSON block.
+Run the accessibility rules against the current page and return every violation — unlabeled interactive controls (and unnamed tree items, tooltips, meters and progress bars), form controls labeled only by title or aria-describedby, images missing alt text, skipped/missing/duplicate heading levels, unlabeled dialogs, broken landmark structure, and controls that share an accessible name. Findings come back grouped and counted (so "17 unlabeled links" is one row, each with its CSS locator) plus a machine-readable JSON block.
 
 Parameters:
 
-- **`rules`** — array of `"no-unlabeled-interactive"` \| `"label-title-only"` \| `"image-alt"` \| `"heading-order"` \| `"dialog-labeled"` \| `"landmark-structure"` — optional — a subset of rules to run. Omit to run all.
+- **`rules`** — array of `"no-unlabeled-interactive"` \| `"label-title-only"` \| `"image-alt"` \| `"heading-order"` \| `"dialog-labeled"` \| `"landmark-structure"` \| `"unique-interactive-names"` — optional — a subset of rules to run. Omit to run all.
 
 Audits **Chromium's own accessibility tree**, read over CDP, so it reaches structure no in-page walk can — most visibly a `<video controls>`'s user-agent-shadow media controls. Findings carry CSS locators, so that reach costs nothing in actionability. Whole-document; Chromium only.
 
@@ -186,7 +186,7 @@ There is **no tab-order section**: the tree this reads carries none, and printin
 
 Parameters:
 
-- **`rules`** — array of the five rule ids above — optional — subset for the findings section. Omit to run all.
+- **`rules`** — array of the rule ids above — optional — subset for the findings section. Omit to run all.
 - **`includeGeneric`** — boolean — optional (default `false`) — include generic container nodes (`role=generic`) in the tree, among them a `<div>` of text, named from its own text.
 - **`states`** — boolean — optional (default `true`) — print each node's `{…}` states block. Pass `false` for lines without blocks, byte for byte the text from before they existed, e.g. to compare with tree text captured then.
 
@@ -306,7 +306,7 @@ Snapshot the current page's accessibility findings and store them under `name`; 
 Parameters:
 
 - **`name`** — string — required — the checkpoint label (the store key).
-- **`rules`** — array of the five rule ids — optional — subset for the findings. Omit to run all.
+- **`rules`** — array of the rule ids [`audit_page`](#audit-page) takes — optional — subset for the findings. Omit to run all.
 - **`values`** — boolean — optional (default `false`) — capture each field's value in the checkpoint's tree view, as the live views show it (a sensitive field still `[redacted]`). Off by default because a checkpoint becomes an artifact that can be exported, committed and posted — the same opt-in as the CLI's `snapshot --values`. It covers each field's own value; a name Chromium builds from what a field or editor holds (a heading typed into an editor) stays, except for sensitive fields — [`REAL_A11Y_REDACT_INPUT=1`](#real-a11y-redact-input) withholds those too. A checkpoint captured with values is exported only when [`export_checkpoint`](#export-checkpoint) is asked for them too. Ignored under [`REAL_A11Y_REDACT_INPUT=1`](#real-a11y-redact-input).
 - **`states`** — boolean — optional (default `true`) — print each node's `{…}` states block in the checkpoint's tree view, as [`get_semantic_tree`](#get-semantic-tree) does. The checkpoint remembers which: [`diff_findings`](#diff-findings) re-reads the page the same way, and an export records it in `meta.states`, as the CLI's `snapshot` does (`--no-states` there).
 

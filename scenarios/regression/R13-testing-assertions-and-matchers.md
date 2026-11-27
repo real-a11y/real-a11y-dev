@@ -1,12 +1,12 @@
 ---
 id: R13
 suite: regression
-scenario: "Testing pkg — all 4 assertions + the matchers entry points, pass AND fail correctly"
+scenario: "Testing pkg — all 5 assertions + the matchers entry points, pass AND fail correctly"
 area: Testing
 type: Automated
 priority: P0
 status: Active
-validFrom: "testing ≥ 0.1.0-beta.11. Exercise every matcher entry point: ./matchers, ./matchers/vitest, and — from the FIRST release after 0.1.0-beta.15 — ./matchers/jest and ./matchers/jest-globals, neither of which existed before that (Jest's augmentation shipped unconditionally from ./matchers, and never covered the `@jest/globals` shape at all). Their TYPES are R36; this row is runtime behaviour. The engine behind these lives in `audit`, which is now PRIVATE and bundled — so assert against `@real-a11y-dev/testing` only; there is no `audit` version to pin, and importing it is the failure."
+validFrom: "testing ≥ 0.1.0-beta.11. Exercise every matcher entry point: ./matchers, ./matchers/vitest, and — from the FIRST release after 0.1.0-beta.15 — ./matchers/jest and ./matchers/jest-globals, neither of which existed before that (Jest's augmentation shipped unconditionally from ./matchers, and never covered the `@jest/globals` shape at all). Their TYPES are R36; this row is runtime behaviour. `assertUniqueInteractiveNames` and `toHaveUniqueInteractiveNames` (step 10) exist from the FIRST release after 0.1.0-beta.24. The engine behind these lives in `audit`, which is now PRIVATE and bundled — so assert against `@real-a11y-dev/testing` only; there is no `audit` version to pin, and importing it is the failure."
 validUntil: ""
 expected: "each assert* passes on good markup and throws A11yAssertionError naming the offender on bad; matchers register and read well"
 twin: D5
@@ -18,7 +18,7 @@ notion: "https://app.notion.com/p/3aa1c354b0b581a18eb8e2d4266bbc66"
 
 ## Steps
 
-For each of the four assertions, run it **twice** — once on markup that should pass,
+For each of the five assertions, run it **twice** — once on markup that should pass,
 once on markup that should fail:
 
 | Assertion                        | Fails on                                                       |
@@ -27,6 +27,7 @@ once on markup that should fail:
 | `assertHeadingOrder`             | a page whose first heading is `<h2>`, and one that skips h2→h4 |
 | `assertDialogsLabeled`           | `role="dialog"` with no accessible name — including one whose only text is loose content beside its buttons (step 9) |
 | `assertLandmarkStructure`        | no `<main>`, and two `<main>`s                                  |
+| `assertUniqueInteractiveNames`   | two `<button>Accept</button>`, and two links named "Read more" with different `href`s (step 10) |
 
 1. Each assertion on good markup
 2. Each assertion on bad markup — read the **message**, not just the throw
@@ -36,9 +37,9 @@ once on markup that should fail:
    `/matchers/jest` or `/matchers/jest-globals`) and exercise:
    `toHaveNoUnlabeledInteractive`,
    `toHaveValidLandmarks`, `toHaveValidHeadingOrder`, `toHaveLabeledDialogs`,
-   `toHaveTabSequence`. The remaining two — `toBeValidA11yTree` and
-   `toMatchA11yContract` — are **R34**, which is where their behaviour lives;
-   here just confirm all seven register
+   `toHaveUniqueInteractiveNames`, `toHaveTabSequence`. The remaining two —
+   `toBeValidA11yTree` and `toMatchA11yContract` — are **R34**, which is where
+   their behaviour lives; here just confirm all eight register
 5. Each matcher **negated** (`.not`) on markup where that reads true
 6. Feed a matcher something that isn't an element — then feed the **same** value
    to the bare `assert*` function behind it, and compare. That gap is **R33**
@@ -54,6 +55,12 @@ once on markup that should fail:
    `<div role="dialog">Delete this project? <button>Cancel</button></div>`, then
    on the same dialog with `aria-labelledby` pointing at an `<h2>` holding that
    sentence
+10. `assertUniqueInteractiveNames` on
+    `<main><section aria-label="Requests"><p>Ana</p><button>Accept</button><p>Luis</p><button>Accept</button></section><section aria-label="Menu"><button aria-expanded="false">Options</button><button aria-expanded="true">Options</button></section></main>`,
+    then on each of these, which should pass: the same buttons named "Accept Ana"
+    and "Accept Luis"; two links `<a href="/p/1">Blue mug</a>` to one `href`;
+    a "Yes" and a "No" radio in each of two `<fieldset>`s. Last, give the two
+    "Accept" buttons different `aria-describedby` descriptions
 
 ## Expected
 
@@ -89,6 +96,16 @@ once on markup that should fail:
   0.1.0-beta.16. On 0.1.0-beta.16 and earlier the first call passes, because the
   DOM producer named the dialog "Delete this project?" from its loose text. That
   is the old behaviour reproduced, not a fail of this row.
+- **10** — the first call **throws** one line per control, four in all: two
+  `another button is also named "Accept"`, each with its own locator and
+  `in <region "Requests">`, and two for "Options", whose different
+  `aria-expanded` doesn't tell them apart. The three variants pass. The
+  `aria-describedby` variant still **throws**: a description doesn't make a name
+  unique. `collectFindings(root)` reports the same four as `warning`s, since
+  the rule is in `ALL_RULES`. From testing ≥ the first release after
+  0.1.0-beta.24; on 0.1.0-beta.24 and earlier the helper doesn't exist and
+  `collectFindings` reports only the missing `<h1>`. That is the old surface,
+  not a fail of this row.
 
 ## Why this exists
 
@@ -103,6 +120,12 @@ its buttons looks labeled, and the DOM producer used to agree, naming it from
 that sentence, while Chromium and a screen reader give it no name at all. So
 `assertDialogsLabeled` passed exactly the unlabeled confirm dialog it exists to
 catch.
+
+Step 10 guards a check people had been writing by hand. Before the rule, the
+way to catch two "Accept" buttons was to split `tabSequenceSnapshot()` into
+lines and look for repeats, and beta.24's `{…}` states block quietly broke it:
+`button "Options" {expanded=false}` and `button "Options" {expanded}` are two
+different lines, so two same-named toggles passed.
 
 Step 6 guards the worst outcome available here: a matcher that accepts junk and
 passes turns an entire suite into decoration, and it does so silently and

@@ -105,7 +105,8 @@ controls inside it. A finding there is located from the frame's own
 (`#checkout >>> body > form > button`) — no single selector crosses a frame.
 `heading-order` and `landmark-structure` judge the page's own document, so an
 embedded widget's `<h1>` or `<main>` is not counted as a second one of the
-page's. That holds wherever Chromium runs the frame: under site isolation — the
+page's, and `unique-interactive-names` compares each frame's controls on their
+own. That holds wherever Chromium runs the frame: under site isolation — the
 [Chrome for Testing](/packages/cli/commands#install) that `real-a11y install`
 fetches, or a Chrome you reach with `--cdp` — a cross-site or `sandbox`ed
 `<iframe>` runs in a process of its own and is read over a session of its own.

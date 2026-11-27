@@ -43,6 +43,7 @@ const CONSUMERS: Record<string, string> = {
   assertHeadingOrder: "testing/playwright evalFn()",
   assertDialogsLabeled: "testing/playwright evalFn()",
   assertLandmarkStructure: "testing/playwright evalFn()",
+  assertUniqueInteractiveNames: "testing/playwright evalFn()",
 
   // Thrown by the assert* helpers inside the page. Exported so a caller
   // evaluating the IIFE directly can identify what it caught; the class itself

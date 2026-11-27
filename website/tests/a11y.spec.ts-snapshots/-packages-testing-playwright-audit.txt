@@ -52,7 +52,7 @@ main
   heading "attach(page, options?)" (level 2)
     code "attach(page, options?)"
   button "Copy Code"
-  code "import { test, expect } from "@playwright/test"; import { attach } from "@real-a11y-dev/testing/playwright"; test("page heading structure", async ({ page }) => { await page.goto("https://example.com"); const sn = await attach(page); // Assertions — throw with descriptive messages on failure await sn.assertHeadingOrder(); await sn.assertNoUnlabeledInteractive(); await sn.assertLandmarkStructure(); await sn.assertDialogsLabeled(); // Snapshots — deterministic strings, safe to commit expect(await sn.treeSnapshot()).toMatchSnapshot(); expect(await sn.outlineSnapshot()).toMatchSnapshot(); expect(await sn.tabSequenceSnapshot()).toMatchSnapshot(); });"
+  code "import { test, expect } from "@playwright/test"; import { attach } from "@real-a11y-dev/testing/playwright"; test("page heading structure", async ({ page }) => { await page.goto("https://example.com"); const sn = await attach(page); // Assertions — throw with descriptive messages on failure await sn.assertHeadingOrder(); await sn.assertNoUnlabeledInteractive(); await sn.assertLandmarkStructure(); await sn.assertDialogsLabeled(); await sn.assertUniqueInteractiveNames(); // Snapshots — deterministic strings, safe to commit expect(await sn.treeSnapshot()).toMatchSnapshot(); expect(await sn.outlineSnapshot()).toMatchSnapshot(); expect(await sn.tabSequenceSnapshot()).toMatchSnapshot(); });"
   paragraph
     strong
       code "attach()"
@@ -147,7 +147,11 @@ main
       code "assertHeadingOrder()"
       text "and"
       code "assertLandmarkStructure()"
-      text "judge the page's own document, not a frame's. That includes a frame Chromium runs in a process of its own (under site isolation, a cross-site or"
+      text "judge the page's own document, not a frame's, and"
+      code "assertUniqueInteractiveNames()"
+      text "compares each frame's controls on their own. It compares the controls Chromium draws inside a player or a field (each"
+      code "<video controls>"
+      text "has a "play", each date input a "Show date picker") only with the others that player or field draws, since no page can rename them. That includes a frame Chromium runs in a process of its own (under site isolation, a cross-site or"
       code "sandbox"
       text "ed"
       code "<iframe>"

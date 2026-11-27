@@ -34,6 +34,7 @@ export {
   assertHeadingOrder,
   assertDialogsLabeled,
   assertLandmarkStructure,
+  assertUniqueInteractiveNames,
   A11yAssertionError,
   collectFindings,
 } from "@real-a11y-dev/audit";

@@ -151,7 +151,8 @@ controls inside it. A finding there is located from the frame's own `<iframe>`,
 then ` >>> `, then its path inside the frame (`#checkout >>> body > form >
 button`). `heading-order` and `landmark-structure` judge the page's own
 document, so an embedded widget's `<h1>` or `<main>` is not a second one of the
-page's. That holds wherever Chromium runs the frame: under site isolation (the
+page's, and `unique-interactive-names` compares each frame's controls on their
+own. That holds wherever Chromium runs the frame: under site isolation (the
 Chrome for Testing `real-a11y install` fetches, or a Chrome reached with
 `--cdp`) a cross-site or `sandbox`ed `<iframe>` runs in a process of its own
 and is read over a session of its own. `interact` and the action commands act

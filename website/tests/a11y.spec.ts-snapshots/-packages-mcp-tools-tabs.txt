@@ -92,6 +92,7 @@ button "Copy Code"
 generic
 link "idle timeout"
 link "tree checkpoints"
+link "audit_page"
 link "REAL_A11Y_REDACT_INPUT=1"
 link "export_checkpoint"
 link "REAL_A11Y_REDACT_INPUT=1"

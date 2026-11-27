@@ -2785,7 +2785,7 @@ main
       strong "Type:"
       text "comma-separated ids ·"
       strong "Default:"
-      text "all six ·"
+      text "all seven ·"
       strong "Commands:"
       text "audit, inspect, snapshot"
   paragraph
@@ -2801,6 +2801,8 @@ main
     code "dialog-labeled"
     text ","
     code "landmark-structure"
+    text ","
+    code "unique-interactive-names"
     text ". An unknown id is a hard error."
   button "Copy Code"
   code "real-a11y audit http://localhost:3000 --rules no-unlabeled-interactive,image-alt"

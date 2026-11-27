@@ -67,6 +67,49 @@ describe("diffFindings — tier 1 (exact)", () => {
   });
 });
 
+describe("diffFindings — unique-interactive-names keeps the name in its identity", () => {
+  // Four id-less buttons in identical rows: the locators and contexts are the
+  // same, so the name is all that tells one duplicate from another.
+  const dup = (name: string, nth: number): Finding => ({
+    rule: "unique-interactive-names",
+    severity: "warning",
+    message: `Duplicate accessible name: another button is also named "${name}".`,
+    role: "button",
+    name,
+    tagName: "button",
+    locator: `body > main > ul > li:nth-of-type(${nth}) > button`,
+    context: "in <main>",
+  });
+
+  it("reads a fixed duplicate and a new one as removed and new, not changed", () => {
+    const entries = diff(
+      [dup("Accept", 1), dup("Accept", 2)],
+      [dup("Edit", 3), dup("Edit", 4)],
+    );
+    expect(summarize(entries)).toMatchObject({
+      new: 2,
+      changed: 0,
+      removed: 2,
+    });
+  });
+
+  it("still matches a duplicate whose name only changed case or spacing", () => {
+    const entries = diff(
+      [dup("Accept", 1), dup("Accept", 2)],
+      [dup("accept ", 1), dup(" ACCEPT", 2)],
+    );
+    expect(summarize(entries)).toMatchObject({ new: 0, removed: 0 });
+  });
+
+  it("leaves other rules' fingerprints without a name", () => {
+    const [plain] = fingerprintFindings("Home", [button({ name: "Go" })]);
+    const [named] = fingerprintFindings("Home", [dup("Go", 1)]);
+    expect(plain!.id).toHaveLength(8);
+    expect(named!.id).toHaveLength(9);
+    expect(named!.id[7]).toBe("go");
+  });
+});
+
 describe("diffFindings — tier 2 (fuzzy)", () => {
   it("a changed tag on the same element reads as CHANGED, not new+removed", () => {
     const entries = diff(

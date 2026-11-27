@@ -63,6 +63,7 @@ The rules, in run order (`ALL_RULES`):
 | `heading-order` | More than one `h1`, or a skipped heading level. |
 | `dialog-labeled` | A `dialog`/`alertdialog` with no accessible name. |
 | `landmark-structure` | Missing/duplicate `main`, or more than one `banner`/`contentinfo`. Always a warning; `assertLandmarkStructure` still throws on any of them. |
+| `unique-interactive-names` | Two buttons, links, checkboxes or switches anywhere on the page, or two radios, options, tabs, menu items or tree items in one container, that share an accessible name. A group scopes items only when named, except a tree's level; an `aria-owns` owner counts as the container. States, descriptions and names strict mode withheld don't count; links to the same `href` pass; each frame of a native tree is compared on its own; text fields aren't compared. Its `context` names the landmark, and a link's `href` without its query or fragment. Always a warning (best practice, WCAG 2.4.6 / 2.4.9); `assertUniqueInteractiveNames` still throws on it. |
 
 ## Assert (throwing)
 
@@ -74,6 +75,7 @@ import {
   assertHeadingOrder,
   assertDialogsLabeled,
   assertLandmarkStructure,
+  assertUniqueInteractiveNames,
 } from "@real-a11y-dev/audit";
 
 assertNoUnlabeledInteractive(container); // throws A11yAssertionError if any control is unnamed

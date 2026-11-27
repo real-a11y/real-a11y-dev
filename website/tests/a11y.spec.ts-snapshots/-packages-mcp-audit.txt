@@ -333,13 +333,15 @@ main
   list
     listitem
       strong "Scope."
-      text "It runs six rules today — unlabeled interactive elements, form controls labeled only by"
+      text "It runs seven rules today — unlabeled interactive elements, form controls labeled only by"
       code "title"
       text "/"
       code "aria-describedby"
-      text ", images missing alt text, heading order, dialog labeling, and landmark structure — plus the full semantic tree. It is not a complete WCAG or axe-core suite; it is semantic-tree-based and tuned to "what a screen reader announces," with"
+      text ", images missing alt text, heading order, dialog labeling, landmark structure, and controls that share an accessible name — plus the full semantic tree. It is not a complete WCAG or axe-core suite; it is semantic-tree-based and tuned to "what a screen reader announces," with"
       code "label-title-only"
-      text "as the one axe-aligned best-practice extra. For contrast, focus visibility, and other rendered/interactive checks, pair it with"
+      text "and"
+      code "unique-interactive-names"
+      text "as its best-practice extras. For contrast, focus visibility, and other rendered/interactive checks, pair it with"
       link "axe-core"
       text "and manual testing."
     listitem

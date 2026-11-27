@@ -64,7 +64,7 @@ describe("renderSarif", () => {
     const driver = sarif.runs[0].tool.driver;
     expect(driver.name).toBe("real-a11y");
     expect(driver.version).toBe("1.2.3");
-    expect(driver.rules).toHaveLength(6);
+    expect(driver.rules).toHaveLength(7);
     const rule = driver.rules.find(
       (r: { id: string }) => r.id === "no-unlabeled-interactive",
     );
@@ -77,6 +77,13 @@ describe("renderSarif", () => {
       (r: { id: string }) => r.id === "label-title-only",
     );
     expect(titleOnly.defaultConfiguration.level).toBe("warning");
+    const uniqueNames = driver.rules.find(
+      (r: { id: string }) => r.id === "unique-interactive-names",
+    );
+    expect(uniqueNames.defaultConfiguration.level).toBe("warning");
+    expect(uniqueNames.shortDescription.text).not.toBe(
+      "unique-interactive-names",
+    );
   });
 
   it("anchors results to sourcePath, else the config file — never the URL", () => {

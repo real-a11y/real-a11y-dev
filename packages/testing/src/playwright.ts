@@ -143,6 +143,8 @@ export interface SemanticNavigatorPageHandle {
   assertDialogsLabeled(): Promise<void>;
   /** Throws if the main/banner/contentinfo landmark structure is incorrect. */
   assertLandmarkStructure(): Promise<void>;
+  /** Throws if two buttons, links, checkboxes or switches share an accessible name, or two radios, options, tabs, menu items or tree items in one container. */
+  assertUniqueInteractiveNames(): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -407,6 +409,9 @@ export async function attach(
     assertLandmarkStructure() {
       return evalFn<void>("assertLandmarkStructure");
     },
+    assertUniqueInteractiveNames() {
+      return evalFn<void>("assertUniqueInteractiveNames");
+    },
   };
 }
 
@@ -478,6 +483,9 @@ async function attachNative(
     },
     async assertLandmarkStructure() {
       assertRules(await getTree(), ["landmark-structure"]);
+    },
+    async assertUniqueInteractiveNames() {
+      assertRules(await getTree(), ["unique-interactive-names"]);
     },
   };
 }
