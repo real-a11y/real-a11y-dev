@@ -31,7 +31,12 @@ export interface TimelineAnnounceEvent {
   live: Level;
 }
 
-/** One thing a keyboard and screen-reader user met, in order. */
+/**
+ * One thing a keyboard and screen-reader user met, in order. The field-value
+ * gates have run: no field's value, and no sensitive field's chosen option.
+ * A user's `redact` patterns have not; `serializeTimeline` applies them, and
+ * a caller that hands events on itself must too.
+ */
 export type TimelineEvent = TimelineFocusEvent | TimelineAnnounceEvent;
 
 export interface TimelineOptions {

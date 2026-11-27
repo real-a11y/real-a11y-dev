@@ -56,7 +56,9 @@ function announceText(
  *
  * `redact` masks matching text in focused names and announced text, as the
  * other snapshots mask names. The field-value gates are the recorder's: an
- * event never carries what a line would withhold.
+ * event never carries a value or a withheld choice that a line would leave
+ * out. `redact` is not: the events carry the text before it, so a caller
+ * that hands events on, rather than lines, applies its patterns itself.
  *
  * @internal The timeline view's one line format, for every surface
  * (ADR-0002): `testing`'s `recordTimeline` today. Not a stability promise.
