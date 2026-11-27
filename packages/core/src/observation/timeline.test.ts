@@ -118,9 +118,10 @@ describe("startTimeline", () => {
     });
   });
 
-  it("hands each run of events to onEvents as its block settles, where focus starts first", async () => {
+  it("hands onEvents where focus starts, then each run of events as its block settles", async () => {
     document.body.innerHTML = `<main><button id="a">A</button><button id="b">B</button><p role="status" id="s"></p></main>`;
     byId("a").focus();
+    await tick();
     const runs: (readonly TimelineEvent[])[] = [];
     const recording = startTimeline(document.querySelector("main")!, {
       onEvents: (events) => runs.push(events),
@@ -131,11 +132,37 @@ describe("startTimeline", () => {
     await tick();
     const events = recording.stop();
     expect(runs.map((run) => run.map((e) => e.kind))).toEqual([
-      ["focus", "announce"],
+      ["focus"],
+      ["announce"],
       ["focus"],
     ]);
     expect(runs.flat()).toEqual(events);
   });
+
+  it.each([
+    ["without onEvents", undefined],
+    ["with onEvents", () => {}],
+  ])(
+    "reads the page's first block whole when focus starts in the root, %s",
+    async (_, onEvents) => {
+      // A status the page clears in a microtask it queued before setting it
+      // never reached a screen reader: the block settles with it empty.
+      document.body.innerHTML = `<main><button id="a">A</button><p role="status" id="s"></p></main>`;
+      byId("a").focus();
+      // A block of its own: the markup's mutations queued the observers'
+      // delivery, which would otherwise come before the cleanup.
+      await tick();
+      const recording = startTimeline(document.querySelector("main")!, {
+        onEvents,
+      });
+      queueMicrotask(() => {
+        byId("s").textContent = "";
+      });
+      byId("s").textContent = "Saving…";
+      await tick();
+      expect(recording.stop().map((e) => e.kind)).toEqual(["focus"]);
+    },
+  );
 
   it("never calls onEvents before startTimeline returns", async () => {
     document.body.innerHTML = `<main><button id="a">A</button></main>`;

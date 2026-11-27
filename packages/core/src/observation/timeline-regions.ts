@@ -18,7 +18,12 @@ import { liveRegionLevel } from "../extraction/overlay-scope.js";
 import { pageText } from "../extraction/page-text.js";
 import { getImplicitRole, isSubtreeHidden } from "../extraction/role-map.js";
 
-/** How a live region announces: politely, or interrupting. */
+/**
+ * How a live region announces: politely, or interrupting.
+ *
+ * @internal Exported as `LiveLevel`, for the timeline's events. Not a
+ * stability promise.
+ */
 export type Level = "polite" | "assertive";
 
 /** The politeness each live role implies. */

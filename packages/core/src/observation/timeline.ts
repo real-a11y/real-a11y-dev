@@ -165,12 +165,18 @@ class TimelineRecorder {
     if (options.focus) {
       this.listen(this.doc, this.addListener);
       // Where focus starts. Nothing read yet counts as `(none)`, so a start
-      // on nothing is no event. Recorded now, handed to `onEvents` when the
-      // block settles: never before `startTimeline` returns.
+      // on nothing is no event. Recorded now, handed to `onEvents` once
+      // `startTimeline` has returned. Handed over, not settled: settling
+      // here would read the block before the page's own microtasks ran, and
+      // announce text a cleanup it queued first would have cleared.
       const start = this.focusChange(0);
       if (start) {
         this.events.push(freeze(start.event));
-        this.schedule();
+        if (options.onEvents) {
+          void Promise.resolve().then(() => {
+            if (!this.done) this.emit([]);
+          });
+        }
       }
     }
   }

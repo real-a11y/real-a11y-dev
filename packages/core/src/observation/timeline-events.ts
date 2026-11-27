@@ -5,7 +5,12 @@ import type { A11yInfo } from "../types.js";
 
 import type { Level } from "./timeline-regions.js";
 
-/** Focus came to rest somewhere new for the timeline to name. */
+/**
+ * Focus came to rest somewhere new for the timeline to name.
+ *
+ * @internal Read by the timeline view's surfaces (ADR-0002). Not a
+ * stability promise.
+ */
 export interface TimelineFocusEvent {
   kind: "focus";
   /**
@@ -20,7 +25,12 @@ export interface TimelineFocusEvent {
   hidden: boolean;
 }
 
-/** A live region showed text it hadn't said. */
+/**
+ * A live region showed text it hadn't said.
+ *
+ * @internal Read by the timeline view's surfaces (ADR-0002). Not a
+ * stability promise.
+ */
 export interface TimelineAnnounceEvent {
   kind: "announce";
   /** The region's role. */
@@ -36,23 +46,38 @@ export interface TimelineAnnounceEvent {
  * gates have run: no field's value, and no sensitive field's chosen option.
  * A user's `redact` patterns have not; `serializeTimeline` applies them, and
  * a caller that hands events on itself must too.
+ *
+ * @internal Read by the timeline view's surfaces (ADR-0002). Not a
+ * stability promise.
  */
 export type TimelineEvent = TimelineFocusEvent | TimelineAnnounceEvent;
 
+/**
+ * How `startTimeline` records.
+ *
+ * @internal Read by the timeline view's surfaces (ADR-0002). Not a
+ * stability promise.
+ */
 export interface TimelineOptions {
   /** Record focus moves. Default `true`. */
   focus?: boolean;
   /** Record live-region announcements. Default `true`. */
   announcements?: boolean;
   /**
-   * Called with each run of events as the page's synchronous block settles,
-   * and with where focus starts, so a caller outside the page can take them
-   * out before a navigation replaces it (ADR-0002).
+   * Called with where focus starts once `startTimeline` has returned, and
+   * with each run of events as the page's synchronous block settles, so a
+   * caller outside the page can take them out before a navigation replaces
+   * it (ADR-0002).
    */
   onEvents?: (events: readonly TimelineEvent[]) => void;
 }
 
-/** A running recorder, from `startTimeline`. */
+/**
+ * A running recorder, from `startTimeline`.
+ *
+ * @internal Read by the timeline view's surfaces (ADR-0002). Not a
+ * stability promise.
+ */
 export interface TimelineRecording {
   /** Stop recording and return every event, in order. Later calls return
    *  the same events. */
