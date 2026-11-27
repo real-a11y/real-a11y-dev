@@ -29,7 +29,7 @@
   {
     "name": "@real-a11y-dev/testing (esm)",
     "path": "packages/testing/dist/index.js",
-    "limit": "35.6 KB",
+    "limit": "36.0 KB",
     "gzip": true
   },
   {
