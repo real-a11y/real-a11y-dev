@@ -162,6 +162,26 @@ test.describe("good fixture", () => {
     await expect(sn.assertLandmarkStructure()).resolves.toBeUndefined();
   });
 
+  test("assertUniqueInteractiveNames survives a form whose controls shadow its methods", async ({
+    page,
+  }) => {
+    // Chromium hands back the `<input name="getAttribute">` for
+    // `form.getAttribute`: a plain call would throw, not report.
+    await page.setContent(`<main><h1>t</h1>
+      <div role="listbox" aria-label="Arrival" aria-owns="a"></div>
+      <form aria-label="Book">
+        <input name="getAttribute" aria-label="Seat">
+        <input name="parentElement" aria-label="Row">
+        <input name="id" aria-label="Car">
+        <div role="listbox" aria-label="Spare"><div role="option" id="a" tabindex="-1">None</div></div>
+        <button>Send</button><button>Send</button>
+      </form></main>`);
+    const sn = await attach(page);
+    await expect(sn.assertUniqueInteractiveNames()).rejects.toThrow(
+      /another button is also named "Send"/,
+    );
+  });
+
   test("assertUniqueInteractiveNames passes, and throws on two of one name", async ({
     page,
   }) => {

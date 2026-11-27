@@ -14,6 +14,8 @@ import {
   isNativeIframeRole,
   linearize,
   REDACTED_VALUE,
+  safeGetAttribute,
+  safeParentElement,
   type ExtractionResult,
   type SemanticNode,
 } from "@real-a11y-dev/core";
@@ -117,31 +119,46 @@ interface Placement {
 }
 
 /**
- * For a DOM tree, each node an `aria-owns` claims, mapped to its owner's node.
+ * For a DOM tree, each id an `aria-owns` names, mapped to its owner's node.
  * The DOM producer keeps an owned item where its markup is, while a screen
  * reader reads it inside its owner, as Chromium's own tree places it: a native
- * tree needs none of this. The first owner in document order wins.
+ * tree needs none of this. The first owner in document order wins. Read
+ * through core's clobber-safe accessors: a `<form>` with a control named
+ * `getAttribute` shadows the method, and the plain call would throw.
  */
 function ariaOwnersOf(tree: ExtractionResult): Map<string, SemanticNode> {
   const owners = new Map<string, SemanticNode>();
   if (tree.source?.producer !== "dom") return owners;
   const refs = getElementRefs();
-  const nodeOf = new Map<Element, SemanticNode>();
   for (const node of tree.nodes.values()) {
     const el = refs.get(node.id);
-    if (el) nodeOf.set(el, node);
-  }
-  for (const [el, owner] of nodeOf) {
-    const ids = el.getAttribute("aria-owns")?.trim();
+    const ids = el ? safeGetAttribute(el, "aria-owns")?.trim() : undefined;
     if (!ids) continue;
-    const root = el.getRootNode() as Document | ShadowRoot;
-    for (const id of ids.split(/\s+/)) {
-      const target = root.getElementById?.(id);
-      const owned = target ? nodeOf.get(target) : undefined;
-      if (owned && !owners.has(owned.id)) owners.set(owned.id, owner);
-    }
+    for (const id of ids.split(/\s+/))
+      if (!owners.has(id)) owners.set(id, node);
   }
   return owners;
+}
+
+/**
+ * The node an `aria-owns` puts `node` under, if any: one that names its
+ * element's id, or the id of an element the tree flattened between it and its
+ * parent (an owned `<div>` around the options, which has no node of its own).
+ */
+function ownerOf(
+  node: SemanticNode,
+  owners: ReadonlyMap<string, SemanticNode>,
+): SemanticNode | undefined {
+  if (owners.size === 0) return undefined;
+  const refs = getElementRefs();
+  const stop = node.parentId === null ? undefined : refs.get(node.parentId);
+  let el = refs.get(node.id) ?? null;
+  for (; el && el !== stop; el = safeParentElement(el)) {
+    const id = safeGetAttribute(el, "id");
+    const owner = id ? owners.get(id) : undefined;
+    if (owner && owner.id !== node.id) return owner;
+  }
+  return undefined;
 }
 
 /** Whether `parent`, a node above an item of `role`, is where it's compared. */
@@ -194,7 +211,7 @@ function candidatesOf(tree: ExtractionResult): Candidate[] {
   const out: Candidate[] = [];
   const owners = ariaOwnersOf(tree);
   const up = (n: SemanticNode): string | null =>
-    owners.get(n.id)?.id ?? n.parentId;
+    ownerOf(n, owners)?.id ?? n.parentId;
   for (const node of linearize(tree, { includeNotExposed: false })) {
     const role = node.a11y.role;
     if (!NAME_SCOPES.has(role) && !PAGE_UNIQUE_NAME_ROLES.has(role)) continue;

@@ -353,6 +353,38 @@ describe("unique-interactive-names — items compared within their container", (
     ]);
   });
 
+  it("follows an aria-owns that names a wrapper the tree flattens", () => {
+    // `aria-owns` points at a role-less `<div>` around the option, which has
+    // no node of its own: the option is still the owner's.
+    const markup = (owns: boolean) => `
+      <div role="listbox" aria-label="Arrival"${owns ? ' aria-owns="a-wrap"' : ""}></div>
+      <div role="listbox" aria-label="Departure"${owns ? ' aria-owns="d-wrap"' : ""}></div>
+      <div role="listbox" aria-label="Spare">
+        <div id="a-wrap"><div role="option" tabindex="-1">None</div></div>
+        <div id="d-wrap"><div role="option" tabindex="-1">None</div></div>
+      </div>`;
+    expect(unique(mount(markup(true)))).toEqual([]);
+    expect(unique(mount(markup(false)))).toHaveLength(2);
+  });
+
+  it("reads ownership through clobber-safe accessors", () => {
+    // In Chromium a form's named controls shadow its methods; jsdom doesn't
+    // model that, so own properties stand in for them (the e2e suite has
+    // the real thing).
+    const root = mount(`
+      <div role="listbox" aria-label="Arrival" aria-owns="a"></div>
+      <form aria-label="Book"><input name="getAttribute" aria-label="Seat">
+        <div role="listbox" aria-label="Spare"><div role="option" id="a" tabindex="-1">None</div></div>
+        <button>Send</button><button>Send</button>
+      </form>`);
+    const form = root.querySelector("form")!;
+    const input = form.querySelector("input")!;
+    for (const key of ["getAttribute", "parentElement", "id"]) {
+      Object.defineProperty(form, key, { value: input, configurable: true });
+    }
+    expect(named(unique(root))).toEqual(['button "Send"', 'button "Send"']);
+  });
+
   it("follows an aria-owns cycle without looping", () => {
     const root = mount(`
       <div role="listbox" id="x" aria-label="X" aria-owns="y"></div>
