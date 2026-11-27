@@ -21,22 +21,25 @@
 
 import { basename, isAbsolute, relative } from "node:path";
 
-import { ALL_RULES } from "@real-a11y-dev/audit";
+import { ALL_RULES, type A11yRule } from "@real-a11y-dev/audit";
 
 import type { SnapshotArtifact } from "@real-a11y-dev/snapshot";
 
 /** Most severe level each rule can emit (per assertions.ts) — SARIF wants the
- *  rule-level default; the per-result `level` still carries the actual one. */
-const RULE_LEVEL: Record<string, "error" | "warning"> = {
+ *  rule-level default; the per-result `level` still carries the actual one.
+ *  Keyed by `A11yRule`, as is the description table, so a new rule can't ship
+ *  without an entry and fall back to its id as its own description. */
+const RULE_LEVEL: Record<A11yRule, "error" | "warning"> = {
   "no-unlabeled-interactive": "error",
   "label-title-only": "warning",
   "image-alt": "warning",
   "heading-order": "warning",
   "dialog-labeled": "error",
   "landmark-structure": "warning",
+  "unique-interactive-names": "warning",
 };
 
-const RULE_DESCRIPTION: Record<string, string> = {
+const RULE_DESCRIPTION: Record<A11yRule, string> = {
   "no-unlabeled-interactive":
     "Interactive elements, and tree items, tooltips, meters and progress bars, must have an accessible name.",
   "label-title-only":
@@ -47,6 +50,8 @@ const RULE_DESCRIPTION: Record<string, string> = {
   "dialog-labeled": "Dialogs must have an accessible name.",
   "landmark-structure":
     "Pages should have one main landmark and at most one banner/contentinfo.",
+  "unique-interactive-names":
+    "Buttons, links, checkboxes and switches should not share an accessible name, nor radios, options, tabs, menu items or tree items in one container.",
 };
 
 const MESSAGE_CAP = 1_000; // GitHub truncates message fields at 1 000 chars.
@@ -128,9 +133,9 @@ export function renderSarif(
             rules: ALL_RULES.map((rule) => ({
               id: rule,
               name: rule,
-              shortDescription: { text: RULE_DESCRIPTION[rule] ?? rule },
+              shortDescription: { text: RULE_DESCRIPTION[rule] },
               helpUri: "https://real-a11y.dev/packages/testing/assertions",
-              defaultConfiguration: { level: RULE_LEVEL[rule] ?? "warning" },
+              defaultConfiguration: { level: RULE_LEVEL[rule] },
             })),
           },
         },

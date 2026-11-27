@@ -130,7 +130,8 @@ It includes the page's `<iframe>`s: each frame's document sits under its
 `Iframe` row, the audit checks the controls inside it, and a finding there is
 located from the frame's own `<iframe>`, then ` >>> `, then its path inside the
 frame. `heading-order` and `landmark-structure` judge the page's own document
-only. That holds for a frame Chromium runs in a process of its own (under site
+only, and `unique-interactive-names` compares each frame's controls on their
+own. That holds for a frame Chromium runs in a process of its own (under site
 isolation, a cross-site or `sandbox`ed `<iframe>`) too, and the action tools act
 inside one the same way.
 

@@ -162,6 +162,19 @@ test.describe("good fixture", () => {
     await expect(sn.assertLandmarkStructure()).resolves.toBeUndefined();
   });
 
+  test("assertUniqueInteractiveNames passes, and throws on two of one name", async ({
+    page,
+  }) => {
+    const sn = await attach(page);
+    await expect(sn.assertUniqueInteractiveNames()).resolves.toBeUndefined();
+    await page.setContent(
+      `<main><h1>t</h1><button>Accept</button><button>Accept</button></main>`,
+    );
+    await expect(sn.assertUniqueInteractiveNames()).rejects.toThrow(
+      /another button is also named "Accept"/,
+    );
+  });
+
   test("assertDialogsLabeled passes when dialog is hidden", async ({
     page,
   }) => {
@@ -280,6 +293,38 @@ test.describe("native tree", () => {
   test("assertLandmarkStructure passes", async ({ page }) => {
     const sn = await attach(page, { tree: "native" });
     await expect(sn.assertLandmarkStructure()).resolves.toBeUndefined();
+  });
+
+  test("assertUniqueInteractiveNames passes, and throws on two of one name", async ({
+    page,
+  }) => {
+    const sn = await attach(page, { tree: "native" });
+    await expect(sn.assertUniqueInteractiveNames()).resolves.toBeUndefined();
+    await page.setContent(
+      `<main><h1>t</h1><button>Accept</button><button>Accept</button></main>`,
+    );
+    await expect(sn.assertUniqueInteractiveNames()).rejects.toThrow(
+      /another button is also named "Accept"/,
+    );
+  });
+
+  test("assertUniqueInteractiveNames leaves the controls Chromium draws to themselves", async ({
+    page,
+  }) => {
+    // Each player and each date or time field brings its own "play", "mute",
+    // "Show date picker" in a user-agent shadow root, which no author can
+    // rename: two of them on one page are not a finding.
+    await page.setContent(`<main><h1>t</h1>
+      <video controls aria-label="One" src="data:video/mp4;base64,AAAA"></video>
+      <video controls aria-label="Two" src="data:video/mp4;base64,AAAA"></video>
+      <label>Start <input type="date"></label><label>End <input type="date"></label>
+      <label>From <input type="time"></label><label>To <input type="time"></label>
+    </main>`);
+    const sn = await attach(page, { tree: "native" });
+    // Some Chromium builds say the name twice ("Show date picker Show date
+    // picker"), as they do the fields' "Day Day".
+    expect(await sn.treeSnapshot()).toMatch(/button "Show date picker/);
+    await expect(sn.assertUniqueInteractiveNames()).resolves.toBeUndefined();
   });
 
   test("assertNoUnlabeledInteractive passes over the UA-shadow media controls", async ({

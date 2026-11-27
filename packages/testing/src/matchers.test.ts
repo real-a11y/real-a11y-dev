@@ -50,6 +50,20 @@ describe("assertion matchers", () => {
     expect(mount(`<main>a</main><main>b</main>`)).not.toHaveValidLandmarks();
   });
 
+  it("toHaveUniqueInteractiveNames fails on two controls of one name", () => {
+    expect(
+      mount(`<button>Accept Ana</button><button>Accept Luis</button>`),
+    ).toHaveUniqueInteractiveNames();
+    expect(
+      mount(`<button>Accept</button><button>Accept</button>`),
+    ).not.toHaveUniqueInteractiveNames();
+    expect(() =>
+      expect(
+        mount(`<button>Accept</button><button>Accept</button>`),
+      ).toHaveUniqueInteractiveNames(),
+    ).toThrow(/another button is also named "Accept"/);
+  });
+
   it("reports a clear error when given a non-Element", () => {
     expect(() => expect("nope").toHaveValidLandmarks()).toThrow(
       /expected a DOM Element/,

@@ -23,6 +23,7 @@ import {
   assertHeadingOrder,
   assertDialogsLabeled,
   assertLandmarkStructure,
+  assertUniqueInteractiveNames,
   A11yAssertionError,
 } from "@real-a11y-dev/audit";
 import type { ExtractionResult, SemanticNode } from "@real-a11y-dev/core";
@@ -523,6 +524,13 @@ export const a11yMatchers = {
       "toHaveValidLandmarks",
     );
   },
+  toHaveUniqueInteractiveNames(received: unknown) {
+    return runAssertion(
+      received,
+      assertUniqueInteractiveNames,
+      "toHaveUniqueInteractiveNames",
+    );
+  },
   toHaveTabSequence,
   toBeValidA11yTree,
   toMatchA11yContract,
@@ -699,6 +707,12 @@ export interface A11yMatchers<R = unknown> {
   toHaveLabeledDialogs(): R;
   /** Exactly one `main`; at most one `banner`/`contentinfo`. */
   toHaveValidLandmarks(): R;
+  /**
+   * No two buttons, links, checkboxes or switches share an accessible name,
+   * nor two radios, options, tabs, menu items or tree items in one container.
+   * Links to the same `href` may.
+   */
+  toHaveUniqueInteractiveNames(): R;
   /** Focusable nodes, in Tab order, equal the given `role "name"` tokens. */
   toHaveTabSequence(expected: string[]): R;
   /** The extracted a11y tree has no ARIA errors (roles, names, relationships). */

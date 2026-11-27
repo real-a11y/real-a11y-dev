@@ -170,7 +170,7 @@ New to the idea of snapshotting the accessibility tree? Start with the concept: 
 ## Which do I reach for?
 
 - **Catch regressions in CI** → [Snapshots](/packages/testing/snapshots) (`treeSnapshot`, `outlineSnapshot`, `tabSequenceSnapshot`, plus `numberTabStops` for a human-read listing) committed with `toMatchSnapshot()`. For **headless page-set audits** of a deployed site — no test suite — reach for [`@real-a11y-dev/cli`](/packages/cli)'s `snapshot` / `diff` instead.
-- **Assert a specific invariant** ("one `<h1>`", "no unlabeled buttons") → [Assertions](/packages/testing/assertions) or, for `expect` style, [Matchers](/packages/testing/matchers). `assertRules` runs an arbitrary subset of the rule set, and `formatFindings` renders findings for your own reporting.
+- **Assert a specific invariant** ("one `<h1>`", "no unlabeled buttons", "no two buttons named Accept" with [`assertUniqueInteractiveNames`](/packages/testing/assertions#assertuniqueinteractivenames-root)) → [Assertions](/packages/testing/assertions) or, for `expect` style, [Matchers](/packages/testing/matchers). `assertRules` runs an arbitrary subset of the rule set, and `formatFindings` renders findings for your own reporting.
 - **Test an interaction** (open a menu, submit a form, dismiss a modal) → [Flow API](/packages/testing/flow).
 - **Assert what an interaction _changed_** (options appeared, `aria-expanded` flipped, focus moved) → [`capture` + `a11yDiff` or `flow().expectChanges`](/packages/testing/flow#asserting-what-an-interaction-changed).
 - **Assert the order a user meets things in** (focus dropping to the page, a status shown and cleared, a message before or after a focus move) → [`recordTimeline`](/packages/testing/flow#recording-what-happened-in-between).

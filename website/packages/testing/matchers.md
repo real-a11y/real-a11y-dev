@@ -86,12 +86,14 @@ Each wraps the matching [`assert*` function](/packages/testing/assertions). They
 | `toHaveValidHeadingOrder()` | Exactly one `<h1>` and no skipped heading levels. |
 | `toHaveLabeledDialogs()` | Every `dialog` / `alertdialog` has an accessible name. |
 | `toHaveValidLandmarks()` | Exactly one `main`; at most one `banner` / `contentinfo`. |
+| `toHaveUniqueInteractiveNames()` | No two buttons, links, checkboxes or switches share an accessible name, nor two radios, options, tabs, menu items or tree items in one container. Links to the same `href` may. See [`assertUniqueInteractiveNames`](/packages/testing/assertions#assertuniqueinteractivenames-root) for what counts. |
 
 ```ts
 expect(container).toHaveNoUnlabeledInteractive();
 expect(container).toHaveValidHeadingOrder();
 expect(container).toHaveLabeledDialogs();
 expect(container).toHaveValidLandmarks();
+expect(container).toHaveUniqueInteractiveNames();
 
 // Negation comes for free
 expect(brokenContainer).not.toHaveValidLandmarks();

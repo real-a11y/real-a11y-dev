@@ -47,6 +47,7 @@ export {
   assertHeadingOrder,
   assertDialogsLabeled,
   assertLandmarkStructure,
+  assertUniqueInteractiveNames,
   A11yAssertionError,
   collectFindings,
   listByRole,

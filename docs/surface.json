@@ -146,6 +146,7 @@
             "assertLandmarkStructure",
             "assertNoUnlabeledInteractive",
             "assertRules",
+            "assertUniqueInteractiveNames",
             "capture",
             "collectFindings",
             "configureA11y",
@@ -1867,7 +1868,7 @@
           "openWorldHint": false,
           "readOnlyHint": true
         },
-        "description": "Run accessibility audits against the current page and return every violation — unlabeled interactive controls (and unnamed tree items, tooltips, meters and progress bars), form controls labeled only by title or aria-describedby, skipped heading levels or missing/duplicate h1, unlabeled dialogs, and broken landmark structure. Empty-name findings are what assistive tech would announce as unnamed; label-title-only is the axe-core best-practice extra (title still is a name). This is the primary tool. Audits Chromium's own accessibility tree, so it reaches structure no in-page walk can (a `<video controls>`'s user-agent-shadow media controls); findings carry CSS locators. Whole-document. Chromium only.",
+        "description": "Run accessibility audits against the current page and return every violation — unlabeled interactive controls (and unnamed tree items, tooltips, meters and progress bars), form controls labeled only by title or aria-describedby, skipped heading levels or missing/duplicate h1, unlabeled dialogs, broken landmark structure, and controls that share an accessible name. Empty-name findings are what assistive tech would announce as unnamed; label-title-only is the axe-core best-practice extra (title still is a name), and unique-interactive-names a best-practice warning (a screen-reader user hearing only the name can't tell two apart). This is the primary tool. Audits Chromium's own accessibility tree, so it reaches structure no in-page walk can (a `<video controls>`'s user-agent-shadow media controls); findings carry CSS locators. Whole-document. Chromium only.",
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
           "properties": {
@@ -1880,7 +1881,8 @@
                   "image-alt",
                   "heading-order",
                   "dialog-labeled",
-                  "landmark-structure"
+                  "landmark-structure",
+                  "unique-interactive-names"
                 ],
                 "type": "string"
               },
@@ -1923,7 +1925,8 @@
                   "image-alt",
                   "heading-order",
                   "dialog-labeled",
-                  "landmark-structure"
+                  "landmark-structure",
+                  "unique-interactive-names"
                 ],
                 "type": "string"
               },
@@ -2347,7 +2350,8 @@
                   "image-alt",
                   "heading-order",
                   "dialog-labeled",
-                  "landmark-structure"
+                  "landmark-structure",
+                  "unique-interactive-names"
                 ],
                 "type": "string"
               },

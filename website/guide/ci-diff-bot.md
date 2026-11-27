@@ -223,7 +223,7 @@ _tree_
 ```
 ````
 
-**Findings** come from the six audit rules and can fail the build. **Structure** covers changes that break no rule, and never fails it. When nothing changed, both lines say so. A line whose only change is its `{…}` states block (a box checked or unchecked, a disclosure collapsed, a description changed) reads as one `States changed:` statement.
+**Findings** come from the seven audit rules and can fail the build. **Structure** covers changes that break no rule, and never fails it. When nothing changed, both lines say so. A line whose only change is its `{…}` states block (a box checked or unchecked, a disclosure collapsed, a description changed) reads as one `States changed:` statement.
 
 Tab order isn't compared: `snapshot` reads Chromium's accessibility tree, which has no tab order, so every diff notes that the tabs view wasn't compared. For keyboard order, use [`real-a11y tabs`](/packages/cli/commands#tabs-url).
 
