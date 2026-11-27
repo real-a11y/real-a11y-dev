@@ -102,11 +102,6 @@
       "count": 4
     }
   },
-  "packages/core/src/extraction/field-text.ts": {
-    "complexity": {
-      "count": 1
-    }
-  },
   "packages/core/src/interaction/picker.ts": {
     "max-lines-per-function": {
       "count": 1
