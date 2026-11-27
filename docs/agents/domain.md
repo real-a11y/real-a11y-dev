@@ -38,6 +38,7 @@ Accepted so far:
 | ADR      | Decision                                                                                                                                                                                    |
 | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | ADR-0001 | [Field values: withhold what is sensitive, show what a screen reader reads](https://app.notion.com/p/3e71c354b0b581d2a8d3fb2ce6612a24) — `a11y.value`, the sensitivity policy, `redactInput` |
+| ADR-0002 | [The timeline view is recorded in the page, on every surface](https://app.notion.com/p/4251c354b0b581a4b080c4a3943ec5b5) — the second DOM holdout, injected on demand, lines streamed out on the CDP surfaces |
 
 The table is a convenience and goes stale; the Notion page is the index.
 

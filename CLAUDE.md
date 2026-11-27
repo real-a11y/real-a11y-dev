@@ -33,11 +33,11 @@ one whose changes reach furthest — reason about consumer impact, not about
 This is the most important thing to know before changing anything about trees,
 and it cuts across packages rather than along them.
 
-|            | **`dom`**                                                                | **`native`**                                                                  |
-| ---------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
-| What it is | in-page walk, this project's own ARIA/AccName implementation             | Chromium's own accessibility tree, read over CDP                              |
-| Lives in   | `core/src/extraction/`                                                   | `browser/src/native-tree.ts`, `extension/src/native/`                         |
-| Reached by | `inspector`, `react`, the injected page bundle, the extension's TAB view | `cli`, `mcp` over Playwright CDP; the extension's tree over `chrome.debugger` |
+|            | **`dom`**                                                                                   | **`native`**                                                                  |
+| ---------- | ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| What it is | in-page walk, this project's own ARIA/AccName implementation                                | Chromium's own accessibility tree, read over CDP                              |
+| Lives in   | `core/src/extraction/`                                                                      | `browser/src/native-tree.ts`, `extension/src/native/`                         |
+| Reached by | `inspector`, `react`, the injected page bundle, the extension's TAB view, the timeline view | `cli`, `mcp` over Playwright CDP; the extension's tree over `chrome.debugger` |
 
 Both stamp `source.producer` on every `ExtractionResult`. The intent recorded on
 `TreeSource` in `core/src/types.ts` is that serializers render it into their
@@ -47,7 +47,7 @@ a convention rather than an enforced check. Preserve the stamp through anything
 that transforms a tree, and don't assume something downstream will catch a
 cross-producer comparison for you.
 
-Four consequences that are easy to get wrong:
+Five consequences that are easy to get wrong:
 
 - **The facets are producer-dependent.** `a11y` is always present; `dom` and
   `interaction` are optional and only the DOM producer fills them. A native tree
@@ -63,11 +63,22 @@ Four consequences that are easy to get wrong:
 - **The CLI has no `--producer` flag any more.** Each surface has exactly one
   correct producer, recorded in `producers` in `packages/cli/src/args.ts`. Nearly
   everything is `native`.
-- **`tabs` is the one DOM holdout, and it is not a fallback.** A native tree
+- **`tabs` is the first DOM holdout, and it is not a fallback.** A native tree
   knows per-node focusability but not the _sequence_ — `tabindex` never reaches a
   native node — so an in-page walk is the only source there is. It is also why
   `tabs` alone still takes `--root`. The extension's TAB view is the same
   holdout, for the same reason. Do not "unify" either.
+- **The timeline view is the second, by
+  [ADR-0002](https://app.notion.com/p/4251c354b0b581a4b080c4a3943ec5b5).** It
+  lists focus moves and live-region announcements in the order the page made
+  them, and that order exists only in the page: CDP has no announcement event,
+  and can't see where a focus event fell among the page's own mutations. Today
+  only `testing`'s `recordTimeline` records one, in jsdom or a browser-mode
+  runner. Each surface that gains it (CLI, MCP, the Playwright adapter, the
+  extension, Storybook) runs that same in-page recorder, injected only when a
+  timeline is recorded, never into the default page bundle. It prints no
+  producer header, since the ADR fixes the producer. Do not "unify" it onto the
+  native tree either.
 
 The normalization vocabulary lives in `core/src/native/` (`normalizeNativeAX`,
 `ax-vocabulary.ts`) rather than in the package that does the CDP read, so a
