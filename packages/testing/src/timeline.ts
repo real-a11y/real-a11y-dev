@@ -9,7 +9,6 @@ import {
   buildA11yTree,
   extractDomTree,
   getImplicitRole,
-  LIVE_REGION_ATTRIBUTES,
   renderingParent,
   resolveFocusedElement,
   safeContains,
@@ -72,9 +71,8 @@ function exposed(tree: ExtractionResult, id: string): boolean {
   return true;
 }
 
-/** Note a change to a region at a point in its block; `writes` when the
- *  change wrote or inserted something rather than restyling. */
-type Touch = (region: Element | null, at: number, writes?: boolean) => void;
+/** Note a change to the regions at a point in their block. */
+type Touch = (regions: Element[], at: number) => void;
 
 /** One recorded line, `focus     …` or `announce  …`. */
 function line(kind: "focus" | "announce", text: string): string {
@@ -90,9 +88,10 @@ interface Pending {
   text: string;
 }
 
-/** A focus event: before which record it happened, where focus went (null
- *  while it is leaving), and, if the block had changed the page by then,
- *  what each region said aloud there ({@link TimelineRecorder.heardAt}). */
+/** A focus event: before which record it happened, where in the root focus
+ *  went (null while it is leaving, or outside the root), and, if the block
+ *  had changed the page by then, what each region said aloud there
+ *  ({@link TimelineRecorder.heardAt}). */
 interface Move {
   at: number;
   to: Element | null;
@@ -112,6 +111,10 @@ class TimelineRecorder {
     Node.prototype,
     "isConnected",
   )!.get!;
+  private readonly shadowRoot = Object.getOwnPropertyDescriptor(
+    Element.prototype,
+    "shadowRoot",
+  )!.get!;
   /** Open shadow roots on focus's path. A move within one stops at its host
    *  and never reaches the document, so each is listened to as well. */
   private readonly shadowRoots = new Set<ShadowRoot>();
@@ -128,6 +131,8 @@ class TimelineRecorder {
   private moves: Move[] = [];
   /** A settle is queued for the end of this synchronous block. */
   private scheduled = false;
+  /** Focus has left one element for another and not arrived yet. */
+  private leaving = false;
   /** The focused element as last read, inside the root or not. */
   private seen: Element | null = null;
   /** The element the last focus line named, or null for `(none)`. */
@@ -141,6 +146,12 @@ class TimelineRecorder {
     > &
       Pick<RecordTimelineOptions, "redact">,
   ) {
+    // Its changes would never reach the document's observer.
+    if (!this.isConnected.call(root)) {
+      throw new TypeError(
+        "recordTimeline: the root isn't in the document, so nothing it does would be seen. Attach it first.",
+      );
+    }
     this.doc = safeOwnerDocument(root);
     if (options.announcements) this.readBaseline();
     // Delivered once the page's synchronous block has run, which is when
@@ -152,35 +163,31 @@ class TimelineRecorder {
     });
     // The whole document, not just the root: removing an ancestor of the
     // root drops focus too, and no event says so.
+    // Every attribute, not just those that make a region: CSS keyed on any
+    // of them (`[data-state=open]`) can show a region's text.
     this.observer.observe(this.doc, {
       childList: true,
       subtree: true,
       ...(options.announcements
-        ? {
-            characterData: true,
-            attributes: true,
-            attributeFilter: [...LIVE_REGION_ATTRIBUTES],
-          }
+        ? { characterData: true, attributes: true }
         : {}),
     });
     if (options.focus) {
-      this.addListener.call(this.doc, "focusin", this.onFocusIn, true);
-      this.addListener.call(this.doc, "focusout", this.onFocusOut, true);
+      this.listen(this.doc, this.addListener);
       // Where focus starts. Nothing read yet counts as `(none)`, so a start
       // on nothing prints no line.
       const start = this.focusChange(0);
       if (start) this.lines.push(start.text);
-      this.listenInside(resolveFocusedElement(this.doc));
     }
   }
 
   stop(): A11ySnapshotBox {
     if (this.box) return this.box;
+    this.leaving = false;
     this.settle();
     this.observer.disconnect();
     for (const target of [this.doc, ...this.shadowRoots]) {
-      this.removeListener.call(target, "focusin", this.onFocusIn, true);
-      this.removeListener.call(target, "focusout", this.onFocusOut, true);
+      this.listen(target, this.removeListener);
     }
     this.box = boxSnapshot(
       this.lines.length ? this.lines.join("\n") : "(nothing recorded)",
@@ -188,27 +195,59 @@ class TimelineRecorder {
     return this.box;
   }
 
+  /**
+   * Add or remove the focus listeners on `target`. `focus` and `blur` as well
+   * as `focusin` and `focusout`, in the capture phase: a page's `focus` or
+   * `blur` listener runs before the other of the pair, and a move is stamped
+   * at the first ({@link moved}).
+   */
+  private listen(
+    target: EventTarget,
+    method: typeof EventTarget.prototype.addEventListener,
+  ): void {
+    for (const type of ["focus", "focusin"]) {
+      method.call(target, type, this.onFocusIn, true);
+    }
+    for (const type of ["blur", "focusout"]) {
+      method.call(target, type, this.onFocusOut, true);
+    }
+  }
+
   private readonly onFocusIn = (): void => {
+    this.leaving = false;
     const to = resolveFocusedElement(this.doc);
     this.moved(to);
     this.listenInside(to);
   };
 
-  private readonly onFocusOut = (): void => this.moved(null);
+  private readonly onFocusOut = (event: Event): void => {
+    // Bound for another element: a browser runs microtasks between the
+    // events of a move, and focus rests nowhere yet.
+    this.leaving = (event as FocusEvent).relatedTarget != null;
+    this.moved(null);
+  };
 
-  /** Listen in every open shadow root `element` is inside, once each. */
+  /**
+   * Listen in every open shadow root `element` is inside, and its own, once
+   * each: a move within one, or from a host into its own, stops at the host
+   * and never reaches the document.
+   */
   private listenInside(element: Element | null): void {
-    if (this.box) return;
-    for (let el = element; el;) {
+    if (this.box || !element) return;
+    const own = this.shadowRoot.call(element) as ShadowRoot | null;
+    if (own) this.listenIn(own);
+    for (let el = element; ;) {
       const root = this.getRootNode.call(el);
       if (!(root instanceof ShadowRoot)) return;
-      if (!this.shadowRoots.has(root)) {
-        this.shadowRoots.add(root);
-        this.addListener.call(root, "focusin", this.onFocusIn, true);
-        this.addListener.call(root, "focusout", this.onFocusOut, true);
-      }
+      this.listenIn(root);
       el = root.host;
     }
+  }
+
+  private listenIn(root: ShadowRoot): void {
+    if (this.shadowRoots.has(root)) return;
+    this.shadowRoots.add(root);
+    this.listen(root, this.addListener);
   }
 
   /** Is `element` in the root, and the root on the page? A region in a root
@@ -217,9 +256,17 @@ class TimelineRecorder {
     return this.inRoot(element) && this.isConnected.call(element) === true;
   }
 
-  /** Note a focus event at this point among the page's changes. */
-  private moved(to: Element | null): void {
+  /**
+   * Note a focus event at this point among the page's changes: a move to
+   * somewhere new for the line to name, not the second event of a pair or a
+   * move between two places outside the root.
+   */
+  private moved(element: Element | null): void {
     if (this.box) return;
+    const to = element && this.inRoot(element) ? element : null;
+    if (this.moves.length && this.moves[this.moves.length - 1]!.to === to) {
+      return;
+    }
     for (const record of this.observer.takeRecords()) this.records.push(record);
     this.moves.push({ at: this.records.length, to, said: this.saidNow() });
     this.schedule();
@@ -244,9 +291,11 @@ class TimelineRecorder {
       return (el !== null && this.inRoot(el)) || holds(target, this.root);
     });
     if (!fresh) return last?.said;
-    return new Map(
-      this.regionsWithin(this.root).map((r) => [r, audibleRead(r)]),
-    );
+    const said = new Map<Element, Said>();
+    for (const region of this.regionsWithin(this.root)) {
+      if (isLive(regionLevel(region))) said.set(region, audibleRead(region));
+    }
+    return said;
   }
 
   /**
@@ -257,7 +306,8 @@ class TimelineRecorder {
   private schedule(): void {
     if (this.scheduled) return;
     this.scheduled = true;
-    queueMicrotask(() => this.settle());
+    // A promise job, not `queueMicrotask`, which Jest's fake timers fake.
+    void Promise.resolve().then(() => this.settle());
   }
 
   /** Turn the block into lines: what it left in each region, and where it
@@ -273,7 +323,8 @@ class TimelineRecorder {
     const pending = this.options.announcements
       ? this.announcements(records, moves)
       : [];
-    if (this.options.focus) {
+    // Between two elements, focus is read once it arrives.
+    if (this.options.focus && !this.leaving) {
       const change = this.focusChange(this.focusSettled(records, moves));
       if (change) pending.push(change);
     }
@@ -285,23 +336,36 @@ class TimelineRecorder {
   // ─── focus ─────────────────────────────────────────────────────────────────
 
   /**
-   * Where in the block focus came to rest: its last move, or the last record
-   * that removed the element it was on (jsdom fires no event for that),
-   * whichever came later. With neither, the end of the block.
+   * Where in the block focus came to rest on what the line names: the first
+   * of the moves, and records that removed the element focus was on (jsdom
+   * fires no event for that), after which it named nothing else. Without
+   * one, the end of the block.
    */
   private focusSettled(records: MutationRecord[], moves: Move[]): number {
-    let at = moves.length ? 2 * moves[moves.length - 1]!.at : -1;
-    let current = this.seen;
+    const changes: [at: number, to: Element | null][] = [];
+    let current = this.focused;
     let next = 0;
-    records.forEach((record, i) => {
+    const moveTo = (i: number): void => {
       while (next < moves.length && moves[next]!.at <= i) {
-        current = moves[next++]!.to;
+        current = moves[next]!.to;
+        changes.push([2 * moves[next++]!.at, current]);
       }
+    };
+    records.forEach((record, i) => {
+      moveTo(i);
       if (current && this.removes(record, current)) {
-        at = Math.max(at, 2 * i + 1);
+        current = null;
+        changes.push([2 * i + 1, null]);
       }
     });
-    return at < 0 ? 2 * records.length : at;
+    moveTo(Infinity);
+    const element = resolveFocusedElement(this.doc);
+    const named = element && this.inRoot(element) ? element : null;
+    let at = 2 * records.length;
+    for (let i = changes.length; i-- && changes[i]![1] === named;) {
+      at = changes[i]![0];
+    }
+    return at;
   }
 
   /** Did this record take `element` out of the document with it? */
@@ -319,6 +383,7 @@ class TimelineRecorder {
     // Same element as last read: no move, and no extraction to find that out.
     if (element === this.seen) return null;
     this.seen = element;
+    this.listenInside(element);
     const label = element ? this.focusLabel(element) : null;
     const target = label === null ? null : element;
     if (target === this.focused) return null;
@@ -331,9 +396,9 @@ class TimelineRecorder {
    * A focused node the a11y view folds away (a `<div tabindex="-1">` with no
    * name) is still where the user is, so it falls back to the DOM view's
    * node. One assistive tech can't reach gets a trailing `[hidden]`, since a
-   * screen reader meets nothing there: inside `aria-hidden` or `inert`
-   * content, above the root as well as in it, or somewhere the tree doesn't
-   * walk at all (jsdom lets a `hidden` element take focus).
+   * screen reader meets nothing there: inside `aria-hidden`, `inert` or
+   * hidden content, above the root as well as in it, or somewhere the tree
+   * doesn't walk at all (jsdom lets a `hidden` element take focus).
    */
   private focusLabel(element: Element): string | null {
     if (!this.inRoot(element)) return null;
@@ -359,8 +424,8 @@ class TimelineRecorder {
     return reachable ? text : `${text} [hidden]`;
   }
 
-  /** Is the root inside `aria-hidden` or `inert` content? The tree, read
-   *  from the root down, can't see that. */
+  /** Is the root inside `aria-hidden`, `inert` or hidden content? The
+   *  tree, read from the root down, can't see that. */
   private hiddenAboveRoot(): boolean {
     return hiddenAbove(this.root);
   }
@@ -389,150 +454,166 @@ class TimelineRecorder {
    * first of those moves, so a change after it that says nothing new, such
    * as a restyle that shows nothing, an edit under `aria-live="off"`, the
    * same words re-rendered or an old entry trimmed, can't carry the line past
-   * the move. Words put in a new order after the move are new. What a region
-   * said at a move only places a line, and is never printed: the block
-   * hadn't rendered.
+   * the move. Words put in a new order after the move are new. And never
+   * before a move at which it had not said it yet, whatever showed it after,
+   * even a change that touched no region, such as a stylesheet's. What a
+   * region said at a move only places a line, and is never printed: the
+   * block hadn't rendered.
    */
   private heardAt(region: Element, positions: number[], moves: Move[]): number {
     // Read only once a move has something to compare: a block with no focus
     // move, or none since the region changed, places by its last change.
     let now: Said | undefined;
     let first = moves.length;
+    let after = -Infinity;
     while (first > 0) {
       const then = moves[first - 1]!.said?.get(region);
       if (!then) break;
       now ??= audibleRead(region);
-      if (!alreadySaid(then, now)) break;
+      if (!alreadySaid(then, now)) {
+        // Just after that move, ahead of the next record.
+        after = 2 * moves[first - 1]!.at + 0.5;
+        break;
+      }
       first--;
     }
     const before = first < moves.length ? 2 * moves[first]!.at : Infinity;
     const earlier = positions.filter((at) => at < before);
-    return Math.max(...(earlier.length ? earlier : positions));
+    return Math.max(after, ...(earlier.length ? earlier : positions));
   }
 
   /**
-   * Which regions the block changed, and everywhere it did. A restyle
-   * changes every region in what it restyled, but a region the block also
-   * wrote to or inserted is placed by those writes alone.
+   * Which regions the block changed, and everywhere it did: every region
+   * around a change, and every region in what it restyled or inserted.
+   * Regions switched off included, so that what they show while off is
+   * known once they turn live.
    */
   private collect(records: MutationRecord[]): Map<Element, number[]> {
     const changed = new Map<Element, number[]>();
-    const written = new Set<Element>();
     const restyledAt = new Map<Element, number[]>();
     const removed: Node[] = [];
-    const touch: Touch = (region, at, writes = false) => {
-      if (!region) return;
-      const positions = changed.get(region);
-      if (positions) positions.push(at);
-      else changed.set(region, [at]);
-      if (writes) written.add(region);
+    const touch: Touch = (regions, at) => {
+      for (const region of regions) {
+        const positions = changed.get(region);
+        if (positions) positions.push(at);
+        else changed.set(region, [at]);
+      }
     };
     for (const [i, record] of records.entries()) {
       const at = 2 * i + 1;
       const target = record.target;
+      touch(this.regionsHolding(target), at);
       if (record.type === "attributes") {
         // Walked once per block, for every time the page restyled it.
         const positions = restyledAt.get(target as Element);
         if (positions) positions.push(at);
         else restyledAt.set(target as Element, [at]);
-        touch(this.regionHolding(target), at);
-      } else if (record.type === "characterData") {
-        touch(this.regionHolding(target), at, true);
-      } else {
-        if (record.removedNodes.length) {
-          touch(this.regionHolding(target), at);
-          removed.push(...record.removedNodes);
-        }
-        for (const node of record.addedNodes) {
-          this.added(node, record, at, touch);
-        }
+      } else if (record.type === "childList") {
+        this.childList(record, at, touch);
+        removed.push(...record.removedNodes);
       }
     }
     // A region moved within the block is still there, holding what it held.
     for (const node of removed) this.forget(node);
     for (const [element, positions] of restyledAt) {
-      for (const region of this.regionsWithin(element)) {
-        if (!written.has(region)) for (const at of positions) touch(region, at);
-      }
+      const regions = this.regionsWithin(element);
+      for (const at of positions) touch(regions, at);
     }
     return changed;
   }
 
   /**
-   * What an added node writes to: a live region of its own (once, not again
-   * as part of a region around it), or else the region it joins; and either
-   * way any region inside it, which announces for itself.
+   * The regions a child added or removed changes beyond its parent's: those
+   * inside an added child, and, for a shadow host's child, which shows
+   * through a slot if anywhere, the regions around the slot.
    */
-  private added(
-    node: Node,
-    record: MutationRecord,
-    at: number,
-    touch: Touch,
-  ): void {
-    const element =
-      safeNodeType(node) === Node.ELEMENT_NODE ? (node as Element) : null;
-    if (!element || !isLive(regionLevel(element))) {
-      touch(this.regionHolding(record.target), at, true);
+  private childList(record: MutationRecord, at: number, touch: Touch): void {
+    const slots = this.shadowOf(record.target)?.querySelectorAll("slot");
+    if (slots && record.removedNodes.length) {
+      for (const slot of slots) touch(this.regionsHolding(slot), at);
     }
-    // `regionsWithin` starts at the element itself.
-    if (element) {
-      for (const region of this.regionsWithin(element)) touch(region, at, true);
+    for (const node of record.addedNodes) {
+      if (slots) {
+        touch(this.regionsHolding(renderedIn(node) ?? record.target), at);
+      }
+      // `regionsWithin` starts at the node itself.
+      if (safeNodeType(node) === Node.ELEMENT_NODE) {
+        touch(this.regionsWithin(node as Element), at);
+      }
     }
   }
 
   /**
-   * The nearest live region rendering `node`, if the root holds it. A change
-   * under an `aria-live="off"` inside it is still its change, though it
-   * announces nothing for the text that change shows ({@link gains}).
+   * Every region rendering `node`, nearest first, if the root holds it:
+   * regions switched off as well, and the regions around a region. A change
+   * under an `aria-live` inside a region is still the region's change,
+   * though it announces nothing for the text that change shows
+   * ({@link gains}).
    */
-  private regionHolding(node: Node): Element | null {
-    let element: Element | null;
-    if (safeNodeType(node) === Node.ELEMENT_NODE) element = node as Element;
-    else {
-      // Text a slot renders belongs to the region around the slot.
-      element = renderedIn(node);
+  private regionsHolding(node: Node): Element[] {
+    const found: Element[] = [];
+    // Text a slot renders belongs to the regions around the slot.
+    let el =
+      safeNodeType(node) === Node.ELEMENT_NODE
+        ? (node as Element)
+        : renderedIn(node);
+    for (; el; el = renderingParent(el)) {
+      if (regionLevel(el) !== null) found.push(el);
+      if (el === this.root) return found;
     }
-    for (let el = element; el; el = renderingParent(el)) {
-      if (isLive(regionLevel(el))) return this.inRoot(el) ? el : null;
-      if (el === this.root) return null;
-    }
-    return null;
+    return [];
   }
 
-  /** Every live region in `element`'s subtree that the root holds. */
+  /** Every region in `element`'s subtree that the root holds, open shadow
+   *  trees included, and those switched off. */
   private regionsWithin(element: Element): Element[] {
     let scope: Element | null = null;
     if (this.inRoot(element)) scope = element;
-    else if (safeContains(element, this.root)) scope = this.root;
-    if (!scope) return [];
+    else if (holds(element, this.root)) scope = this.root;
     const found: Element[] = [];
-    const walker = this.createTreeWalker.call(
-      this.doc,
-      scope,
-      NodeFilter.SHOW_ELEMENT,
-    );
-    for (let n: Node | null = scope; n; n = walker.nextNode()) {
-      if (isLive(regionLevel(n as Element))) found.push(n as Element);
+    if (scope) {
+      this.eachElement(scope, (el) => {
+        if (regionLevel(el) !== null) found.push(el);
+      });
     }
     return found;
+  }
+
+  /** `start`, if an element, and every element under it, into open shadow
+   *  roots. */
+  private eachElement(start: Node, each: (el: Element) => void): void {
+    const walker = this.createTreeWalker.call(
+      this.doc,
+      start,
+      NodeFilter.SHOW_ELEMENT,
+    );
+    let n: Node | null =
+      safeNodeType(start) === Node.ELEMENT_NODE ? start : walker.nextNode();
+    for (; n; n = walker.nextNode()) {
+      each(n as Element);
+      const shadow = this.shadowOf(n);
+      if (shadow) this.eachElement(shadow, each);
+    }
+  }
+
+  /** `node`'s open shadow root, if it is an element with one. */
+  private shadowOf(node: Node): ShadowRoot | null {
+    return safeNodeType(node) === Node.ELEMENT_NODE
+      ? (this.shadowRoot.call(node) as ShadowRoot | null)
+      : null;
   }
 
   /**
    * Forget the regions a removal took with it, as emptying one does: put
    * back holding the same text, a region is announced again. Not one the
-   * block put back already, which only moved.
+   * block put back already, which only moved, nor an ancestor of the root
+   * put back on the page.
    */
   private forget(node: Node): void {
     if (safeNodeType(node) !== Node.ELEMENT_NODE) return;
     if (this.onPage(node as Element)) return;
-    const walker = this.createTreeWalker.call(
-      this.doc,
-      node,
-      NodeFilter.SHOW_ELEMENT,
-    );
-    for (let n: Node | null = node; n; n = walker.nextNode()) {
-      this.forgetRegion(n as Element);
-    }
+    if (this.isConnected.call(this.root) && holds(node, this.root)) return;
+    this.eachElement(node, (el) => this.forgetRegion(el));
   }
 
   /** Is `element` the root, or rendered inside it? */
@@ -544,8 +625,9 @@ class TimelineRecorder {
   }
 
   /**
-   * The regions' texts at the start: only text they gain is announced. One
-   * hidden from assistive tech above it holds its text all the same.
+   * The regions' texts at the start, those switched off included: only text
+   * they gain is announced. One hidden from assistive tech above it holds its
+   * text all the same.
    */
   private readBaseline(): void {
     for (const region of this.regionsWithin(this.root)) {
@@ -561,14 +643,16 @@ class TimelineRecorder {
    * reveals, but not text a removal or a restyle only takes away, nor a
    * change under an `aria-live="off"` inside it. The same text again says
    * nothing. Emptied, removed, or hidden by its own `hidden`, `display` or
-   * `aria-hidden`, it forgets, so the same text shown again is news again.
-   * Hidden from assistive tech above it (`aria-hidden` on an ancestor, as a
-   * modal does to the rest of the page), it keeps what it showed: shown
-   * again, it announces only text it gained meanwhile.
+   * `aria-hidden` or a container's, it forgets, so the same text shown again
+   * is news again. Hidden from assistive tech above it (`aria-hidden` or
+   * `inert` on an ancestor, as a modal does to the rest of the page), it
+   * keeps what it showed: shown again, it announces only text it gained
+   * meanwhile. Switched off, it announces nothing, but what it shows counts
+   * as said once it turns live.
    */
   private announcement(region: Element): string | null {
     const level = this.onPage(region) ? regionLevel(region) : null;
-    if (!isLive(level)) {
+    if (!level) {
       this.forgetRegion(region);
       return null;
     }
@@ -578,6 +662,7 @@ class TimelineRecorder {
       return null;
     }
     const said =
+      !isLive(level) ||
       this.lastText.get(region) === now.text ||
       !gains(region, now.from, this.lastFrom.get(region));
     this.lastText.set(region, now.text);
@@ -623,19 +708,22 @@ class TimelineRecorder {
  * - An **announce** line is the text a live region gains: an element with
  *   `aria-live="polite"` or `"assertive"`, or a `status` (an `<output>` too),
  *   `alert` or `log`. It names the region's role, and `{live=…}` when
- *   `aria-live` sets a politeness the role doesn't imply. A region emptied
- *   prints nothing, and so does the same text set again; emptied, removed or
- *   hidden by its own `hidden` or `aria-hidden` first, it prints again. One
- *   hidden by `aria-hidden` above it keeps its text.
+ *   `aria-live` sets a politeness the role doesn't imply. Only text nodes are
+ *   read: an image's `alt` or an `aria-label` inside the region isn't. A
+ *   region emptied prints nothing, and so does the same text set again;
+ *   emptied, removed or hidden first, by itself or a container, it prints
+ *   again. One hidden by `aria-hidden` or `inert` above it keeps its text,
+ *   and one switched to `aria-live="off"` takes in what it shows silently.
  * - Lines follow the order the page made its changes. What one synchronous
  *   run of the page's code does is read once: text set and cleared in it, or
  *   focus passing through an element, prints nothing. Anything an `await`
  *   separates is read separately, even an `await` of a resolved promise.
  *
  * Only what the root holds is recorded, so pass `document.body` to hear the
- * whole page. Changes inside a shadow root aren't seen: a `MutationObserver`
- * doesn't reach them. Call `stop()` even when a test fails first (in a
- * `finally` or `afterEach`), or the recorder keeps listening.
+ * whole page; a root not in the document throws. Changes inside a shadow
+ * root aren't seen as they happen: a `MutationObserver` doesn't reach them.
+ * Call `stop()` even when a test fails first (in a `finally` or
+ * `afterEach`), or the recorder keeps listening.
  */
 export function recordTimeline(
   root: Element,

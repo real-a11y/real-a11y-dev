@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { a11ySnapshotSerializer } from "./snapshot-box.js";
 
@@ -314,6 +314,142 @@ describe("recordTimeline", () => {
     byId("d").focus();
     expect(timeline.stop()).toMatchInlineSnapshot(
       `focus     button "Delete draft"`,
+    );
+  });
+
+  it("puts a message a focus listener writes after the focus line", async () => {
+    document.body.innerHTML = `<main><button id="back">Back</button><label>Password <input id="pw"></label><p role="status" id="s"></p></main>`;
+    byId("pw").addEventListener("focus", () => {
+      byId("s").textContent = "At least 12 characters.";
+    });
+    byId("back").focus();
+    const timeline = recordTimeline(document.querySelector("main")!);
+    await tick();
+    byId("pw").focus();
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`
+      focus     button "Back"
+      focus     textbox "Password"
+      announce  status "At least 12 characters."
+    `);
+  });
+
+  it("puts a message a blur listener writes after focus leaves", async () => {
+    document.body.innerHTML = `<main><label>Email <input id="em"></label><p role="alert" id="a"></p></main>`;
+    byId("em").addEventListener("blur", () => {
+      byId("a").textContent = "Email is required.";
+    });
+    byId("em").focus();
+    const timeline = recordTimeline(document.querySelector("main")!);
+    byId("em").blur();
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`
+      focus     textbox "Email"
+      focus     (none)
+      announce  alert "Email is required."
+    `);
+  });
+
+  it("reads no focus while it is between two elements, as a browser leaves it", async () => {
+    // A browser runs microtasks between the events of a native move, with
+    // focus on <body> after `focusout` and before `focus`.
+    const main = draftPage();
+    byId("d").focus();
+    const timeline = recordTimeline(main);
+    byId("d").blur();
+    byId("d").dispatchEvent(
+      new FocusEvent("focusout", { bubbles: true, relatedTarget: byId("n") }),
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+    byId("n").focus();
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`
+      focus     button "Delete draft"
+      focus     button "New draft"
+    `);
+  });
+
+  it("reads each block when queueMicrotask is faked, as Jest's fake timers fake it", async () => {
+    // Queued, never run: what `jest.useFakeTimers()` does to it until the
+    // clock moves.
+    vi.stubGlobal("queueMicrotask", () => {});
+    try {
+      const main = draftPage();
+      const timeline = recordTimeline(main);
+      byId("d").focus();
+      await Promise.resolve();
+      await Promise.resolve();
+      byId("n").focus();
+      expect(timeline.stop()).toMatchInlineSnapshot(`
+        focus     button "Delete draft"
+        focus     button "New draft"
+      `);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("puts (none) where focus fell, not at a later move outside the root", async () => {
+    document.body.innerHTML = `<main><p role="status" id="s"></p><ul><li>Draft <button id="d">Delete</button></li></ul></main><button id="outside">Help</button>`;
+    byId("d").focus();
+    const timeline = recordTimeline(document.querySelector("main")!);
+    byId("d").closest("li")!.remove();
+    byId("s").textContent = "Deleted.";
+    byId("outside").focus();
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`
+      focus     button "Delete"
+      focus     (none)
+      announce  status "Deleted."
+    `);
+  });
+
+  it("follows focus from a shadow host into its own shadow tree", async () => {
+    document.body.innerHTML = `<main><div id="host" tabindex="0"></div><p role="status" id="s"></p></main>`;
+    const shadow = byId("host").attachShadow({ mode: "open" });
+    shadow.innerHTML = `<button>First</button><button>Second</button>`;
+    const [first, second] = shadow.querySelectorAll("button");
+    const timeline = recordTimeline(document.querySelector("main")!);
+    byId("host").focus();
+    await tick();
+    first!.focus();
+    await tick();
+    byId("s").textContent = "Saved.";
+    await tick();
+    second!.focus();
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`
+      focus     generic
+      focus     button "First"
+      announce  status "Saved."
+      focus     button "Second"
+    `);
+  });
+
+  it("follows focus into the shadow tree of a host focused at the start", async () => {
+    document.body.innerHTML = `<main><div id="host" tabindex="0"></div><p role="status" id="s"></p></main>`;
+    const shadow = byId("host").attachShadow({ mode: "open" });
+    shadow.innerHTML = `<button>First</button>`;
+    byId("host").focus();
+    const timeline = recordTimeline(document.querySelector("main")!);
+    shadow.querySelector("button")!.focus();
+    await tick();
+    byId("s").textContent = "Saved.";
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`
+      focus     generic
+      focus     button "First"
+      announce  status "Saved."
+    `);
+  });
+
+  it("marks focus inside a hidden ancestor above the root", () => {
+    document.body.innerHTML = `<div hidden><main><button id="a">A</button></main></div>`;
+    const timeline = recordTimeline(document.querySelector("main")!);
+    byId("a").focus();
+    expect(timeline.stop()).toMatchInlineSnapshot(
+      `focus     button "A" [hidden]`,
     );
   });
 });
@@ -961,6 +1097,208 @@ describe("recordTimeline announcements", () => {
       announce  status "Order [REDACTED] placed, [REDACTED] confirmed."
     `);
   });
+
+  it("doesn't print a nested region's text again for the region around it", async () => {
+    document.body.innerHTML = `<main><form aria-live="polite"><label>Name <input id="n"></label><p role="alert" id="e"></p></form></main>`;
+    const timeline = recordTimeline(document.body);
+    byId("e").textContent = "Name is required.";
+    await tick();
+    byId("n").focus();
+    await tick();
+    document.body.style.overflow = "hidden"; // a scroll lock
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`
+      announce  alert "Name is required."
+      focus     textbox "Name"
+    `);
+  });
+
+  it("doesn't announce what is left of nested regions when one is removed", async () => {
+    document.body.innerHTML = `<main><div aria-live="polite"><p role="alert" id="a"></p><p role="alert" id="b"></p></div></main>`;
+    const timeline = recordTimeline(document.body);
+    byId("a").textContent = "Card declined.";
+    byId("b").textContent = "Try another card.";
+    await tick();
+    byId("a").remove();
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`
+      announce  alert "Card declined."
+      announce  alert "Try another card."
+    `);
+  });
+
+  it("places text a reveal above shows after a focus move, though written before it", async () => {
+    document.body.innerHTML = `<main><label>Name <input id="n"></label><div id="panel" hidden></div></main>`;
+    const timeline = recordTimeline(document.querySelector("main")!);
+    byId("panel").innerHTML = `<p role="alert">Name is required.</p>`;
+    byId("n").focus();
+    byId("panel").hidden = false;
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`
+      focus     textbox "Name"
+      announce  alert "Name is required."
+    `);
+  });
+
+  it("places text a restyle reveals after a focus move that a silent write came before", async () => {
+    document.body.innerHTML = `<style>.more { display: none } .open .more { display: inline }</style>
+      <main id="m"><button id="b">Sync</button><p role="status">Saved <span class="more">3 files, <span aria-live="off" id="o">0</span> left</span></p></main>`;
+    const timeline = recordTimeline(byId("m"));
+    byId("o").textContent = "2";
+    byId("b").focus();
+    byId("m").className = "open";
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`
+      focus     button "Sync"
+      announce  status "Saved 3 files, 2 left"
+    `);
+  });
+
+  it("places text shown after a focus move after it, though no change to the region shows it", async () => {
+    // A stylesheet's own change restyles the page without touching a region.
+    document.body.innerHTML = `<style id="css">.more { display: none }</style>
+      <main id="m"><button id="b">Sync</button><p role="status">Saved <span class="more" id="o"></span></p></main>`;
+    const timeline = recordTimeline(byId("m"));
+    byId("o").textContent = "3 files synced";
+    byId("b").focus();
+    byId("css").textContent = "";
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`
+      focus     button "Sync"
+      announce  status "Saved 3 files synced"
+    `);
+  });
+
+  it("announces a region shown by un-hiding its container", async () => {
+    document.body.innerHTML = `<main><div id="panel" hidden><p role="alert">Name is required.</p></div></main>`;
+    const timeline = recordTimeline(document.querySelector("main")!);
+    byId("panel").hidden = false;
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(
+      `announce  alert "Name is required."`,
+    );
+  });
+
+  it("forgets a region its container hides, so shown again its text is news", async () => {
+    document.body.innerHTML = `<style>.closed { display: none }</style>
+      <main><div id="panel"><p role="alert">Name is required.</p></div></main>`;
+    const timeline = recordTimeline(document.querySelector("main")!);
+    byId("panel").className = "closed";
+    await tick();
+    byId("panel").className = "";
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(
+      `announce  alert "Name is required."`,
+    );
+  });
+
+  it("announces a region shown by opening the <details> it is in", async () => {
+    document.body.innerHTML = `<main><details id="d"><summary>Errors</summary><p role="alert">Name is required.</p></details></main>`;
+    const timeline = recordTimeline(document.querySelector("main")!);
+    (byId("d") as HTMLDetailsElement).open = true;
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(
+      `announce  alert "Name is required."`,
+    );
+  });
+
+  it("hears text given to the host of a slotted live region", async () => {
+    document.body.innerHTML = `<main><div id="host"></div></main>`;
+    byId("host").attachShadow({ mode: "open" }).innerHTML =
+      `<p role="status"><slot></slot></p>`;
+    const timeline = recordTimeline(document.body);
+    byId("host").textContent = "Saved.";
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`announce  status "Saved."`);
+  });
+
+  it("forgets a slotted region a removal from its host emptied", async () => {
+    document.body.innerHTML = `<main><div id="host"><span id="t">Saved.</span></div></main>`;
+    byId("host").attachShadow({ mode: "open" }).innerHTML =
+      `<p role="status"><slot></slot></p>`;
+    const timeline = recordTimeline(document.body);
+    const text = byId("t");
+    text.remove();
+    await tick();
+    byId("host").append(text);
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`announce  status "Saved."`);
+  });
+
+  it("treats text a region in a shadow root holds at the start as already said", async () => {
+    document.body.innerHTML = `<main><div id="host"><span id="t">3 results</span></div></main>`;
+    byId("host").attachShadow({ mode: "open" }).innerHTML =
+      `<div role="status"><slot></slot></div>`;
+    const timeline = recordTimeline(document.querySelector("main")!);
+    byId("t").className = "bold";
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`(nothing recorded)`);
+  });
+
+  it("doesn't announce regions when an ancestor of the root moves", async () => {
+    document.body.innerHTML = `<div id="other"></div><div id="wrap"><main><p role="status">3 results</p><p role="alert">Card declined.</p></main></div>`;
+    const timeline = recordTimeline(document.querySelector("main")!);
+    document.body.insertBefore(byId("wrap"), byId("other"));
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`(nothing recorded)`);
+  });
+
+  it("stays silent for text a region gained while switched off, once it is back on", async () => {
+    document.body.innerHTML = `<main><p aria-live="polite" id="s">3 results</p></main>`;
+    const timeline = recordTimeline(document.querySelector("main")!);
+    byId("s").setAttribute("aria-live", "off");
+    await tick();
+    byId("s").textContent = "5 results";
+    await tick();
+    byId("s").setAttribute("aria-live", "polite");
+    await tick();
+    byId("s").textContent = "6 results";
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(
+      `announce  paragraph "6 results" {live=polite}`,
+    );
+  });
+
+  it("treats text a switched-off region holds at the start as already said", async () => {
+    document.body.innerHTML = `<main><p role="status" aria-live="off" id="s">3 results</p></main>`;
+    const timeline = recordTimeline(document.querySelector("main")!);
+    byId("s").removeAttribute("aria-live");
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`(nothing recorded)`);
+  });
+
+  it("stays silent for a switched-off part of a region once it turns live itself", async () => {
+    document.body.innerHTML = `<main><p role="status">Total: <span aria-live="off" id="o">1</span></p></main>`;
+    const timeline = recordTimeline(document.querySelector("main")!);
+    byId("o").textContent = "2";
+    await tick();
+    byId("o").setAttribute("aria-live", "polite");
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`(nothing recorded)`);
+  });
+
+  it("places a reveal through any attribute where it shows", async () => {
+    document.body.innerHTML = `<style>[data-state="closed"] { display: none }</style><main><button id="b">Next</button><p role="alert" id="a" data-state="closed">Name is required.</p></main>`;
+    const timeline = recordTimeline(document.body);
+    byId("a").setAttribute("data-state", "open");
+    await tick();
+    byId("b").focus();
+    await tick();
+    document.body.className = "theme-dark";
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`
+      announce  alert "Name is required."
+      focus     button "Next"
+    `);
+  });
+
+  it("reads only a region's text nodes, not an image's alt, as documented", async () => {
+    document.body.innerHTML = `<main><p role="status" id="s"></p></main>`;
+    const timeline = recordTimeline(document.querySelector("main")!);
+    byId("s").innerHTML = `<img alt="Success"> Saved`;
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`announce  status "Saved"`);
+  });
 });
 
 describe("recordTimeline options", () => {
@@ -998,6 +1336,12 @@ describe("recordTimeline options", () => {
     expect(() => recordTimeline(null as unknown as Element)).toThrow(
       /expected a DOM Element, received null/,
     );
+  });
+
+  it("throws on a root that isn't in the document", () => {
+    // Its changes never reach the document's observer: a test that can't fail.
+    const root = document.createElement("main");
+    expect(() => recordTimeline(root)).toThrow(/isn't in the document/);
   });
 
   it("stops listening once stopped, and returns the same box again", async () => {

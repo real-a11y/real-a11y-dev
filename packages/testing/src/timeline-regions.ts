@@ -5,6 +5,8 @@
 import {
   getImplicitRole,
   isAriaHiddenValue,
+  isRenderedInFlatTree,
+  isSubtreeHidden,
   liveRegionLevel,
   pageText,
   renderingParent,
@@ -38,11 +40,21 @@ export function regionLevel(el: Element): Level | "off" | null {
     : null;
 }
 
-/** Is `element` inside `aria-hidden` or `inert` content? */
-export function hiddenAbove(element: Element): boolean {
+/**
+ * Does something above `element` hide it from assistive tech? With
+ * `unrendered`, only something that keeps it from rendering at all: a
+ * `hidden` or `display: none` ancestor, a closed `<details>`, no slot for it.
+ * Otherwise `aria-hidden` and `inert` content as well.
+ */
+export function hiddenAbove(element: Element, unrendered = false): boolean {
+  if (!isRenderedInFlatTree(element)) return true;
   for (let el = renderingParent(element); el; el = renderingParent(el)) {
-    if (isAriaHiddenValue(safeGetAttribute(el, "aria-hidden"))) return true;
-    if (safeGetAttribute(el, "inert") !== null) return true;
+    if (!unrendered && isAriaHiddenValue(safeGetAttribute(el, "aria-hidden"))) {
+      return true;
+    }
+    // `inert` only hides from assistive tech, though core's rule counts it.
+    if (unrendered && safeGetAttribute(el, "inert") !== null) continue;
+    if (isSubtreeHidden(el, getComputedStyle(el))) return true;
   }
   return false;
 }
@@ -78,16 +90,19 @@ export function announcedRead(region: Element): RegionRead {
 }
 
 /**
- * The text nodes `region` holds whatever hides it from assistive tech above
- * it (a modal's `aria-hidden` on the page behind it, or a hidden ancestor):
- * what it would say once shown, nothing `aria-hidden` inside it included.
- * None when it is emptied, or hidden by its own `hidden`, `display` or
- * `aria-hidden`.
+ * The text nodes `region` holds while `aria-hidden` or `inert` content above
+ * it hides it from assistive tech (a modal's `aria-hidden` on the page
+ * behind it): what it would say once shown, nothing `aria-hidden` inside it
+ * included. None when it is emptied, hidden by its own `hidden`, `display`
+ * or `aria-hidden`, or not rendered at all because of an ancestor.
  */
 export function heldFrom(region: Element): Map<Text, string> {
-  // Its own `aria-hidden` hides it as its own `hidden` does: shown again, its
-  // text is news.
-  if (isAriaHiddenValue(safeGetAttribute(region, "aria-hidden"))) {
+  // Its own `aria-hidden` hides it as its own `hidden` does, and a container
+  // that doesn't render it as well: shown again, its text is news.
+  if (
+    isAriaHiddenValue(safeGetAttribute(region, "aria-hidden")) ||
+    hiddenAbove(region, true)
+  ) {
     return new Map();
   }
   const texts: Text[] = [];
@@ -106,8 +121,9 @@ export function heldFrom(region: Element): Map<Text, string> {
 /**
  * Does `region` show text `before` didn't: a text node new to it, or one
  * whose data changed? Not white space alone, and not text under an
- * `aria-live="off"` inside it, a change it announces nothing for. Text a
- * removal or a restyle only takes away, or shows again unchanged, is no gain.
+ * `aria-live` inside it, `off` or a region of its own, which `region`
+ * announces nothing for. Text a removal or a restyle only takes away, or
+ * shows again unchanged, is no gain.
  */
 export function gains(
   region: Element,
@@ -130,9 +146,10 @@ export interface Said {
 
 /**
  * What `region` says aloud now, for placing its line: {@link announcedRead}
- * without what sits under an `aria-live="off"` inside it, so a silent edit
- * reads as nothing said and silenced text as not said yet, with the page's
- * word and line breaks kept around it. Nodes of white space alone aside.
+ * without what sits under an `aria-live` inside it, so a silent edit, or a
+ * nested region's, reads as nothing said and silenced text as not said yet,
+ * with the page's word and line breaks kept around it. Nodes of white space
+ * alone aside.
  */
 export function audibleRead(region: Element): Said {
   const texts: Text[] = [];
@@ -171,13 +188,10 @@ export function alreadySaid(then: Said, now: Said): boolean {
   return true;
 }
 
-/** Is `node` under an `aria-live="off"` inside `region`? The nearest
- *  `aria-live` decides. */
+/** Is `node` under an `aria-live="off"` inside `region`, or a region of its
+ *  own there? Either way `region` says nothing for it. */
 function silentIn(node: Text, region: Element): boolean {
-  const level = between(node, region)
-    .map(regionLevel)
-    .find((l) => l !== null);
-  return level === "off";
+  return between(node, region).some((el) => regionLevel(el) !== null);
 }
 
 /** The elements from `node`'s parent up to `region`, not including it, as
