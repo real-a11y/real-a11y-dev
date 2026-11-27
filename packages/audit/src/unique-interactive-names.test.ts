@@ -385,6 +385,36 @@ describe("unique-interactive-names — items compared within their container", (
     expect(named(unique(root))).toEqual(['button "Send"', 'button "Send"']);
   });
 
+  it("resolves an aria-owns id in the owner's own shadow root", () => {
+    // Two instances of one widget reuse the internal id "opt": each list
+    // box owns its own option, not the first instance's.
+    const root = mount(`<div id="one"></div><div id="two"></div>`);
+    for (const host of root.querySelectorAll("div")) {
+      host.attachShadow({ mode: "open" }).innerHTML = `
+        <div role="listbox" aria-label="Pick" aria-owns="opt"></div>
+        <div role="option" id="opt" tabindex="-1">None</div>`;
+    }
+    expect(unique(root)).toEqual([]);
+  });
+
+  it("climbs from a slotted option to its slot, not its host", () => {
+    // Each option renders in its component's own list box. The hosts are
+    // owned by an outer list box, which must not pull the options out.
+    const root = mount(`
+      <div role="listbox" aria-label="Outer" aria-owns="h1 h2"></div>
+      <div id="h1"><div role="option" tabindex="-1">None</div></div>
+      <div id="h2"><div role="option" tabindex="-1">None</div></div>`);
+    for (const id of ["h1", "h2"]) {
+      root.querySelector(`#${id}`)!.attachShadow({ mode: "open" }).innerHTML =
+        `<div role="listbox" aria-label="Inner"><slot></slot></div>`;
+    }
+    const options = [...extractA11yTree(root).nodes.values()].filter(
+      (n) => n.a11y.role === "option",
+    );
+    expect(options).toHaveLength(2);
+    expect(unique(root)).toEqual([]);
+  });
+
   it("follows an aria-owns cycle without looping", () => {
     const root = mount(`
       <div role="listbox" id="x" aria-label="X" aria-owns="y"></div>

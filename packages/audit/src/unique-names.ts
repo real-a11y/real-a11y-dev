@@ -14,8 +14,8 @@ import {
   isNativeIframeRole,
   linearize,
   REDACTED_VALUE,
+  renderingParent,
   safeGetAttribute,
-  safeParentElement,
   type ExtractionResult,
   type SemanticNode,
 } from "@real-a11y-dev/core";
@@ -119,23 +119,43 @@ interface Placement {
 }
 
 /**
- * For a DOM tree, each id an `aria-owns` names, mapped to its owner's node.
- * The DOM producer keeps an owned item where its markup is, while a screen
- * reader reads it inside its owner, as Chromium's own tree places it: a native
- * tree needs none of this. The first owner in document order wins. Read
- * through core's clobber-safe accessors: a `<form>` with a control named
- * `getAttribute` shadows the method, and the plain call would throw.
+ * `Node.prototype.getRootNode`, held at load as core's own `safeRootNode`
+ * holds it: on a `<form>` with `<input name="getRootNode">` the plain call is
+ * that input. `Node` is absent in Node.js, where only native trees are
+ * audited, and those never reach it.
  */
-function ariaOwnersOf(tree: ExtractionResult): Map<string, SemanticNode> {
-  const owners = new Map<string, SemanticNode>();
+const getRootNodeMethod: ((this: Node) => Node) | undefined =
+  typeof Node === "undefined" ? undefined : Node.prototype.getRootNode;
+
+/** The tree an element's ids resolve in: its document or shadow root. A
+ *  component reusing an internal id names its own element, not another's. */
+function idScopeOf(el: Element): Node {
+  return getRootNodeMethod ? getRootNodeMethod.call(el) : el.getRootNode();
+}
+
+/** Owners by id, per id scope ({@link idScopeOf}). */
+type Owners = Map<Node, Map<string, SemanticNode>>;
+
+/**
+ * For a DOM tree, each id an `aria-owns` names, mapped to its owner's node,
+ * in the owner's own id scope. The DOM producer keeps an owned item where its
+ * markup is, while a screen reader reads it inside its owner, as Chromium's
+ * own tree places it: a native tree needs none of this. The first owner in
+ * document order wins. Read through clobber-safe accessors: a `<form>` with a
+ * control named `getAttribute` shadows the method, and the plain call throws.
+ */
+function ariaOwnersOf(tree: ExtractionResult): Owners {
+  const owners: Owners = new Map();
   if (tree.source?.producer !== "dom") return owners;
   const refs = getElementRefs();
   for (const node of tree.nodes.values()) {
     const el = refs.get(node.id);
     const ids = el ? safeGetAttribute(el, "aria-owns")?.trim() : undefined;
-    if (!ids) continue;
-    for (const id of ids.split(/\s+/))
-      if (!owners.has(id)) owners.set(id, node);
+    if (!el || !ids) continue;
+    const scope = idScopeOf(el);
+    const byId = owners.get(scope) ?? new Map<string, SemanticNode>();
+    owners.set(scope, byId);
+    for (const id of ids.split(/\s+/)) if (!byId.has(id)) byId.set(id, node);
   }
   return owners;
 }
@@ -144,18 +164,18 @@ function ariaOwnersOf(tree: ExtractionResult): Map<string, SemanticNode> {
  * The node an `aria-owns` puts `node` under, if any: one that names its
  * element's id, or the id of an element the tree flattened between it and its
  * parent (an owned `<div>` around the options, which has no node of its own).
+ * The climb follows what renders each element (`renderingParent`: a slotted
+ * option's slot, not its host), so it meets the tree parent where the
+ * extraction put it, and never an owner past it.
  */
-function ownerOf(
-  node: SemanticNode,
-  owners: ReadonlyMap<string, SemanticNode>,
-): SemanticNode | undefined {
+function ownerOf(node: SemanticNode, owners: Owners): SemanticNode | undefined {
   if (owners.size === 0) return undefined;
   const refs = getElementRefs();
   const stop = node.parentId === null ? undefined : refs.get(node.parentId);
   let el = refs.get(node.id) ?? null;
-  for (; el && el !== stop; el = safeParentElement(el)) {
+  for (; el && el !== stop; el = renderingParent(el)) {
     const id = safeGetAttribute(el, "id");
-    const owner = id ? owners.get(id) : undefined;
+    const owner = id ? owners.get(idScopeOf(el))?.get(id) : undefined;
     if (owner && owner.id !== node.id) return owner;
   }
   return undefined;
