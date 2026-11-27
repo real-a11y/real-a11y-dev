@@ -89,9 +89,17 @@ describe("heading-order, an SVG heading with no level", () => {
     await page.setContent(
       `<main><h1>Page</h1><svg role="heading" aria-label="Chart"><circle r="5" cx="8" cy="8"/></svg><h3>Details</h3></main>`,
     );
-    const native = collectFindings(await nativeTree(page), [
-      "heading-order",
-    ]).map((f) => f.message);
+    const tree = await nativeTree(page);
+    const svg = [...tree.nodes.values()].find(
+      (n) => n.a11y.role === "heading" && n.a11y.name === "Chart",
+    );
+    // The heading is in the native tree, with no level; the finding below
+    // is about it, not about it going missing.
+    expect(svg).toBeDefined();
+    expect(svg?.a11y.properties?.level).toBeUndefined();
+    const native = collectFindings(tree, ["heading-order"]).map(
+      (f) => f.message,
+    );
     expect(native).toEqual([
       'Heading level skipped: "Details" is h3 but the previous heading was h1.',
     ]);
