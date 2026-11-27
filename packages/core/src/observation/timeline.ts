@@ -58,6 +58,17 @@ function exposed(tree: ExtractionResult, id: string): boolean {
   return true;
 }
 
+/** `event`, and the stop it names, made read-only: `stop()` and `onEvents`
+ *  hand out the same events, which no reader can then change for another. */
+function freeze(event: TimelineEvent): TimelineEvent {
+  if (event.kind === "focus" && event.stop) {
+    Object.freeze(event.stop.states);
+    Object.freeze(event.stop.properties);
+    Object.freeze(event.stop);
+  }
+  return Object.freeze(event);
+}
+
 /** Note a change to the regions at a point in their block. */
 type Touch = (regions: Element[], at: number) => void;
 
@@ -101,6 +112,8 @@ class TimelineRecorder {
    *  and never reaches the document, so each is listened to as well. */
   private readonly shadowRoots = new Set<ShadowRoot>();
   private readonly events: TimelineEvent[] = [];
+  /** How many of them `onEvents` has had. */
+  private sent = 0;
   /** Each region's text as last read; gone once it empties. */
   private readonly lastText = new WeakMap<Element, string>();
   /** The text nodes that text came from, which count as said ({@link gains}). */
@@ -152,29 +165,39 @@ class TimelineRecorder {
     if (options.focus) {
       this.listen(this.doc, this.addListener);
       // Where focus starts. Nothing read yet counts as `(none)`, so a start
-      // on nothing is no event.
+      // on nothing is no event. Recorded now, handed to `onEvents` when the
+      // block settles: never before `startTimeline` returns.
       const start = this.focusChange(0);
-      if (start) this.emit([start.event]);
+      if (start) {
+        this.events.push(freeze(start.event));
+        this.schedule();
+      }
     }
   }
 
   stop(): readonly TimelineEvent[] {
     if (this.done) return this.done;
     this.leaving = false;
-    this.settle();
-    this.observer.disconnect();
-    for (const target of [this.doc, ...this.shadowRoots]) {
-      this.listen(target, this.removeListener);
+    // Detached however the last `onEvents` call ends.
+    try {
+      this.settle();
+    } finally {
+      this.observer.disconnect();
+      for (const target of [this.doc, ...this.shadowRoots]) {
+        this.listen(target, this.removeListener);
+      }
+      this.done = Object.freeze([...this.events]);
     }
-    this.done = Object.freeze([...this.events]);
     return this.done;
   }
 
-  /** Add a run of events, and hand it to `onEvents`. */
+  /** Add a run of events, and hand `onEvents` every one it hasn't had. */
   private emit(events: TimelineEvent[]): void {
-    if (!events.length) return;
-    this.events.push(...events);
-    this.options.onEvents?.(events);
+    for (const event of events) this.events.push(freeze(event));
+    if (this.sent === this.events.length) return;
+    const run = this.events.slice(this.sent);
+    this.sent = this.events.length;
+    this.options.onEvents?.(run);
   }
 
   /**

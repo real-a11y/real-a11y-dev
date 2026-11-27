@@ -108,7 +108,7 @@ const STOP_ATTRIBUTES = ["tabindex", "role", "type"] as const;
  * chosen option would otherwise still find it.
  *
  * @internal Also for any other view that singles one node out, such as
- * `testing`'s timeline naming the focused node. Not a stability promise.
+ * the timeline recorder naming the focused node. Not a stability promise.
  */
 export function asStop(node: SemanticNode): SemanticNode {
   if (!node.a11y.choiceWithheld) return node;

@@ -118,25 +118,60 @@ describe("startTimeline", () => {
     });
   });
 
-  it("hands each run of events to onEvents as it settles, where focus starts first", async () => {
+  it("hands each run of events to onEvents as its block settles, where focus starts first", async () => {
     document.body.innerHTML = `<main><button id="a">A</button><button id="b">B</button><p role="status" id="s"></p></main>`;
     byId("a").focus();
     const runs: (readonly TimelineEvent[])[] = [];
     const recording = startTimeline(document.querySelector("main")!, {
       onEvents: (events) => runs.push(events),
     });
-    expect(runs).toHaveLength(1);
     byId("s").textContent = "Ready.";
     await tick();
     byId("b").focus();
     await tick();
     const events = recording.stop();
     expect(runs.map((run) => run.map((e) => e.kind))).toEqual([
-      ["focus"],
-      ["announce"],
+      ["focus", "announce"],
       ["focus"],
     ]);
     expect(runs.flat()).toEqual(events);
+  });
+
+  it("never calls onEvents before startTimeline returns", async () => {
+    document.body.innerHTML = `<main><button id="a">A</button></main>`;
+    byId("a").focus();
+    let stopped: readonly TimelineEvent[] | undefined;
+    // Called from inside startTimeline, this would read `recording` before
+    // it is initialized, and throw.
+    const recording = startTimeline(document.querySelector("main")!, {
+      onEvents: () => {
+        stopped = recording.stop();
+      },
+    });
+    expect(stopped).toBeUndefined();
+    await tick();
+    expect(stopped).toHaveLength(1);
+  });
+
+  it("detaches at stop though onEvents throws there", async () => {
+    document.body.innerHTML = `<main><p role="status" id="s"></p></main>`;
+    let calls = 0;
+    const recording = startTimeline(document.querySelector("main")!, {
+      onEvents: () => {
+        calls++;
+        throw new Error("the bridge is gone");
+      },
+    });
+    byId("s").textContent = "Saved.";
+    expect(() => recording.stop()).toThrow("the bridge is gone");
+    expect(calls).toBe(1);
+    // Detached: the page's next change reaches nobody.
+    byId("s").textContent = "Later.";
+    await tick();
+    expect(calls).toBe(1);
+    expect(
+      recording.stop().map((e) => e.kind === "announce" && e.text),
+    ).toEqual(["Saved."]);
   });
 
   it("returns the same events from a second stop, and records nothing after the first", async () => {
@@ -148,6 +183,21 @@ describe("startTimeline", () => {
     expect(recording.stop()).toBe(events);
     expect(events).toEqual([]);
     expect(Object.isFrozen(events)).toBe(true);
+  });
+
+  it("hands out events no reader can change for another", async () => {
+    document.body.innerHTML = `<main><button id="b" aria-expanded="false">Menu</button><p role="status" id="s"></p></main>`;
+    const recording = startTimeline(document.querySelector("main")!);
+    byId("b").focus();
+    byId("s").textContent = "Saved.";
+    await tick();
+    const [focus, announce] = recording.stop();
+    expect(Object.isFrozen(announce)).toBe(true);
+    expect(Object.isFrozen(focus)).toBe(true);
+    if (focus?.kind !== "focus" || !focus.stop) throw new Error("no stop");
+    expect(Object.isFrozen(focus.stop)).toBe(true);
+    expect(Object.isFrozen(focus.stop.states)).toBe(true);
+    expect(Object.isFrozen(focus.stop.properties)).toBe(true);
   });
 
   it("throws, naming itself, on a root or options that can record nothing", () => {
