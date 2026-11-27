@@ -72,11 +72,13 @@ Five consequences that are easy to get wrong:
   [ADR-0002](https://app.notion.com/p/4251c354b0b581a4b080c4a3943ec5b5).** It
   lists focus moves and live-region announcements in the order the page made
   them, and that order exists only in the page: CDP has no announcement event,
-  and can't see where a focus event fell among the page's own mutations. So one
-  in-page recorder writes it on every surface, injected only when a timeline is
-  recorded, never into the default page bundle. It prints no producer header,
-  since the ADR fixes the producer. Do not "unify" it onto the native tree
-  either.
+  and can't see where a focus event fell among the page's own mutations. Today
+  only `testing`'s `recordTimeline` records one, in jsdom or a browser-mode
+  runner. Each surface that gains it (CLI, MCP, the Playwright adapter, the
+  extension, Storybook) runs that same in-page recorder, injected only when a
+  timeline is recorded, never into the default page bundle. It prints no
+  producer header, since the ADR fixes the producer. Do not "unify" it onto the
+  native tree either.
 
 The normalization vocabulary lives in `core/src/native/` (`normalizeNativeAX`,
 `ax-vocabulary.ts`) rather than in the package that does the CDP read, so a
