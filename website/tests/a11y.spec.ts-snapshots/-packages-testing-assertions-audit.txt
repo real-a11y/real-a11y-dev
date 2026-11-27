@@ -14,6 +14,8 @@ navigation "On this page"
     listitem
       link "assertLandmarkStructure(root)"
     listitem
+      link "assertUniqueInteractiveNames(root)"
+    listitem
       link "A11yAssertionError"
     listitem
       link "See also"
@@ -80,7 +82,7 @@ main
       row
         cell "severity"
           code "severity"
-        cell ""error" blocks use (unlabeled controls, unnamed tree items, tooltips, meters and progress bars, unlabeled dialogs); "warning" is triage-later (heading order, a missing main landmark, duplicate landmarks, images missing alt, form controls labeled only by title)."
+        cell ""error" blocks use (unlabeled controls, unnamed tree items, tooltips, meters and progress bars, unlabeled dialogs); "warning" is triage-later (heading order, a missing main landmark, duplicate landmarks, images missing alt, form controls labeled only by title, controls that share a name)."
           code ""error""
           code ""warning""
           code "title"
@@ -110,9 +112,9 @@ main
     code "collectFindings"
     text "runs by default:"
   button "Copy Code"
-  code "ALL_RULES; // ["no-unlabeled-interactive", "label-title-only", "image-alt", // "heading-order", "dialog-labeled", "landmark-structure"]"
+  code "ALL_RULES; // ["no-unlabeled-interactive", "label-title-only", "image-alt", // "heading-order", "dialog-labeled", "landmark-structure", // "unique-interactive-names"]"
   paragraph
-    text "Pass a subset as the second argument to run only some. The four"
+    text "Pass a subset as the second argument to run only some. The five"
     code "assert*"
     text "helpers below are thin wrappers over"
     code "collectFindings"
@@ -223,9 +225,78 @@ main
       text "(footer) landmark"
   button "Copy Code"
   code "assertLandmarkStructure(document.body);"
+  heading "assertUniqueInteractiveNames(root)" (level 2)
+    code "assertUniqueInteractiveNames(root)"
+  paragraph
+    text "Throws if two controls of one role share an accessible name, so that a screen-reader user who hears only the name, in the Tab order or in a list of the page's buttons or links, can't tell them apart. The rule is"
+    code "unique-interactive-names"
+    text ", a"
+    code "warning"
+    text "in"
+    code "collectFindings"
+    text ": no specification requires unique names, so it is best practice (WCAG 2.4.6 Headings and Labels, 2.4.9 Link Purpose (Link Only)), not a conformance failure."
+  list
+    listitem
+      strong "Buttons, links, checkboxes and switches"
+      text "are compared across the whole page, whichever landmark or region they sit in."
+    listitem
+      strong "Radios, options, tabs, menu items and tree items"
+      text "are compared only within their own container (a"
+      code "radiogroup"
+      text "or"
+      code "<fieldset>"
+      text ", a list box or"
+      code "<select>"
+      text ", a tab list, a menu, a tree's level), which a screen reader announces as focus enters it. The same "Yes" radio under two questions passes; two "Large" radios in one group don't. A radio in no group is compared across the page."
+    listitem
+      strong "Text fields aren't compared"
+      text ": a billing and a shipping fieldset can each have a "City"."
+    listitem
+      strong
+        text "Links to the same"
+        code "href"
+        text "don't count"
+      text ": they are one destination, and so are a path and an absolute URL with that path ("
+      code "/docs"
+      text "and"
+      code "https://example.com/docs"
+      text "). Links of one name that go to two places are all reported. A"
+      code "href="#""
+      text "or"
+      code "javascript:"
+      text "link goes nowhere in particular, so two "Delete" links with"
+      code "href="#""
+      text "are reported."
+    listitem
+      strong "The comparison ignores case, spacing and states"
+      text "(an expanded and a collapsed "Options" are two "Options"), and ignores"
+      strong "descriptions"
+      text ": an"
+      code "aria-describedby"
+      text "that differs doesn't make two names unique, because the Tab order and an elements list don't read it."
+    listitem
+      strong "Each frame is compared on its own"
+      text "in a native tree, and so is each player or field that draws controls of its own: every"
+      code "<video controls>"
+      text "has a "play" and every date input a "Show date picker" in Chromium's tree, and no page can rename them."
+    listitem
+      text "Unnamed controls are"
+      code "assertNoUnlabeledInteractive"
+      text "'s to report, not this rule's."
+  button "Copy Code"
+  code "import { assertUniqueInteractiveNames } from "@real-a11y-dev/testing"; document.body.innerHTML = ` <main> <section aria-label="Requests"> <p>Ana</p><button>Accept</button> <p>Luis</p><button>Accept</button> </section> </main>`; assertUniqueInteractiveNames(document.body);"
+  paragraph "Each control gets a finding of its own, with its locator and the landmark it is in:"
+  button "Copy Code"
+  code "A11yAssertionError: Found 2 accessibility issues: - Duplicate accessible name: another button is also named "Accept". A screen-reader user who hears only the name can't tell them apart; give each a name of its own (best practice, WCAG 2.4.6 and 2.4.9). [body > main > section > button:nth-of-type(1) — in <region "Requests">] - Duplicate accessible name: another button is also named "Accept". A screen-reader user who hears only the name can't tell them apart; give each a name of its own (best practice, WCAG 2.4.6 and 2.4.9). [body > main > section > button:nth-of-type(2) — in <region "Requests">]"
+  paragraph
+    text "To fix one, give each control a name of its own, for example by adding its row's or card's text with"
+    code "aria-labelledby"
+    text "("
+    code "aria-labelledby="accept-ana ana""
+    text "), or visually hidden text inside the button."
   heading "A11yAssertionError" (level 2)
     code "A11yAssertionError"
-  paragraph "All four assertions throw this error type on failure. Import it to catch or assert against it directly:"
+  paragraph "All five assertions throw this error type on failure. Import it to catch or assert against it directly:"
   button "Copy Code"
   code "import type { A11yAssertionError } from "@real-a11y-dev/testing";"
   heading "See also" (level 2)

@@ -7,5 +7,6 @@ h1 Assertions
   h2 assertHeadingOrder(root)
   h2 assertDialogsLabeled(root)
   h2 assertLandmarkStructure(root)
+  h2 assertUniqueInteractiveNames(root)
   h2 A11yAssertionError
   h2 See also

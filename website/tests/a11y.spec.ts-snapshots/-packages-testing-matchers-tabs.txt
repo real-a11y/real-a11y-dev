@@ -28,6 +28,7 @@ button "Copy Code"
 generic
 link "assert* function"
 table
+link "assertUniqueInteractiveNames"
 button "Copy Code"
 generic
 button "Copy Code"
