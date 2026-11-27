@@ -1535,6 +1535,28 @@ async function transportForFrame(
   return found.find((t) => t !== undefined);
 }
 
+/** A failed dispatch, carrying only a static reason string. */
+function failure(error: string): NativeDispatchResult {
+  return { success: false, error };
+}
+
+/** The remote object id of a backend node, or undefined when it won't resolve. */
+async function resolveObjectId(
+  target: CdpTransport,
+  backendNodeId: number,
+): Promise<string | undefined> {
+  try {
+    await target.send("DOM.enable");
+    const resolved = await target.send<{ object?: { objectId?: string } }>(
+      "DOM.resolveNode",
+      { backendNodeId },
+    );
+    return resolved.object?.objectId;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * Dispatch a click / type / focus against a native node over any CDP transport.
  * Resolves the node's backend id to a live DOM element (`DOM.resolveNode`) and
@@ -1548,60 +1570,38 @@ export async function dispatchNative(
   value?: string,
 ): Promise<NativeDispatchResult> {
   if (!SUPPORTED.has(action)) {
-    return { success: false, error: `unsupported action "${action}"` };
+    return failure(`unsupported action "${action}"`);
   }
   const { localId, frame } = splitNativeNodeId(nodeId);
   const backendNodeId = backendNodeIdFrom(localId);
   if (backendNodeId === null) {
-    return { success: false, error: "node has no backing DOM element" };
+    return failure("node has no backing DOM element");
   }
   if (action === "type" && typeof value !== "string") {
-    return {
-      success: false,
-      error: 'the "type" action requires a string value',
-    };
+    return failure('the "type" action requires a string value');
   }
   // A node of an out-of-process frame resolves only in that frame's own
   // session; its backend id means something else, or nothing, in this one.
   const target =
     frame === null ? transport : await transportForFrame(transport, frame);
   if (!target) {
-    return { success: false, error: "the frame is gone — re-read the tree" };
+    return failure("the frame is gone — re-read the tree");
   }
   if (target === "navigated") {
-    return { success: false, error: "page navigated — reload the native tree" };
+    return failure("page navigated — reload the native tree");
   }
 
-  let objectId: string | undefined;
-  try {
-    await target.send("DOM.enable");
-    const resolved = await target.send<{ object?: { objectId?: string } }>(
-      "DOM.resolveNode",
-      { backendNodeId },
-    );
-    objectId = resolved.object?.objectId;
-  } catch {
-    return {
-      success: false,
-      error: "could not resolve node — re-read the tree",
-    };
-  }
+  const objectId = await resolveObjectId(target, backendNodeId);
   if (!objectId) {
-    return {
-      success: false,
-      error: "could not resolve node — re-read the tree",
-    };
+    return failure("could not resolve node — re-read the tree");
   }
 
   try {
     const marker = await runInPage(target, objectId, action, value);
     if (marker?.ok) return { success: true };
-    return { success: false, error: marker?.reason ?? "action failed" };
+    return failure(marker?.reason ?? "action failed");
   } catch {
-    return {
-      success: false,
-      error: "the action could not be dispatched over CDP",
-    };
+    return failure("the action could not be dispatched over CDP");
   }
 }
 
