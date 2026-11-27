@@ -227,6 +227,18 @@ describe("unique-interactive-names — links", () => {
     ]);
   });
 
+  it("prints an href without its query or fragment, where a token would be", () => {
+    const root = mount(`
+      <a href="/reset?token=abc123">Reset</a>
+      <a href="/reset?token=def456#top">Reset</a>`);
+    const findings = unique(root);
+    expect(findings.map((f) => f.context)).toEqual([
+      'href="/reset"',
+      'href="/reset"',
+    ]);
+    expect(JSON.stringify(findings)).not.toMatch(/abc123|def456/);
+  });
+
   it("counts a link with no href as a destination of its own", () => {
     const root = mount(
       `<span role="link" tabindex="0">Next</span><span role="link" tabindex="0">Next</span>`,
@@ -437,6 +449,32 @@ describe("unique-interactive-names — a native tree", () => {
       ]),
     );
     expect(findings.map((f) => f.locator)).toEqual(["#a", "#b"]);
+  });
+
+  it("names no Chromium role when one field draws two of a name", () => {
+    const findings = unique(
+      tree([
+        n("t", "InputTime", "From", {}, [
+          n("a", "button", "Pick"),
+          n("b", "button", "Pick"),
+        ]),
+      ]),
+    );
+    expect(findings[0]!.message).toMatch(
+      /^Duplicate accessible name: another button in the same field or player is also named "Pick"\./,
+    );
+    expect(findings[0]!.message).not.toContain("InputTime");
+  });
+
+  it("prints a native link's href without its query", () => {
+    const findings = unique(
+      tree([
+        n("l1", "link", "Reset", { attributes: { href: "/r?token=abc" } }),
+        n("l2", "link", "Reset", { attributes: { href: "/r?token=def" } }),
+      ]),
+    );
+    // Two tokens, one path: the rule still sees two destinations.
+    expect(findings.map((f) => f.context)).toEqual(['href="/r"', 'href="/r"']);
   });
 
   it("does not describe a frame's control by the page's landmark", () => {

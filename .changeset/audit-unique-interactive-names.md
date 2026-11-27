@@ -9,7 +9,7 @@ New audit rule `unique-interactive-names`: a `warning` for two controls of one r
 - Buttons, links, checkboxes and switches are compared across the whole page. Radios, options, tabs, menu items and tree items are compared only within their own container, so the same "Yes" under two questions passes. Text fields aren't compared.
 - States and descriptions don't count: an expanded and a collapsed "Options" are two "Options", and a different `aria-describedby` doesn't make two names unique. Links with the same name and the same `href` pass, and so do a path and an absolute URL with that path; `href="#"` and `javascript:` links don't count as one destination.
 - In a native tree, each frame is compared on its own, and so is each player or field that draws controls of its own (every `<video controls>` has a "play", every date input a "Show date picker").
-- Each control gets a finding with its locator and its landmark as context (`in <region "Requests">`), and the count stays out of the message, so adding a row doesn't change the findings already in a saved snapshot.
+- Each control gets a finding with its locator and, as context, its landmark (`in <region "Requests">`) and a link's `href` without its query or fragment, where a token would be, and the count stays out of the message, so adding a row doesn't change the findings already in a saved snapshot.
 
 `@real-a11y-dev/testing` adds `assertUniqueInteractiveNames(root)`, the matcher `toHaveUniqueInteractiveNames()` and `sn.assertUniqueInteractiveNames()` on the Playwright handle, for both trees. All three throw on a finding, as `assertLandmarkStructure` does on its warnings.
 

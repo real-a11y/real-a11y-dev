@@ -235,12 +235,14 @@ function clip(text: string): string {
 /**
  * `href` + nearest landmark, read from the tree rather than the live element,
  * so both producers say it. The landmark's name is what tells two "Edit"
- * buttons in two named regions apart. The `href` is whatever the tree kept:
- * both producers drop it inside an editor in strict mode.
+ * buttons in two named regions apart. The `href` is whatever the tree kept
+ * (both producers drop it inside an editor in strict mode), without its query
+ * or fragment: a reset or sign-in link carries its token there, and a native
+ * finding printed no `href` at all before this rule.
  */
 function contextOf({ node, landmark }: Candidate): string | undefined {
   const bits: string[] = [];
-  const href = node.dom?.attributes["href"];
+  const href = node.dom?.attributes["href"]?.replace(/[?#].*$/s, "");
   if (href) bits.push(`href="${clip(href)}"`);
   if (landmark) {
     const name = landmark.a11y.name.trim();
@@ -255,12 +257,16 @@ function contextOf({ node, landmark }: Candidate): string | undefined {
 function findingFor(candidate: Candidate, locator?: string): Finding {
   const { node, name, container } = candidate;
   const role = node.a11y.role;
+  // A control host's role is Chromium's own (`InputTime`), not one to print.
+  const within = !container
+    ? ""
+    : CONTROL_HOST_ROLES.has(container)
+      ? " in the same field or player"
+      : ` in this ${container}`;
   const others =
     role === "link"
       ? `another link named "${name}" goes somewhere else`
-      : container
-        ? `another ${role} in this ${container} is also named "${name}"`
-        : `another ${role} is also named "${name}"`;
+      : `another ${role}${within} is also named "${name}"`;
   const tag = node.dom?.tagName;
   const context = contextOf(candidate);
   return {
