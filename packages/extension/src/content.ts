@@ -9,8 +9,10 @@ import {
   getElementRefs,
   getExplicitRole,
   getNodeId,
+  LIVE_REGION_ATTRIBUTES,
+  liveRegionLevel,
+  pageText,
   renderingParent,
-  safeGetAttribute,
   safeNodeType,
   safeParentElement,
 } from "@real-a11y-dev/core";
@@ -37,7 +39,6 @@ import {
   pageInputFilter,
   typingClock,
 } from "./page-input.js";
-import { pageText } from "./page-text.js";
 import { isTrustedSender, planHighlight } from "./routing.js";
 import { elementsFromTabSequence, sendKey } from "./send-key.js";
 import type { PanelToContent, TreeRequest } from "./types.js";
@@ -695,22 +696,6 @@ const onNativePreview = (e: Event) => highlightFromNativeEvent(e, "preview");
 
 // ---- Live region observer (top frame only) ----
 
-/**
- * Attributes that can show or hide a region's content, or make an element a
- * region at all. Revealing a pre-filled `role="alert"` is an attribute change
- * and nothing else, and Chromium announces it.
- */
-const LIVE_REGION_ATTRIBUTES = [
-  "hidden",
-  "inert",
-  "class",
-  "style",
-  "aria-hidden",
-  "open",
-  "role",
-  "aria-live",
-];
-
 if (!isSubFrame) {
   // Through the prototype: a `<form>` whose control is named `isConnected`
   // shadows its own. Core's readers cover the rest. A selector engine is no
@@ -720,22 +705,6 @@ if (!isSubFrame) {
     "isConnected",
   )!.get!;
   const createTreeWalker = Document.prototype.createTreeWalker;
-
-  /**
-   * How `element` announces, or null if it is no live region. Core's rule
-   * (`countsAsOverlay`), with the role from core's own parse: an `aria-live`
-   * of `polite` or `assertive` decides, `off` means none whatever the role, and
-   * any other value — `<div aria-live>` included — leaves it to the role,
-   * `alert` assertive and `status` or `log` polite.
-   */
-  const liveLevel = (element: Element): "polite" | "assertive" | null => {
-    const live = safeGetAttribute(element, "aria-live")?.trim().toLowerCase();
-    if (live === "polite" || live === "assertive") return live;
-    if (live === "off") return null;
-    const role = getExplicitRole(element);
-    if (role === "alert") return "assertive";
-    return role === "status" || role === "log" ? "polite" : null;
-  };
 
   let liveDebounce: ReturnType<typeof setTimeout> | null = null;
   const lastLiveText = new WeakMap<Element, string>();
@@ -761,7 +730,7 @@ if (!isSubFrame) {
     }
     // Up the tree that renders it, slots included, into a shadow tree's region.
     for (let el = element; el; el = renderingParent(el)) {
-      if (liveLevel(el)) touched.add(el);
+      if (liveRegionLevel(el)) touched.add(el);
     }
     if (inside && element && element === node) {
       const walker = createTreeWalker.call(
@@ -771,7 +740,7 @@ if (!isSubFrame) {
       );
       while (walker.nextNode()) {
         const el = walker.currentNode as Element;
-        if (liveLevel(el)) touched.add(el);
+        if (liveRegionLevel(el)) touched.add(el);
       }
     }
   };
@@ -795,7 +764,7 @@ if (!isSubFrame) {
       touched.clear();
       for (const region of regions) {
         if (!isConnected.call(region)) continue;
-        const level = liveLevel(region);
+        const level = liveRegionLevel(region);
         if (!level) continue;
         // What a screen reader could announce, never raw `textContent`: that
         // also holds a <textarea>'s markup default — the secret, for a
@@ -879,7 +848,7 @@ function observeLiveRegions() {
     subtree: true,
     characterData: true,
     attributes: true,
-    attributeFilter: LIVE_REGION_ATTRIBUTES,
+    attributeFilter: [...LIVE_REGION_ATTRIBUTES],
   });
 }
 

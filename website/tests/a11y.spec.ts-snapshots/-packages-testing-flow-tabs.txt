@@ -1,6 +1,7 @@
 link "Why flow() (vs Testing Library)?"
 link "Available steps"
 link "Asserting what an interaction changed"
+link "Recording what happened in between"
 link "flow(root, options?)"
 link "Utilities"
 link "See also"
@@ -34,6 +35,15 @@ button "Copy Code"
 generic
 button "Copy Code"
 generic
+link "snapshot report"
+button "Copy Code"
+generic
+link "tabSequenceSnapshot"
+link "registerA11yMatchers"
+table
+link "other snapshots"
+link "strict mode"
+link "Playwright adapter"
 link "snapshot report"
 table
 button "Copy Code"

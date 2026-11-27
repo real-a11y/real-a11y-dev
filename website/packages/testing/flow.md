@@ -229,6 +229,67 @@ In a suite that doesn't register the matchers, `configureA11y({ diff: { … } })
 - **They hold for the rest of the test file.** Set them in the setup file. A test that changes them for itself should put them back afterwards, or every later test in the file prints its way; under Vitest's `isolate: false`, so do later files.
 - **They apply to every diff this package prints for a test:** `a11yDiff`, the text a `flow().expectChanges("…")` string is compared against, and the diff a `ChangeSpec` failure ends with. The [snapshot report](/packages/testing/snapshots#the-snapshot-report) redacts an `a11yDiff` record with the same patterns as its text.
 
+## Recording what happened in between
+
+A diff sees the page at two moments. A keyboard or screen-reader user meets a sequence: where focus goes, and what live regions announce, in that order. Whatever comes and goes between the two captures (focus dropping to the page for a moment, a "Deleting…" status shown and then cleared) never reaches the diff. `recordTimeline` records it.
+
+### `recordTimeline(root, options?)`
+
+Start it before the interaction, wait for the page's last change, then box what it heard with `stop()`:
+
+```ts
+import { recordTimeline } from "@real-a11y-dev/testing";
+
+test("deleting a draft", async () => {
+  render(<Drafts />);
+  const timeline = recordTimeline(document.body);
+
+  await user.click(screen.getByRole("button", { name: "Delete draft" }));
+  await screen.findByText("Draft deleted.");
+
+  expect(timeline.stop()).toMatchInlineSnapshot(`
+    focus     button "Delete draft"
+    announce  status "Deleting…"
+    focus     (none)
+    focus     button "New draft"
+    announce  status "Draft deleted."
+  `);
+});
+```
+
+The diff of the same interaction shows only `focus: button "Delete draft" → button "New draft"` and the final status. The timeline also shows that focus fell to the page when the row was removed, where a screen reader announces the document and the user's reading position resets, that "Deleting…" was announced before it was cleared, and which came first at the end: the focus move or the message.
+
+- **A `focus` line** names the focused node the way [`tabSequenceSnapshot`](/packages/testing/snapshots#tabsequencesnapshot-root-options) prints a stop: `role "name" {states}`. `(none)` means focus rests on `<body>` or `<html>`, or outside the root, whatever else the page is showing. The first line is where focus starts, unless it starts on nothing. A focused node the tree folds away, such as a `<div tabindex="-1">` with no name, still gets a line, as `generic`. One that assistive tech can't reach ends in `[hidden]`, since a screen reader meets nothing there: inside `aria-hidden`, `inert` or hidden (`hidden`, `display: none`) content, above the root as well as in it, which jsdom lets take focus (`button "A" [hidden]`). A focused option in a sensitive field's popup, such as a card's expiry month, prints `option "[redacted]"`, as the tab order prints it: which one holds focus says which is chosen.
+- **An `announce` line** is the text a live region gains: an element with `aria-live="polite"` or `"assertive"`, or a `status` (an `<output>` included), `alert` or `log`. It names the region's role, and adds `{live=polite}` or `{live=assertive}` when `aria-live` sets a politeness the role doesn't imply (`<div aria-live="polite">` prints `announce  generic "Saved." {live=polite}`). The text is the text of the region's text nodes as a screen reader could read them, on one line: nothing `aria-hidden` or hidden, never a `<textarea>`'s markup, and blocks kept apart by a space. A change under `aria-live="off"` inside a region prints nothing on its own: the nearest `aria-live` decides. Nor does text in a region nested inside it, which announces for itself.
+- **A region emptied prints nothing**, because nothing is announced, and neither does text a removal or a restyle takes out of a region: only text it gains prints. The same text set again prints nothing either; emptied, removed, or hidden first, it prints again, whether by its own `hidden`, `display` or `aria-hidden` or by a container that stops rendering it (`hidden`, `display: none`, a closed `<details>`). A region hidden from assistive tech from above, as a modal's `aria-hidden` or `inert` does to the rest of the page, keeps its text, so showing it again prints only text it gained meanwhile, and moving it, or the root, within one step prints nothing. A region inserted into another prints once, as itself; one inserted with a region inside it prints its whole text, the inner region's included, if it has text of its own outside the inner region, and the inner region prints a line of its own either way. A region switched to `aria-live="off"` prints nothing, and what it shows meanwhile counts as said when it turns live again. Text a region holds when recording starts counts as already said, even while hidden from above, switched off, or inside an open shadow root.
+- **Lines follow the order the page made its changes**, even within one step: a focus line where focus came to rest on what it names, an announce line where its text was last written or shown. Text a page's `focus` or `blur` listener writes follows the move. What one synchronous run of the page's code does is read once, so text set and cleared in it, or focus passing through an element on the way to another, prints nothing. Anything an `await` separates is read separately, even an `await` of a promise that has already resolved, which a browser would render together with what came before: text set before one and cleared after it still prints.
+
+The order is the point. In the example, React renders `setStatus("Draft deleted.")` later, while `newDraft.focus()` runs at once, so focus lands before the message arrives even though the handler sets the status first. A page that announces first and then moves focus prints the two lines the other way round. Which one a screen reader user hears first, and whether one cuts the other off, can depend on exactly that.
+
+`stop()` returns a box like `a11yDiff`'s, so with the serializer registered ([`registerA11yMatchers`](/packages/testing/matchers)) it snapshots as the plain text above. A timeline that heard nothing prints `(nothing recorded)`. Calling `stop()` again returns the same box; nothing is recorded after the first call.
+
+| Option | Default | What it does |
+|---|---|---|
+| `focus` | `true` | Record focus moves. |
+| `announcements` | `true` | Record live-region announcements. |
+| `redact` | none | Patterns masked as `[REDACTED]` in focused names and in announced text, as in the [other snapshots](/packages/testing/snapshots#using-redact). |
+
+Pass `{ announcements: false }` for a focus-only timeline, so a copy change in a status message doesn't churn a focus test, or `{ focus: false }` for announcements alone. Turning both off throws: a recorder that listens for nothing could never fail. So does a root that isn't in the document, whose changes the recorder would never see. Jest's fake timers are fine, `queueMicrotask` faked included.
+
+**What it doesn't model yet:**
+
+- **Only what the root holds** is recorded. Pass `document.body` to hear the whole page, including a toast portaled outside your component.
+- **Changes inside a shadow root** aren't heard as they happen: a `MutationObserver` doesn't reach them. Light-DOM text a slot shows in a region is, and so is focus inside an open shadow root.
+- **A stylesheet's own change**, such as a `<style>` edited or added, isn't read as a restyle: text that change alone shows in a region prints at the region's next change, and is placed by the reads at focus moves.
+- **Only text nodes are read.** An image's `alt`, an `aria-label` inside a region and a field's value are left out, so `<img alt="Success"> Saved` prints `"Saved"`, and a region whose message is only an image or a label prints no line.
+- **`aria-atomic`, `aria-relevant` and `aria-busy`** aren't read: an announce line is always the region's whole text.
+- **Order around a focus move within one step is best-effort.** An announce line goes before a focus move made in the same synchronous run when the region already said its final text at the move, or that text with some of its elements removed since. A run that rewrites the region into new elements after the move and drops part of it places the line after the move, though the words that stay were there before.
+- **A region inserted already holding its text** prints like any other. Most screen readers don't announce one, `role="alert"` being the usual exception, so a line for a `status` that arrived with its message may be a message nobody hears.
+- **No strict mode.** There is no `redactInput` here yet, so a timeline can't promise what [strict mode](/packages/testing/snapshots#strict-mode) does for the other snapshots: a focused name built from typed text, or an editor inside a live region, prints as it is.
+- **In the page only.** The recorder runs where the test's DOM is: jsdom, or a runner that runs the test inside a browser. The [Playwright adapter](/packages/testing/playwright), which drives a page from outside, has no timeline yet, and the [snapshot report](/packages/testing/snapshots#the-snapshot-report) doesn't draw one.
+
+Call `stop()` even when the test fails before it, in a `finally` or an `afterEach`: until then, the recorder keeps listening to the document, and reads the root's tree on every later focus move.
+
 ## `flow(root, options?)`
 
 | Option | Type | Default | Description |

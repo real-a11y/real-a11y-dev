@@ -2,6 +2,7 @@ import {
   getExplicitRole,
   getImplicitRole,
   isSensitiveField,
+  pageText,
   safeGetAttribute,
   withAriaOwnerIndex,
   withholdsState,
@@ -10,7 +11,6 @@ import {
   type ActionType,
 } from "@real-a11y-dev/core";
 
-import { pageText } from "./page-text.js";
 import type { DispatchReply, SelectOption } from "./types.js";
 
 /** The panel's inline-input state for a field element, as returned to the

@@ -277,14 +277,6 @@
       "count": 2
     }
   },
-  "packages/extension/src/page-text.ts": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "packages/extension/src/sidepanel/App.tsx": {
     "complexity": {
       "count": 6

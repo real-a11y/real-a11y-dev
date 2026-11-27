@@ -256,13 +256,55 @@ const IMPLICIT_LIVE_ROLES = new Set(["status", "alert", "log"]);
 export function countsAsOverlay(el: Element): boolean {
   const role = getExplicitRole(el);
   if (role && OVERLAY_ROLES.has(role)) return true;
-
-  // `aria-live` values ARE case-insensitive tokens, unlike `role` above.
-  const live = safeGetAttribute(el, "aria-live")?.trim().toLowerCase();
-  if (live === "polite" || live === "assertive") return true;
-  if (live === "off") return false;
-  return role ? IMPLICIT_LIVE_ROLES.has(role) : false;
+  return liveLevelOf(el, role) !== null;
 }
+
+/**
+ * How `el` announces as a live region, or null if it is none: an `aria-live`
+ * of `polite` or `assertive` decides, `off` means none whatever the role, and
+ * any other value (`<div aria-live>` included) leaves it to the role, `alert`
+ * assertive and `status` or `log` polite. The role is read as
+ * {@link countsAsOverlay} reads it, so the two agree about what is a region.
+ *
+ * @internal For the readers of live regions outside core: the extension's
+ * live-region line and `testing`'s timeline. Not a stability promise.
+ */
+export function liveRegionLevel(el: Element): "polite" | "assertive" | null {
+  return liveLevelOf(el, getExplicitRole(el));
+}
+
+/** {@link liveRegionLevel}, given the role `getExplicitRole` read, so the
+ *  overlay scan parses it once per element. */
+function liveLevelOf(
+  el: Element,
+  role: string | undefined,
+): "polite" | "assertive" | null {
+  // `aria-live` values ARE case-insensitive tokens, unlike `role`.
+  const live = safeGetAttribute(el, "aria-live")?.trim().toLowerCase();
+  if (live === "polite" || live === "assertive") return live;
+  if (live === "off") return null;
+  if (role === "alert") return "assertive";
+  return role && IMPLICIT_LIVE_ROLES.has(role) ? "polite" : null;
+}
+
+/**
+ * Attributes that can show or hide a live region's text, or make an element a
+ * region at all. Revealing a pre-filled `role="alert"` is an attribute change
+ * and nothing else, and Chromium announces it.
+ *
+ * @internal For the observers of live regions outside core: the extension's
+ * live-region line and `testing`'s timeline. Not a stability promise.
+ */
+export const LIVE_REGION_ATTRIBUTES: readonly string[] = [
+  "hidden",
+  "inert",
+  "class",
+  "style",
+  "aria-hidden",
+  "open",
+  "role",
+  "aria-live",
+];
 
 /**
  * The child of `<body>` that holds `el` — the top-level container the page

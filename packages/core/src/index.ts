@@ -44,6 +44,10 @@ export {
   type ExtractDomTreeOptions,
   type RedactInputOption,
 } from "./extraction/dom-extractor.js";
+// @internal — the element that holds focus, `<body>`/`<html>` counted as
+// none, through open shadow roots: what the extractor marks as focused, for
+// `testing`'s timeline. Not a stability promise.
+export { resolveFocusedElement } from "./extraction/dom-extractor.js";
 // The field-value sensitivity policy (ADR-0001), one for every producer.
 export {
   holdsEnteredValue,
@@ -79,6 +83,14 @@ export { safeParentElement } from "./extraction/clobber-safe.js";
 // producer does: the flat tree, what is rendered, what AT can reach, and the
 // same elements skipped, read through the same clobber-safe accessors.
 export { ignoresChildText, isTextVisible } from "./extraction/dom-extractor.js";
+// @internal — what a screen reader could say for a live region, and which
+// elements are one: the extension's live-region line and field state, and
+// `testing`'s timeline, read the page's text through this one walk.
+export { pageText } from "./extraction/page-text.js";
+export {
+  LIVE_REGION_ATTRIBUTES,
+  liveRegionLevel,
+} from "./extraction/overlay-scope.js";
 export {
   flatChildNodes,
   isRenderedInFlatTree,
@@ -86,6 +98,9 @@ export {
 } from "./extraction/flat-tree.js";
 export { isAriaHiddenValue } from "./extraction/aria-tokens.js";
 export { safeGetAttribute, safeNodeType } from "./extraction/clobber-safe.js";
+// @internal — clobber-safe reads for `testing`'s timeline, which walks the
+// page's own DOM outside core. Not a stability promise.
+export { safeContains, safeOwnerDocument } from "./extraction/clobber-safe.js";
 export {
   getExplicitRole,
   getImplicitRole,
@@ -267,6 +282,9 @@ export {
   getTabSequence,
   diffTrees,
 } from "./query/index.js";
+// @internal — a node as a view that singles it out may show it: a sensitive
+// field's choice withheld (ADR-0001). For `testing`'s timeline.
+export { asStop } from "./query/index.js";
 export type {
   FindByRoleOptions,
   QueryInput,

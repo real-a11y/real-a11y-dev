@@ -266,6 +266,12 @@ main
         code "flow().expectChanges"
       text "."
     listitem
+      strong "Assert the order a user meets things in"
+      text "(focus dropping to the page, a status shown and cleared, a message before or after a focus move) →"
+      link "recordTimeline"
+        code "recordTimeline"
+      text "."
+    listitem
       strong "See what a snapshot holds beyond its text"
       text "(states, tab stops, a diff marked on the tree) → the"
       link "snapshot report"
