@@ -394,7 +394,26 @@ describe("unique-interactive-names — items compared within their container", (
         <div role="listbox" aria-label="Pick" aria-owns="opt"></div>
         <div role="option" id="opt" tabindex="-1">None</div>`;
     }
+    const options = [...extractA11yTree(root).nodes.values()].filter(
+      (n) => n.a11y.role === "option" && n.a11y.isExposedToAT,
+    );
+    expect(options).toHaveLength(2);
     expect(unique(root)).toEqual([]);
+  });
+
+  it("leaves an option where it is when aria-owns names the slot it renders in", () => {
+    // Owning a slot moves nothing assigned to it, in Chromium's tree too: both
+    // options are still the "Pick" list box's, and share a name. The owner
+    // sits in the slot's own shadow root, where its id resolves.
+    const root = mount(`
+      <div id="host">
+        <div role="option" tabindex="-1">None</div>
+        <div role="option" tabindex="-1" slot="other">None</div>
+      </div>`);
+    root.querySelector("#host")!.attachShadow({ mode: "open" }).innerHTML = `
+      <div role="listbox" aria-label="Elsewhere" aria-owns="s"></div>
+      <div role="listbox" aria-label="Pick"><slot id="s"></slot><slot name="other"></slot></div>`;
+    expect(named(unique(root))).toEqual(['option "None"', 'option "None"']);
   });
 
   it("climbs from a slotted option to its slot, not its host", () => {

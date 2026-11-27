@@ -166,7 +166,8 @@ function ariaOwnersOf(tree: ExtractionResult): Owners {
  * parent (an owned `<div>` around the options, which has no node of its own).
  * The climb follows what renders each element (`renderingParent`: a slotted
  * option's slot, not its host), so it meets the tree parent where the
- * extraction put it, and never an owner past it.
+ * extraction put it, and never an owner past it. A `<slot>`'s own id doesn't
+ * count: owning a slot moves nothing assigned to it, in Chromium's tree too.
  */
 function ownerOf(node: SemanticNode, owners: Owners): SemanticNode | undefined {
   if (owners.size === 0) return undefined;
@@ -174,7 +175,7 @@ function ownerOf(node: SemanticNode, owners: Owners): SemanticNode | undefined {
   const stop = node.parentId === null ? undefined : refs.get(node.parentId);
   let el = refs.get(node.id) ?? null;
   for (; el && el !== stop; el = renderingParent(el)) {
-    const id = safeGetAttribute(el, "id");
+    const id = el.localName === "slot" ? null : safeGetAttribute(el, "id");
     const owner = id ? owners.get(idScopeOf(el))?.get(id) : undefined;
     if (owner && owner.id !== node.id) return owner;
   }
