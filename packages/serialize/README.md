@@ -149,7 +149,11 @@ One line per added (`+`) / removed (`-`) node, one per changed field (`~`), in
 document order. Nodes are labeled `role "name" (level N)` — **never a node id**,
 so the output is snapshot-stable; a child-list change renders as counts for the
 same reason. A pure reorder shows `childIds reordered (3 children)` (so a
-tab-order or menu reorder isn't a silent no-op). An empty diff renders
+tab-order or menu reorder isn't a silent no-op). A text change that is also
+the node's name change prints once, as `a11y.name`: when the node's
+`dom.textContent` is its name on both sides, that line would repeat the same
+two strings, so it is left out. When they differ (an `aria-label` that stays
+put, a name from `aria-labelledby`), both print. An empty diff renders
 `(no changes)`.
 
 Options: `redact` (as above); `values`, which adds `a11y.value` change lines

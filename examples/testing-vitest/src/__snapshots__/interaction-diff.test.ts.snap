@@ -2,7 +2,6 @@
 
 exports[`booking form > announces a closed day in a status message 1`] = `
 ~ status "We're closed that day. Pick another date.": a11y.name "" → "We're closed that day. Pick another date."
-~ status "We're closed that day. Pick another date.": dom.textContent "" → "We're closed that day. Pick another date."
 focus: (none) → html-input-date "Date"
 `;
 

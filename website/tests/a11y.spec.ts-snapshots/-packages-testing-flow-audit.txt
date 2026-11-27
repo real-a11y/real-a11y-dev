@@ -280,6 +280,22 @@ main
     text "line, and a reorder still print their"
     code "childIds"
     text "lines."
+  paragraph
+    text "A text change prints once. When an element's text is its name before and after, as with a"
+    code "status"
+    text "message or a paragraph, the diff prints the"
+    code "a11y.name"
+    text "line and leaves out the"
+    code "dom.textContent"
+    text "line that would repeat the same two strings:"
+  button "Copy Code"
+  code "~ status "That hour is closed.": a11y.name "" → "That hour is closed.""
+  paragraph
+    text "When the two differ, both lines print. A button whose"
+    code "aria-label"
+    text "stays put while its text changes prints only its"
+    code "dom.textContent"
+    text "line."
   heading "Style B — flow().expectChanges (fluent, structured)" (level 3)
     code "flow().expectChanges"
   paragraph

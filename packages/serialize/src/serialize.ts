@@ -475,6 +475,19 @@ function childIdsExplained(change: NodeChange, diff: TreeDiff): boolean {
   );
 }
 
+/**
+ * True when a node's `dom.textContent` change repeats its `a11y.name` change:
+ * on each side the text is the name, so the name changed between the same two
+ * strings and its line already says it. Where the two differ — an `aria-label`
+ * that stays put, a name from `aria-labelledby`, or one that also reads nested
+ * elements — both lines print. So does the text line of a diff whose `changes`
+ * a caller filtered `a11y.name` out of: no name line would say it.
+ */
+const textRepeatsName = ({ before, after, changes }: NodeChange): boolean =>
+  changes.includes("a11y.name") &&
+  before.dom?.textContent === before.a11y.name &&
+  after.dom?.textContent === after.a11y.name;
+
 /** `<path> <before> → <after>` for one changed field of a node. */
 function changeDetail(
   change: NodeChange,
@@ -520,7 +533,9 @@ function focusLine(
  * ```
  *
  * One line per added/removed node, one per (node, changed-field) pair, then an
- * optional focus transition (see {@link TreeDiffSerializeOptions}). Nodes are
+ * optional focus transition (see {@link TreeDiffSerializeOptions}). A text
+ * change that is also the node's name change prints once, as `a11y.name`: the
+ * `dom.textContent` line would repeat its strings. Nodes are
  * labeled `role "name" (level N)` — never a node id, so the output is stable
  * across runs and safe to commit. Section order and within-section order follow
  * the diff's own (document) order; an empty diff renders `(no changes)`.
@@ -532,10 +547,12 @@ export function serializeTreeDiff(
   const { focusBefore, focusAfter, values = false, childIds = true } = options;
   const redact = ensureGlobalFlags(options.redact);
   const lines: string[] = [];
-  // A field left out: a value change unless asked for, or a child list its
-  // +/- lines already explain when `childIds` is off.
+  // A field left out: a value change unless asked for, a text change its name
+  // line already says, or a child list its +/- lines already explain when
+  // `childIds` is off.
   const omitted = (change: NodeChange, path: string): boolean =>
     (path === "a11y.value" && !values) ||
+    (path === "dom.textContent" && textRepeatsName(change)) ||
     (path === "childIds" && !childIds && childIdsExplained(change, diff));
 
   for (const node of diff.added) {

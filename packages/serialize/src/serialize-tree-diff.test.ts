@@ -560,3 +560,174 @@ describe("serializeTreeDiff childIds: false", () => {
     );
   });
 });
+
+describe("serializeTreeDiff: a text change that is also a name change", () => {
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  /** A node whose name and direct text both change. */
+  function retexted(
+    role: string,
+    from: { name: string; text: string | null },
+    to: { name: string; text: string | null },
+  ) {
+    return {
+      id: "sn-n",
+      before: mk(role, { id: "sn-n", name: from.name, textContent: from.text }),
+      after: mk(role, { id: "sn-n", name: to.name, textContent: to.text }),
+      changes: ["a11y.name", "dom.textContent"],
+    };
+  }
+
+  it("prints one a11y.name line when the text is the name on both sides", () => {
+    const diff: TreeDiff = {
+      ...empty,
+      changed: [
+        retexted(
+          "status",
+          { name: "", text: "" },
+          { name: "Saved", text: "Saved" },
+        ),
+      ],
+    };
+    expect(serializeTreeDiff(diff)).toBe(
+      '~ status "Saved": a11y.name "" → "Saved"',
+    );
+  });
+
+  it("keeps both lines when the text differs from the name on either side", () => {
+    // A label that stays put on one side and not the other.
+    const diff: TreeDiff = {
+      ...empty,
+      changed: [
+        retexted(
+          "button",
+          { name: "Save", text: "Old" },
+          { name: "New", text: "New" },
+        ),
+      ],
+    };
+    expect(serializeTreeDiff(diff)).toBe(
+      [
+        '~ button "New": a11y.name "Save" → "New"',
+        '~ button "New": dom.textContent "Old" → "New"',
+      ].join("\n"),
+    );
+  });
+
+  it("keeps the text line when the name did not change", () => {
+    const before = mk("button", {
+      id: "sn-b",
+      name: "Save",
+      textContent: "Old",
+    });
+    const after = mk("button", {
+      id: "sn-b",
+      name: "Save",
+      textContent: "New",
+    });
+    const diff: TreeDiff = {
+      ...empty,
+      changed: [{ id: "sn-b", before, after, changes: ["dom.textContent"] }],
+    };
+    expect(serializeTreeDiff(diff)).toBe(
+      '~ button "Save": dom.textContent "Old" → "New"',
+    );
+  });
+
+  it("keeps the text line of a diff whose a11y.name change was filtered out", () => {
+    // A caller that drops `a11y.name` from `changes` gets no name line, so the
+    // text line is the only one left to say what changed.
+    const change = retexted(
+      "paragraph",
+      { name: "Pending", text: "Pending" },
+      { name: "Cancelled", text: "Cancelled" },
+    );
+    const diff: TreeDiff = {
+      ...empty,
+      changed: [{ ...change, changes: ["dom.textContent"] }],
+    };
+    expect(serializeTreeDiff(diff)).toBe(
+      '~ paragraph "Cancelled": dom.textContent "Pending" → "Cancelled"',
+    );
+  });
+
+  it("keeps the text line where the node has no text on one side", () => {
+    // `null` text is not an empty name: the two lines say different things.
+    const diff: TreeDiff = {
+      ...empty,
+      changed: [
+        retexted(
+          "paragraph",
+          { name: "", text: null },
+          { name: "Done", text: "Done" },
+        ),
+      ],
+    };
+    expect(serializeTreeDiff(diff)).toBe(
+      [
+        '~ paragraph "Done": a11y.name "" → "Done"',
+        '~ paragraph "Done": dom.textContent null → "Done"',
+      ].join("\n"),
+    );
+  });
+
+  it("redacts the line it keeps", () => {
+    const diff: TreeDiff = {
+      ...empty,
+      changed: [
+        retexted(
+          "status",
+          { name: "", text: "" },
+          { name: "Saved at 10:42", text: "Saved at 10:42" },
+        ),
+      ],
+    };
+    expect(serializeTreeDiff(diff, { redact: [/\d{2}:\d{2}/] })).toBe(
+      '~ status "Saved at [REDACTED]": a11y.name "" → "Saved at [REDACTED]"',
+    );
+  });
+
+  it("prints each text change once in a real extraction, and keeps the ones that differ", () => {
+    const root = document.createElement("main");
+    root.innerHTML = `
+      <p role="status"></p>
+      <p>Pending</p>
+      <button aria-label="Save">Old</button>
+      <span id="lbl">Delete</span><button aria-labelledby="lbl">Old</button>
+      <h2>Step <em>one</em></h2>`;
+    document.body.appendChild(root);
+
+    const before = extract(root);
+    root.querySelector("[role=status]")!.textContent = "That hour is closed.";
+    root.querySelectorAll("p")[1]!.textContent = "Cancelled";
+    root.querySelector("[aria-label]")!.textContent = "New";
+    root.querySelector("[aria-labelledby]")!.textContent = "New";
+    root.querySelector("h2")!.firstChild!.textContent = "Part ";
+    const after = extract(root);
+
+    expect(serializeTreeDiff(diffTrees(before, after))).toBe(
+      [
+        '~ status "That hour is closed.": a11y.name "" → "That hour is closed."',
+        '~ paragraph "Cancelled": a11y.name "Pending" → "Cancelled"',
+        '~ button "Save": dom.textContent "Old" → "New"',
+        '~ button "Delete": dom.textContent "Old" → "New"',
+        '~ heading "Part one" (level 2): a11y.name "Step one" → "Part one"',
+        '~ heading "Part one" (level 2): dom.textContent "Step" → "Part"',
+      ].join("\n"),
+    );
+  });
+
+  it("leaves diffTrees' own change list alone", () => {
+    const root = document.createElement("div");
+    root.innerHTML = `<p role="status"></p>`;
+    document.body.appendChild(root);
+
+    const before = extract(root);
+    root.querySelector("p")!.textContent = "Saved";
+    const [change] = diffTrees(before, extract(root)).changed;
+
+    expect(change!.changes).toEqual(["a11y.name", "dom.textContent"]);
+  });
+});
