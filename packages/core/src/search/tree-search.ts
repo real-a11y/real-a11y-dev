@@ -175,6 +175,25 @@ function matchesRoleFilter(
 }
 
 /**
+ * Nodes matching the role filter, plus their ancestors for path visibility;
+ * `null` when there is no role filter, so every node passes it.
+ */
+function collectRoleMatches(
+  nodes: Map<string, SemanticNode>,
+  roleFilter: RoleFilter,
+): Set<string> | null {
+  if (roleFilter === null) return null;
+  const roleMatchedIds = new Set<string>();
+  for (const [id, node] of nodes) {
+    if (matchesRoleFilter(node, roleFilter)) {
+      roleMatchedIds.add(id);
+      addAncestors(nodes, node, roleMatchedIds);
+    }
+  }
+  return roleMatchedIds;
+}
+
+/**
  * Update the matchesFilter UI state on all nodes based on search and role filter.
  * Returns the count of directly matching nodes (not ancestors).
  */
@@ -200,17 +219,7 @@ export function applySearchFilter(
   // the direct matches the count below reports.
   const search = hasQuery ? collectSearchMatches(nodes, query, viewMode) : null;
 
-  // Find nodes matching role filter (include ancestors for path visibility)
-  const roleMatchedIds = new Set<string>();
-  if (hasRoleFilter) {
-    for (const [id, node] of nodes) {
-      if (matchesRoleFilter(node, roleFilter)) {
-        roleMatchedIds.add(id);
-        // Include ancestors
-        addAncestors(nodes, node, roleMatchedIds);
-      }
-    }
-  }
+  const roleMatchedIds = collectRoleMatches(nodes, roleFilter);
 
   // Apply combined filter: AND when both active, and count the direct matches
   // (nodes that match both filters themselves, not ancestors pulled in for the
@@ -218,14 +227,12 @@ export function applySearchFilter(
   let directMatches = 0;
   for (const [id, node] of nodes) {
     const matchesSearch = search ? search.visibleIds.has(id) : true;
-    const matchesRole = hasRoleFilter ? roleMatchedIds.has(id) : true;
+    const matchesRole = roleMatchedIds ? roleMatchedIds.has(id) : true;
     if (node.ui) node.ui.matchesFilter = matchesSearch && matchesRole;
 
     const directSearchMatch = search ? search.directIds.has(id) : true;
-    const directRoleMatch = hasRoleFilter
-      ? matchesRoleFilter(node, roleFilter)
-      : true;
-    if (directSearchMatch && directRoleMatch) {
+    // A null filter passes every node, so no guard is needed here.
+    if (directSearchMatch && matchesRoleFilter(node, roleFilter)) {
       directMatches++;
     }
   }
