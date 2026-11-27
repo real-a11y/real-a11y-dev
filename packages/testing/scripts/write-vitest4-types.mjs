@@ -1,21 +1,25 @@
 // Writes `./matchers/vitest4` into `dist/` beside the compiled entries: the
-// last step of `pnpm build`, after both tsup runs, and the first of `pnpm dev`.
+// last step of `pnpm build`, after both tsup runs, and `pnpm dev`'s `onSuccess`
+// after every rebuild.
 //
 // It is a hand-written declaration, not a tsup entry: it merges into Vitest
 // 4's `Assertion<T = any>`, and this repo is on Vitest 5, so compiling it here
 // fails with TS2428. `types/matchers-vitest4.d.ts` says more.
 //
-// It has to run after tsup rather than in its `onSuccess` hook. On a clean
-// build, tsup's declaration build deletes every `*.d.{ts,mts,cts}` in `dist/`
-// before it writes its own, and it runs alongside `onSuccess`, not before it,
-// so a declaration written from the hook can be deleted.
+// In `pnpm build` it has to run after tsup rather than in its `onSuccess`
+// hook. On a clean build, tsup's declaration build deletes every
+// `*.d.{ts,mts,cts}` in `dist/` before it writes its own, and it runs
+// alongside `onSuccess`, not before it, so a declaration written from the hook
+// can be deleted. Watch mode doesn't clean, so `pnpm dev` can use the hook.
+// It watches `types/` by name: a bare `--watch` skips changes to files no
+// entry imports, and nothing imports this declaration.
 //
 // It ships as the same four files a compiled types-only entry does: the
 // declaration once per module format, each importing `A11yMatchers` from its
 // own format's `matchers` file, and an empty module per format, so that a
 // setup file importing it at run time resolves.
 
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 
 const pkg = new URL("../", import.meta.url);
 const dist = (name) => new URL(`dist/${name}`, pkg);
@@ -41,9 +45,6 @@ if (/from\s+["']\.\/(?!matchers\.js["'])/.test(source)) {
   );
 }
 
-// `pnpm dev` runs this before `tsup --watch`, when a fresh checkout has no
-// `dist/` yet. Watch mode doesn't clean, so the files written here survive.
-await mkdir(dist(""), { recursive: true });
 await Promise.all([
   writeFile(dist("matchers-vitest4.d.ts"), source),
   writeFile(
