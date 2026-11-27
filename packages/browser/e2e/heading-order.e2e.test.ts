@@ -83,3 +83,17 @@ describe("heading-order, DOM against native", () => {
     });
   }
 });
+
+describe("heading-order, an SVG heading with no level", () => {
+  it("keeps the native skip: Chromium gives the SVG no level, and the fallback is the DOM path's", async () => {
+    await page.setContent(
+      `<main><h1>Page</h1><svg role="heading" aria-label="Chart"><circle r="5" cx="8" cy="8"/></svg><h3>Details</h3></main>`,
+    );
+    const native = collectFindings(await nativeTree(page), [
+      "heading-order",
+    ]).map((f) => f.message);
+    expect(native).toEqual([
+      'Heading level skipped: "Details" is h3 but the previous heading was h1.',
+    ]);
+  });
+});

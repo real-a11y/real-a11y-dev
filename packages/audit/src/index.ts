@@ -298,6 +298,36 @@ function frameContent(tree: ExtractionResult): Set<string> {
  */
 const UNLEVELLED_HEADING_LEVEL = 2;
 
+/**
+ * The page's headings in document order, each with a level. Not `getOutline`:
+ * it leaves out a heading with no finite level, and the DOM producer emits
+ * none for a `role="heading"` without a usable `aria-level`. AT still reaches
+ * that heading, so the rule keeps it and compares it at
+ * `UNLEVELLED_HEADING_LEVEL`. A native tree carries Chromium's own level; a
+ * heading it gives none (an SVG `role="heading"`) stays out, as it did under
+ * `getOutline` — the fallback fills the DOM producer's gap, not Chromium's.
+ */
+function pageHeadings(
+  tree: ExtractionResult,
+  inFrame: ReadonlySet<string>,
+): { id: string; level: number; name: string }[] {
+  const out: { id: string; level: number; name: string }[] = [];
+  const isNative = tree.source?.producer === "native";
+  for (const node of linearize(tree, { includeNotExposed: false })) {
+    if (node.a11y.role !== "heading" || inFrame.has(node.id)) continue;
+    const raw = node.a11y.properties?.level;
+    const parsed = raw !== undefined ? Number(raw) : NaN;
+    const usable = Number.isInteger(parsed) && parsed >= 1;
+    if (!usable && isNative) continue;
+    out.push({
+      id: node.id,
+      level: usable ? parsed : UNLEVELLED_HEADING_LEVEL,
+      name: node.a11y.name,
+    });
+  }
+  return out;
+}
+
 /** `heading-order`: exactly one `<h1>`, and no skipped heading levels, in the
  *  page's own document. Appends to `findings`. */
 function headingOrderFindings(
@@ -305,21 +335,7 @@ function headingOrderFindings(
   findings: Finding[],
   inFrame: ReadonlySet<string>,
 ): void {
-  // Not `getOutline`: it leaves out a heading with no finite level, and the
-  // DOM producer emits none for a `role="heading"` without a usable
-  // `aria-level`. AT still reaches that heading, so the rule keeps it and
-  // compares it at `UNLEVELLED_HEADING_LEVEL`.
-  const outline: { id: string; level: number; name: string }[] = [];
-  for (const node of linearize(tree, { includeNotExposed: false })) {
-    if (node.a11y.role !== "heading" || inFrame.has(node.id)) continue;
-    const raw = node.a11y.properties?.level;
-    const parsed = raw !== undefined ? Number(raw) : NaN;
-    const level =
-      Number.isInteger(parsed) && parsed >= 1
-        ? parsed
-        : UNLEVELLED_HEADING_LEVEL;
-    outline.push({ id: node.id, level, name: node.a11y.name });
-  }
+  const outline = pageHeadings(tree, inFrame);
   const h1s = outline.filter((e) => e.level === 1);
   if (h1s.length === 0) {
     findings.push({
