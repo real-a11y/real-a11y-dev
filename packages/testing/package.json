@@ -115,7 +115,7 @@
   },
   "scripts": {
     "build": "tsup && tsup --config tsup.reporter.config.ts && node scripts/write-vitest4-types.mjs",
-    "dev": "tsup --watch",
+    "dev": "node scripts/write-vitest4-types.mjs && tsup --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",

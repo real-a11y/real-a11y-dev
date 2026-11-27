@@ -20,7 +20,7 @@
 // because Vitest 5 changed `Matchers<T = any>` to `Matchers<R, T>` as well.
 //
 // Like `./matchers/vitest`, this ships no runtime behaviour: the `.js` and
-// `.cjs` beside it are empty, so a setup file can import it either way.
+// `.cjs` beside it carry no code, so a setup file can import it either way.
 
 import type { A11yMatchers } from "./matchers.js";
 
@@ -33,7 +33,7 @@ declare module "vitest" {
   // gives: `T` is the subject being asserted on, `A11yMatchers`' parameter is
   // the matcher's return type, and Vitest types every matcher as returning
   // `void`.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-empty-object-type -- declaration-merge into Vitest's matcher types
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-empty-object-type, @typescript-eslint/no-unused-vars -- declaration-merge into Vitest's matcher types
   interface Assertion<T = any> extends A11yMatchers<void> {}
   // eslint-disable-next-line @typescript-eslint/no-empty-object-type -- declaration-merge into Vitest's matcher types
   interface AsymmetricMatchersContaining extends A11yMatchers {}
