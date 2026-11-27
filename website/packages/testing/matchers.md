@@ -21,7 +21,7 @@ Registration is opt-in (the jest-axe pattern): call `registerA11yMatchers(expect
 
 ### Vitest
 
-The `@real-a11y-dev/testing/matchers/vitest` types entry needs **Vitest 5 or newer** (which itself needs Node.js 22.12+): it merges into Vitest 5's `Assertion<R, T>` interface, and an interface merge must repeat the original's type parameters. On Vitest 3 or 4 it fails with TS2428. The runtime `registerA11yMatchers` has no such requirement.
+The `@real-a11y-dev/testing/matchers/vitest` types entry needs **Vitest 5 or newer** (which itself needs Node.js 22.12+): it merges into Vitest 5's `Assertion<R, T>` interface, and an interface merge must repeat the original's type parameters. The runtime `registerA11yMatchers` has no such requirement.
 
 ```ts
 // vitest.setup.ts
@@ -31,6 +31,15 @@ import "@real-a11y-dev/testing/matchers/vitest"; // types-only augmentation
 
 registerA11yMatchers(expect);
 ```
+
+**On Vitest 3 or 4**, import `@real-a11y-dev/testing/matchers/vitest4` in its place. It declares those versions' `Assertion<T = any>`, and is otherwise the same entry:
+
+```ts
+// vitest.setup.ts, on Vitest 3 or 4
+import "@real-a11y-dev/testing/matchers/vitest4"; // instead of …/matchers/vitest
+```
+
+The Vitest 5 entry on Vitest 3 or 4 fails with TS2428 under `skipLibCheck: false`. Under `skipLibCheck: true`, the default in most templates, the error is suppressed and the matchers still type, but through a merge TypeScript has rejected, so use `./matchers/vitest4` there too. When you upgrade to Vitest 5, switch the import back to `./matchers/vitest`: the other way round fails with the same TS2428.
 
 ```ts
 // vitest.config.ts
@@ -385,13 +394,13 @@ The matcher signatures are identical, and so is the wiring — one runtime call,
 | Aspect | Vitest | Jest |
 |---|---|---|
 | Runtime registration | `registerA11yMatchers(expect)` | `registerA11yMatchers(expect)` |
-| Type augmentation | `import "@real-a11y-dev/testing/matchers/vitest"` | `import "@real-a11y-dev/testing/matchers/jest"` |
+| Type augmentation | `import "@real-a11y-dev/testing/matchers/vitest"` (`…/matchers/vitest4` on Vitest 3 or 4) | `import "@real-a11y-dev/testing/matchers/jest"` |
 
 **Jest has two `expect`s**, and they have separate type surfaces. If you `import { expect } from "@jest/globals"` rather than using the global that `@types/jest` declares, import `@real-a11y-dev/testing/matchers/jest-globals` instead — `./matchers/jest` augments `jest.Matchers` and does not reach it. `@testing-library/jest-dom` splits its own augmentation the same way.
 
 Each is a separate entry point because a type augmentation you cannot opt out of is a type augmentation that lands in projects that did not want it. Jest's used to ship unconditionally from `./matchers` — a global `namespace jest` merge needs no module resolution, so it looked free. It was not: Vitest's `Assertion` extends `JestAssertion`, which extends `jest.Matchers`, so a Vitest user importing `./matchers` received every matcher name twice, from two augmentations that disagreed about what the matchers return. Under `skipLibCheck: false` on TypeScript 7 that is one `TS2320` per matcher, reported against a file inside `node_modules`; on TypeScript 5.x, or under the default `skipLibCheck: true`, it is silent — and silent is not healthy, it is the Jest declaration quietly winning the merge.
 
-Importing more than one entry is redundant but harmless. That is true because the augmentations now agree that every matcher returns `void`, which is what Vitest and Jest both say about their own; making them agree is the fix, and keeping them separate is what stops a consumer carrying the other runner's types at all.
+Importing more than one entry is redundant but harmless. That is true because the augmentations now agree that every matcher returns `void`, which is what Vitest and Jest both say about their own; making them agree is the fix, and keeping them separate is what stops a consumer carrying the other runner's types at all. The one exception is `./matchers/vitest` and `./matchers/vitest4` together: each declares a different Vitest major's `Assertion`, and whichever doesn't match your Vitest reports TS2428. Import the one for the Vitest you have.
 
 None of these entries ships runtime code — importing one is a types-only statement, and `registerA11yMatchers(expect)` remains what actually installs the matchers.
 
@@ -399,6 +408,7 @@ None of these entries ships runtime code — importing one is a types-only state
 
 - [`examples/testing-vitest`](https://github.com/real-a11y/real-a11y-dev/tree/main/examples/testing-vitest) — `matchers-basic.test.ts` (simple) and `matchers-account-page.test.ts` (a full a11y gate + `flow()`-driven modal)
 - [`examples/testing-jest`](https://github.com/real-a11y/real-a11y-dev/tree/main/examples/testing-jest) — the minimal Jest + ts-jest setup
+- [`examples/testing-vitest4`](https://github.com/real-a11y/real-a11y-dev/tree/main/examples/testing-vitest4) — the setup file for Vitest 3 or 4, type-checked against Vitest 4 with `skipLibCheck: false`
 
 ## See also
 

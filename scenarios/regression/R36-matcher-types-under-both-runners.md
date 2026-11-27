@@ -6,9 +6,9 @@ area: Packaging
 type: Manual
 priority: P1
 status: Active
-validFrom: "testing ≥ 0.1.0-beta.15 for the row; `./matchers/jest`, `./matchers/jest-globals` and the removal of the unconditional global ship in the FIRST release after 0.1.0-beta.15. On 0.1.0-beta.15 and earlier neither jest entry exists — steps 2 and 3 fail to RESOLVE, and step 1 reproduces the TS2320 collision rather than failing the test. That is the old behaviour, not a fail. Everything here is checked with `tsc --noEmit`; no test runner executes. TWO conditions have to hold together or the defect is invisible, and both are recorded here because getting either wrong produces a green run that proves nothing: `skipLibCheck: false`, and **TypeScript 7** — 5.6 and 5.9 do not report the collision at all, on the same project and the same package."
+validFrom: "testing ≥ 0.1.0-beta.15 for the row; `./matchers/jest`, `./matchers/jest-globals` and the removal of the unconditional global ship in the FIRST release after 0.1.0-beta.15. On 0.1.0-beta.15 and earlier neither jest entry exists — steps 2 and 3 fail to RESOLVE, and step 1 reproduces the TS2320 collision rather than failing the test. That is the old behaviour, not a fail. Everything here is checked with `tsc --noEmit`; no test runner executes. TWO conditions have to hold together or the defect is invisible, and both are recorded here because getting either wrong produces a green run that proves nothing: `skipLibCheck: false`, and **TypeScript 7** — 5.6 and 5.9 do not report the collision at all, on the same project and the same package. `./matchers/vitest4` (step 11) ships in testing ≥ 0.1.0-beta.25; on 0.1.0-beta.24 and earlier it fails to resolve, which is the old behaviour, not a fail."
 validUntil: ""
-expected: "a Vitest consumer and both Jest consumer shapes each get every matcher typed, with zero errors under `skipLibCheck: false` on TypeScript 7; importing `./matchers` alone augments no runner's `expect`"
+expected: "a Vitest consumer and both Jest consumer shapes each get every matcher typed, with zero errors under `skipLibCheck: false` on TypeScript 7; a Vitest 3 or 4 consumer gets the same from `./matchers/vitest4`; importing `./matchers` alone augments no runner's `expect`"
 twin: D5
 covers:
   - packages.@real-a11y-dev/testing
@@ -42,6 +42,11 @@ run — the whole scenario is `npx tsc --noEmit`.
    and read what the error says the actual type is
 10. Repeat 1 against **`vitest@latest`** — the major a stranger's `npm i vitest` installs
     that day, not the one this repo pins — and record the version
+11. **Vitest 3 and 4** — repeat 1 in a project on `vitest@4` and again on `vitest@3`
+    (add `@types/node`, which Vitest 3's declarations need), importing
+    `./matchers/vitest4` in place of `./matchers/vitest`. Then swap the import back to
+    `./matchers/vitest` in both, and import `./matchers/vitest4` in step 10's project.
+    Repeat each with `skipLibCheck: true`
 
 ## Expected
 
@@ -100,8 +105,17 @@ run — the whole scenario is `npx tsc --noEmit`.
   known defect the beta.19 dogfood filed (twin: D5 step 8), fixed in testing
   0.1.0-beta.22. From 0.1.0-beta.22 the entry declares Vitest 5's shape, so a step
   that imports `./matchers/vitest` on Vitest 3 or 4 reports `TS2428`, the documented
-  requirement and not a fail.
+  requirement and not a fail: those versions take `./matchers/vitest4` (step 11).
   Steps 1–9, on the repo's pinned Vitest, keep their own expectations through it
+- **11** — zero errors with `./matchers/vitest4` on both Vitest 4 and Vitest 3, every
+  matcher typed. Swapped to `./matchers/vitest`, each reports `TS2428` once, from
+  `matchers-vitest.d.ts`; `./matchers/vitest4` on Vitest 5 reports it three times, from
+  `matchers-vitest4.d.ts`. Unlike the TS2320 class, `TS2428` reports on TypeScript 5.9,
+  so step 8's caveat does not apply here. Under `skipLibCheck: true` all of these are
+  silent, and the mismatched entry still types the matchers. That is not a pass for it
+  either: TypeScript has rejected the merge, and the docs send Vitest 3 and 4 users to
+  `./matchers/vitest4` either way. Measured on 4.1.11 and 3.2.4 with TypeScript 5.9.3,
+  under both `bundler` and `nodenext`
 
 ## Why this exists
 
@@ -132,7 +146,7 @@ this was half-built before and after — the fix is what made it whole, and it i
 `@jest/expect` that gets augmented, never `@jest/globals`, which merely
 re-exports an `expect` typed elsewhere.
 
-Three things guard the repo half of this now, and none of them can replace the
+Four things guard the repo half of this now, and none of them can replace the
 steps above:
 
 - `packages/testing/src/matchers-entry.test.ts` — `./matchers` carries no
@@ -149,8 +163,13 @@ steps above:
   it is permanently in the "imported two augmentations" shape. That is a useful
   accident: it means step 5's condition is checked on every commit, and it is
   why the return types agreeing is load-bearing rather than cosmetic
+- `examples/testing-vitest4` compiles `./matchers/vitest4` against a real Vitest 4,
+  with `skipLibCheck: false`, on every `pnpm verify`: the Vitest 4 half of step 11.
+  It is the only thing that compiles that entry at all, because it is hand-written
+  and the rest of the repo is on Vitest 5. Import `./matchers/vitest` there instead
+  and it fails with `TS2428`; delete the import and it fails with `TS2339`
 
-All three run on TypeScript 5.x, which reports none of the TS2320 class. That is
+All four run on TypeScript 5.x, which reports none of the TS2320 class. That is
 the gap the steps above exist to fill, and why this row is Manual.
 
 ## Notes

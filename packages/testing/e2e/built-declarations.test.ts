@@ -44,6 +44,8 @@ const DECLARATIONS = [
   "matchers-jest.d.cts",
   "matchers-vitest.d.ts",
   "matchers-vitest.d.cts",
+  "matchers-vitest4.d.ts",
+  "matchers-vitest4.d.cts",
   "matchers-jest-globals.d.ts",
   "matchers-jest-globals.d.cts",
 ];
@@ -75,6 +77,10 @@ test.describe("built matcher declarations", () => {
     expect(vitest).toMatch(/declare module ["']vitest["']/);
     expect(vitest).not.toMatch(/namespace jest/);
 
+    const vitest4 = code("matchers-vitest4.d.ts");
+    expect(vitest4).toMatch(/declare module ["']vitest["']/);
+    expect(vitest4).not.toMatch(/namespace jest/);
+
     const jestGlobals = code("matchers-jest-globals.d.ts");
     // `@jest/expect` re-exports `Matchers` from `expect`; the augmentation
     // merges through that alias. `@jest/globals` merely re-exports an `expect`
@@ -105,10 +111,32 @@ test.describe("built matcher declarations", () => {
     );
   });
 
+  test("the vitest4 augmentation declares Vitest 4's Assertion, in both formats", () => {
+    // Vitest 3 and 4 declare `Assertion<T = any>`, and a merge must repeat the
+    // type parameters exactly. This file is hand-written and copied in after
+    // tsup (`scripts/write-vitest4-types.mjs`), so nothing compiles it here:
+    // `examples/testing-vitest4` does, against a real Vitest 4.
+    for (const name of ["matchers-vitest4.d.ts", "matchers-vitest4.d.cts"]) {
+      expect(code(name)).toMatch(
+        /interface Assertion<T = any>\s*extends\s+A11yMatchers<void>/,
+      );
+    }
+    // Each format's declaration imports `A11yMatchers` from its own format's
+    // file, as tsup's emit does for the compiled entries. A `.d.cts` that
+    // imports `./matchers.js` reaches into the ESM declarations from CJS.
+    expect(code("matchers-vitest4.d.ts")).toMatch(
+      /from ["']\.\/matchers\.js["']/,
+    );
+    expect(code("matchers-vitest4.d.cts")).toMatch(
+      /from ["']\.\/matchers\.cjs["']/,
+    );
+  });
+
   test("the types-only entries emit no runtime code", () => {
     for (const name of [
       "matchers-jest",
       "matchers-vitest",
+      "matchers-vitest4",
       "matchers-jest-globals",
     ]) {
       for (const ext of ["js", "cjs"]) {

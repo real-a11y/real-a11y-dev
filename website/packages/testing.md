@@ -128,7 +128,8 @@ import "@real-a11y-dev/testing/matchers/vitest"; // types
 registerA11yMatchers(expect);
 ```
 
-The second import is types-only, and there is one per runner: `./matchers/vitest`,
+The second import is types-only, and there is one per runner: `./matchers/vitest`
+(or [`./matchers/vitest4` on Vitest 3 or 4](/packages/testing/matchers#vitest)),
 `./matchers/jest` for Jest's global `expect`, and `./matchers/jest-globals` if you
 `import { expect } from "@jest/globals"` — [which is a different type surface](/packages/testing/matchers#vitest-vs-jest-type-augmentation).
 

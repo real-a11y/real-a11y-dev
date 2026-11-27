@@ -65,6 +65,14 @@
       "import": "./dist/matchers-vitest.js",
       "require": "./dist/matchers-vitest.cjs"
     },
+    "./matchers/vitest4": {
+      "types": {
+        "import": "./dist/matchers-vitest4.d.ts",
+        "require": "./dist/matchers-vitest4.d.cts"
+      },
+      "import": "./dist/matchers-vitest4.js",
+      "require": "./dist/matchers-vitest4.cjs"
+    },
     "./matchers/jest": {
       "types": {
         "import": "./dist/matchers-jest.d.ts",
@@ -106,7 +114,7 @@
     "provenance": true
   },
   "scripts": {
-    "build": "tsup && tsup --config tsup.reporter.config.ts",
+    "build": "tsup && tsup --config tsup.reporter.config.ts && node scripts/write-vitest4-types.mjs",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

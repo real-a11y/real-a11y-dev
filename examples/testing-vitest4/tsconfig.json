@@ -1,0 +1,29 @@
+{
+  // `skipLibCheck: false` is the point of this project, unlike in the other two
+  // testing examples, where it would buy nothing. Here it is what reports
+  // TS2428, the error `./matchers/vitest` raises on Vitest 3 and 4 and the
+  // reason `./matchers/vitest4` exists. It costs little: Vitest 4's own
+  // declarations and `@real-a11y-dev/testing`'s are clean on TypeScript 5.9,
+  // and nothing else is installed.
+  //
+  // `paths` stands in for a real install, and without it this project tests
+  // the wrong thing. Through the workspace link, `@real-a11y-dev/testing` is
+  // `packages/testing` itself, so the entry's `declare module "vitest"`
+  // resolves from there, to the Vitest 5 that package develops against: it
+  // augments Vitest 5 and leaves this project's Vitest 4 untouched, and every
+  // matcher fails with TS2339. Installed in a consumer's `node_modules`, the
+  // entry resolves the consumer's own Vitest, which is what this pins.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "strict": true,
+    "noEmit": true,
+    "isolatedModules": true,
+    "skipLibCheck": false,
+    "types": [],
+    "paths": { "vitest": ["./node_modules/vitest"] }
+  },
+  "include": ["src"]
+}

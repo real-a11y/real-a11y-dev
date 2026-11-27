@@ -1,0 +1,20 @@
+{
+  "name": "@real-a11y-dev/example-testing-vitest4",
+  "private": true,
+  "version": "0.0.0",
+  "description": "A Vitest 4 project that type-checks @real-a11y-dev/testing/matchers/vitest4 with skipLibCheck off",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@real-a11y-dev/testing": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "vitest": "^4.1.11"
+  },
+  "volta": {
+    "extends": "../../package.json"
+  }
+}
