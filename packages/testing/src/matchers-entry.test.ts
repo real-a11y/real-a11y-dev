@@ -197,16 +197,18 @@ describe("matcher type-augmentation entries", () => {
     );
   });
 
-  it("rewrites the hand-written entries on every `pnpm dev` rebuild", () => {
-    // Watch mode doesn't clean, so `onSuccess` is safe there. `types` has to
-    // be watched by name: a bare `--watch` skips changes to files no entry
-    // imports, and nothing imports the hand-written declaration, so editing it
-    // left `dist/` stale until a full build.
-    const dev = manifest.scripts.dev;
-    expect(dev).toMatch(/--watch src\b/);
-    expect(dev).toMatch(/--watch types\b/);
-    expect(dev).toMatch(
-      /--onSuccess ["']node scripts\/write-vitest4-types\.mjs["']/,
+  it("rewrites the hand-written entries under `pnpm dev`, beside a bare tsup watch", () => {
+    // `pnpm dev` runs every `dev:*` script at once. The copy script watches
+    // `types/` itself, because a bare `tsup --watch` skips changes to files no
+    // entry imports, and nothing imports the hand-written declaration.
+    // tsup's watch stays BARE: naming paths turns off its re-read of
+    // `package.json`, so a dependency added mid-session would be bundled
+    // instead of left external.
+    const { scripts } = manifest;
+    expect(scripts.dev).toBe('pnpm run "/^dev:/"');
+    expect(scripts["dev:tsup"]).toBe("tsup --watch");
+    expect(scripts["dev:types"]).toBe(
+      "node scripts/write-vitest4-types.mjs --watch",
     );
   });
 
