@@ -3,7 +3,6 @@ import {
   extractA11yTree,
   findAllByRole,
   getElementRefs,
-  getOutline,
   isExtractionResult,
   isNativeIframeRole,
   linearize,
@@ -290,6 +289,15 @@ function frameContent(tree: ExtractionResult): Set<string> {
   return out;
 }
 
+/**
+ * The level `heading-order` compares a heading with no usable level at. It is
+ * the level Chromium computes, and the implicit default WAI-ARIA 1.1 gave the
+ * heading role. ARIA 1.2 has none, and the DOM producer deliberately emits no
+ * `level` there (see `getHeadingLevel` in core's `role-map.ts`). The missing
+ * attribute itself is `toBeValidA11yTree`'s to report, not this rule's.
+ */
+const UNLEVELLED_HEADING_LEVEL = 2;
+
 /** `heading-order`: exactly one `<h1>`, and no skipped heading levels, in the
  *  page's own document. Appends to `findings`. */
 function headingOrderFindings(
@@ -297,7 +305,21 @@ function headingOrderFindings(
   findings: Finding[],
   inFrame: ReadonlySet<string>,
 ): void {
-  const outline = getOutline(tree).filter((e) => !inFrame.has(e.id));
+  // Not `getOutline`: it leaves out a heading with no finite level, and the
+  // DOM producer emits none for a `role="heading"` without a usable
+  // `aria-level`. AT still reaches that heading, so the rule keeps it and
+  // compares it at `UNLEVELLED_HEADING_LEVEL`.
+  const outline: { id: string; level: number; name: string }[] = [];
+  for (const node of linearize(tree, { includeNotExposed: false })) {
+    if (node.a11y.role !== "heading" || inFrame.has(node.id)) continue;
+    const raw = node.a11y.properties?.level;
+    const parsed = raw !== undefined ? Number(raw) : NaN;
+    const level =
+      Number.isInteger(parsed) && parsed >= 1
+        ? parsed
+        : UNLEVELLED_HEADING_LEVEL;
+    outline.push({ id: node.id, level, name: node.a11y.name });
+  }
   const h1s = outline.filter((e) => e.level === 1);
   if (h1s.length === 0) {
     findings.push({

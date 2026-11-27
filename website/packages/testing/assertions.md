@@ -84,6 +84,8 @@ Throws if:
 - There is not exactly one `h1`
 - Any heading level is skipped (e.g., `h2` followed directly by `h4`)
 
+A `role="heading"` with no valid `aria-level` is compared as level 2, the level browsers expose. The missing attribute itself is reported by `toBeValidA11yTree`, not by this assertion.
+
 ```ts
 assertHeadingOrder(document.body);
 ```
