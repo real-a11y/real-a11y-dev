@@ -97,9 +97,9 @@ function redactText(input: string, patterns: RegExp[] | undefined): string {
 /**
  * Apply `redact` to one string as the serializers apply it to a name: every
  * match of every pattern becomes `[REDACTED]`. For text a reader prints next
- * to serialized lines, such as `testing`'s timeline announcements.
+ * to serialized lines, such as the timeline's announcements.
  *
- * @internal Shared with `testing`; not re-exported by any published package.
+ * @internal For `serializeTimeline` (`timeline.ts`); not in the package's index.
  */
 export function redactString(input: string, redact?: RegExp[]): string {
   return redactText(input, ensureGlobalFlags(redact));
@@ -353,9 +353,9 @@ function tabStopWriter(
  * One node as a line of {@link serializeTabSequence} prints it —
  * `role "name" {states}`, with ` = "value"` when `values` is on — and no
  * `[focused]` marker. For a reader that names one node the way the tab view
- * does, such as `testing`'s timeline.
+ * does, such as the timeline's focus lines.
  *
- * @internal Shared with `testing`; not re-exported by any published package.
+ * @internal For `serializeTimeline` (`timeline.ts`); not in the package's index.
  */
 export function serializeTabStop(
   node: SemanticNode,

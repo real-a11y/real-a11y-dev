@@ -1,28 +1,42 @@
-// How `recordTimeline` reads live regions: which element is one, how it
+// How the timeline recorder reads live regions: which element is one, how it
 // announces, and the text it says or holds. Kept apart from the recorder,
-// which decides when and in what order those reads become lines.
+// which decides when and in what order those reads become events.
 
+import { isAriaHiddenValue } from "../extraction/aria-tokens.js";
 import {
-  getImplicitRole,
-  isAriaHiddenValue,
-  isRenderedInFlatTree,
-  isSubtreeHidden,
-  liveRegionLevel,
-  pageText,
-  renderingParent,
+  safeAssignedSlot,
   safeGetAttribute,
   safeNodeType,
   safeParentElement,
-} from "@real-a11y-dev/core";
+  safeParentNode,
+} from "../extraction/clobber-safe.js";
+import {
+  isRenderedInFlatTree,
+  renderingParent,
+} from "../extraction/flat-tree.js";
+import { liveRegionLevel } from "../extraction/overlay-scope.js";
+import { pageText } from "../extraction/page-text.js";
+import { getImplicitRole, isSubtreeHidden } from "../extraction/role-map.js";
 
+/** How a live region announces: politely, or interrupting. */
 export type Level = "polite" | "assertive";
 
-/** The politeness each live role implies, for the `{live=…}` suffix. */
-export const ROLE_LEVELS: ReadonlyMap<string, Level> = new Map([
+/** The politeness each live role implies. */
+const ROLE_LEVELS: ReadonlyMap<string, Level> = new Map([
   ["alert", "assertive"],
   ["status", "polite"],
   ["log", "polite"],
 ]);
+
+/**
+ * The politeness `role` implies, or undefined for a role that implies none:
+ * a region whose `aria-live` sets another is printed with `{live=…}`.
+ *
+ * @internal For `serialize`'s timeline lines. Not a stability promise.
+ */
+export function impliedLiveLevel(role: string): Level | undefined {
+  return ROLE_LEVELS.get(role);
+}
 
 /**
  * How `el` announces: a politeness, `"off"` when its `aria-live` switches
@@ -145,7 +159,7 @@ export interface Said {
 }
 
 /**
- * What `region` says aloud now, for placing its line: {@link announcedRead}
+ * What `region` says aloud now, for placing its event: {@link announcedRead}
  * without what sits under an `aria-live` inside it, so a silent edit, or a
  * nested region's, reads as nothing said and silenced text as not said yet,
  * with the page's word and line breaks kept around it. Nodes of white space
@@ -207,11 +221,17 @@ function between(node: Text, region: Element): Element[] {
 /** The element `node` renders inside: its slot, its parent, or the host of
  *  the shadow root it sits directly under. */
 export function renderedIn(node: Node): Element | null {
-  const slot = (node as Partial<Text>).assignedSlot;
+  const type = safeNodeType(node);
+  let slot: Element | null = null;
+  if (type === Node.ELEMENT_NODE) slot = safeAssignedSlot(node as Element);
+  else if (type === Node.TEXT_NODE) {
+    // eslint-disable-next-line no-restricted-properties -- one read, and a text node is never a form
+    slot = (node as Text).assignedSlot;
+  }
   if (slot) return slot;
   const parent = safeParentElement(node);
   if (parent) return parent;
-  const root = node.parentNode;
+  const root = safeParentNode(node) as Node | null;
   return root && safeNodeType(root) === Node.DOCUMENT_FRAGMENT_NODE
     ? ((root as Partial<ShadowRoot>).host ?? null)
     : null;

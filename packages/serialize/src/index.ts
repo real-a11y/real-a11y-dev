@@ -5,9 +5,10 @@ export {
   serializeTabSequence,
   numberTabStops,
   serializeTreeDiff,
-  serializeTabStop,
-  redactString,
 } from "./serialize.js";
+// The timeline view's lines, from core's recorder's events (ADR-0002).
+// Internal: `testing`'s `recordTimeline` writes its snapshot with it.
+export { serializeTimeline } from "./timeline.js";
 export type {
   SerializeInput,
   SerializeOptions,
