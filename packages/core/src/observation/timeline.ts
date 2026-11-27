@@ -114,6 +114,8 @@ class TimelineRecorder {
   private readonly events: TimelineEvent[] = [];
   /** How many of them `onEvents` has had. */
   private sent = 0;
+  /** A call to `onEvents` is running. */
+  private delivering = false;
   /** Each region's text as last read; gone once it empties. */
   private readonly lastText = new WeakMap<Element, string>();
   /** The text nodes that text came from, which count as said ({@link gains}). */
@@ -189,21 +191,31 @@ class TimelineRecorder {
       this.settle();
     } finally {
       this.observer.disconnect();
-      for (const target of [this.doc, ...this.shadowRoots]) {
+      for (const target of [this.doc, ...this.shadowRoots])
         this.listen(target, this.removeListener);
-      }
       this.done = Object.freeze([...this.events]);
     }
     return this.done;
   }
 
-  /** Add a run of events, and hand `onEvents` every one it hasn't had. */
+  /**
+   * Add a run of events, and hand `onEvents` every one it hasn't had. Never
+   * from inside a call to it: what a call's `stop()` settles is the next
+   * run, handed over once that call returns.
+   */
   private emit(events: TimelineEvent[]): void {
     for (const event of events) this.events.push(freeze(event));
-    if (this.sent === this.events.length) return;
-    const run = this.events.slice(this.sent);
-    this.sent = this.events.length;
-    this.options.onEvents?.(run);
+    if (this.delivering) return;
+    this.delivering = true;
+    try {
+      while (this.sent < this.events.length) {
+        const run = this.events.slice(this.sent);
+        this.sent = this.events.length;
+        this.options.onEvents?.(run);
+      }
+    } finally {
+      this.delivering = false;
+    }
   }
 
   /**

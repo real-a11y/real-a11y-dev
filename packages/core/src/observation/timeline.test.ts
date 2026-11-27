@@ -164,6 +164,31 @@ describe("startTimeline", () => {
     },
   );
 
+  it("never calls onEvents from inside itself, though it stops with a change unread", async () => {
+    document.body.innerHTML = `<main><button id="a">A</button><p role="status" id="s"></p></main>`;
+    byId("a").focus();
+    await tick();
+    const runs: string[][] = [];
+    let depth = 0;
+    let deepest = 0;
+    const recording = startTimeline(document.querySelector("main")!, {
+      onEvents: (events) => {
+        deepest = Math.max(deepest, ++depth);
+        try {
+          // Reads the status below before the observer delivers it.
+          recording.stop();
+          runs.push(events.map((e) => e.kind));
+        } finally {
+          depth--;
+        }
+      },
+    });
+    byId("s").textContent = "Saved.";
+    await tick();
+    expect(deepest).toBe(1);
+    expect(runs).toEqual([["focus"], ["announce"]]);
+  });
+
   it("never calls onEvents before startTimeline returns", async () => {
     document.body.innerHTML = `<main><button id="a">A</button></main>`;
     byId("a").focus();
