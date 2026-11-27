@@ -955,6 +955,33 @@ describe("recordTimeline announcements", () => {
     `);
   });
 
+  it("prints no line for an inserted region with nothing of its own but a nested region", async () => {
+    document.body.innerHTML = `<main></main>`;
+    const main = document.querySelector("main")!;
+    const timeline = recordTimeline(main);
+    main.insertAdjacentHTML(
+      "beforeend",
+      `<div role="log"><p role="alert">Session expired.</p></div>`,
+    );
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(
+      `announce  alert "Session expired."`,
+    );
+  });
+
+  it("reads text a stylesheet's change alone shows at the region's next change, as documented", async () => {
+    document.body.innerHTML = `<style id="css">.more { display: none }</style>
+      <main id="m"><p role="status" id="s">Saved <span class="more">3 files synced</span></p></main>`;
+    const timeline = recordTimeline(byId("m"));
+    byId("css").textContent = "";
+    await tick();
+    byId("s").append(".");
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(
+      `announce  status "Saved 3 files synced."`,
+    );
+  });
+
   it("forgets a region a silent removal emptied, so the same text is news again", async () => {
     document.body.innerHTML = `<main><p role="status" id="s"><span aria-live="off" id="o">Saved.</span></p></main>`;
     const timeline = recordTimeline(document.querySelector("main")!);

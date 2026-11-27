@@ -550,7 +550,7 @@ main
       code "aria-hidden"
       text "or"
       code "inert"
-      text "does to the rest of the page, keeps its text, so showing it again prints only text it gained meanwhile, and moving it, or the root, within one step prints nothing. A region inserted into another prints once, as itself; one inserted with a region inside it prints its whole text, the inner region's included, and the inner region prints a line of its own. A region switched to"
+      text "does to the rest of the page, keeps its text, so showing it again prints only text it gained meanwhile, and moving it, or the root, within one step prints nothing. A region inserted into another prints once, as itself; one inserted with a region inside it prints its whole text, the inner region's included, if it has text of its own outside the inner region, and the inner region prints a line of its own either way. A region switched to"
       code "aria-live="off""
       text "prints nothing, and what it shows meanwhile counts as said when it turns live again. Text a region holds when recording starts counts as already said, even while hidden from above, switched off, or inside an open shadow root."
     listitem
@@ -629,6 +629,11 @@ main
       text "aren't heard as they happen: a"
       code "MutationObserver"
       text "doesn't reach them. Light-DOM text a slot shows in a region is, and so is focus inside an open shadow root."
+    listitem
+      strong "A stylesheet's own change"
+      text ", such as a"
+      code "<style>"
+      text "edited or added, isn't read as a restyle: text that change alone shows in a region prints at the region's next change, and is placed by the reads at focus moves."
     listitem
       strong "Only text nodes are read."
       text "An image's"
