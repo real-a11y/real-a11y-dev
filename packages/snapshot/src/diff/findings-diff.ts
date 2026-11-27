@@ -79,6 +79,8 @@ function score(a: FingerprintedFinding, b: FingerprintedFinding): number {
     return MATCH_THRESHOLD;
   }
   if (ca.role !== cb.role) return -1;
+  // Set only for a rule whose finding is about the name (see `componentsOf`).
+  if (ca.name !== cb.name) return -1;
   let s = ca.tagName === cb.tagName ? 0.5 : 0;
   s += 2 * locatorSim(ca, cb);
   s += ca.context && ca.context === cb.context ? 1 : 0;

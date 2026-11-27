@@ -1,4 +1,8 @@
-import type { ExtractionResult, SemanticNode } from "@real-a11y-dev/core";
+import {
+  extractA11yTree,
+  type ExtractionResult,
+  type SemanticNode,
+} from "@real-a11y-dev/core";
 import { describe, it, expect } from "vitest";
 
 import {
@@ -239,6 +243,31 @@ describe("unique-interactive-names — links", () => {
     expect(JSON.stringify(findings)).not.toMatch(/abc123|def456/);
   });
 
+  it("takes /docs and /./docs as one destination", () => {
+    const root = mount(`<a href="/docs">Docs</a><a href="/./docs">Docs</a>`);
+    expect(unique(root)).toEqual([]);
+  });
+
+  it("tells a tel: and an sms: link to one number apart", () => {
+    const root = mount(`
+      <a href="tel:+15550100">Contact</a><a href="sms:+15550100">Contact</a>`);
+    expect(unique(root)).toHaveLength(2);
+  });
+
+  it("prints no credentials however the href spells them", () => {
+    const root = mount(`
+      <a href="  https://ann:s3cret@a.example/x">Files</a>
+      <a href="https:\\\\bob:hunter2@b.example/y">Files</a>
+      <a href="https://cat:p@ss@c.example/z">Files</a>`);
+    const contexts = unique(root).map((f) => f.context);
+    expect(contexts).toEqual([
+      'href="https://a.example/x"',
+      'href="https://b.example/y"',
+      'href="https://c.example/z"',
+    ]);
+    expect(JSON.stringify(contexts)).not.toMatch(/s3cret|hunter2|ss@/);
+  });
+
   it("prints an href without the credentials in it", () => {
     const root = mount(`
       <a href="https://ann:s3cret@a.example/x">Files</a>
@@ -279,6 +308,57 @@ describe("unique-interactive-names — items compared within their container", (
     expect(findings[0]!.message).toMatch(
       /^Duplicate accessible name: another radio in this group is also named "Large"\./,
     );
+  });
+
+  it("compares radios in unnamed fieldsets as one group: nothing is announced", () => {
+    const root = mount(`
+      <fieldset><label><input type="radio" name="a">Yes</label></fieldset>
+      <fieldset><label><input type="radio" name="b">Yes</label></fieldset>`);
+    expect(named(unique(root))).toEqual(['radio "Yes"', 'radio "Yes"']);
+  });
+
+  it("compares one menu's items across its unnamed groups", () => {
+    const root = mount(`
+      <div role="menu" aria-label="Actions">
+        <div role="group"><div role="menuitem" tabindex="-1">Rename</div></div>
+        <div role="group"><div role="menuitem" tabindex="-1">Rename</div></div>
+      </div>`);
+    const findings = unique(root);
+    expect(named(findings)).toEqual(['menuitem "Rename"', 'menuitem "Rename"']);
+    expect(findings[0]!.message).toContain("in this menu");
+  });
+
+  it("passes one item name in two named groups of a menu", () => {
+    const root = mount(`
+      <div role="menu" aria-label="Actions">
+        <div role="group" aria-label="File"><div role="menuitem" tabindex="-1">Rename</div></div>
+        <div role="group" aria-label="Folder"><div role="menuitem" tabindex="-1">Rename</div></div>
+      </div>`);
+    expect(unique(root)).toEqual([]);
+  });
+
+  it("scopes an option by the list box that owns it with aria-owns", () => {
+    // Both options sit in "Spare" in the markup; each is owned elsewhere.
+    const markup = (owns: boolean) => `
+      <div role="listbox" aria-label="Arrival"${owns ? ' aria-owns="a-none"' : ""}></div>
+      <div role="listbox" aria-label="Departure"${owns ? ' aria-owns="d-none"' : ""}></div>
+      <div role="listbox" aria-label="Spare">
+        <div role="option" id="a-none" tabindex="-1">None</div>
+        <div role="option" id="d-none" tabindex="-1">None</div>
+      </div>`;
+    expect(unique(mount(markup(true)))).toEqual([]);
+    expect(named(unique(mount(markup(false))))).toEqual([
+      'option "None"',
+      'option "None"',
+    ]);
+  });
+
+  it("follows an aria-owns cycle without looping", () => {
+    const root = mount(`
+      <div role="listbox" id="x" aria-label="X" aria-owns="y"></div>
+      <div role="listbox" id="y" aria-label="Y" aria-owns="x"></div>
+      <div role="option" tabindex="-1">One</div>`);
+    expect(unique(root)).toEqual([]);
   });
 
   it("compares radios with no group across the page", () => {
@@ -499,6 +579,23 @@ describe("unique-interactive-names — a native tree", () => {
       ]),
     );
     expect(findings.map((f) => f.context)).toEqual([undefined, undefined]);
+  });
+});
+
+describe("unique-interactive-names — strict mode", () => {
+  it("doesn't compare names strict mode withheld", () => {
+    // Each button is named by a field's value; strict mode withholds both as
+    // the same marker, which says nothing about whether the names match.
+    const root = mount(`
+      <input id="a" value="Ana" aria-label="First"><button aria-labelledby="a">x</button>
+      <input id="b" value="Luis" aria-label="Second"><button aria-labelledby="b">x</button>`);
+    const strict = extractA11yTree(root, { redactInput: true });
+    const names = [...strict.nodes.values()]
+      .filter((n) => n.a11y.role === "button")
+      .map((n) => n.a11y.name);
+    expect(names).toEqual(["[redacted]", "[redacted]"]);
+    expect(unique(strict)).toEqual([]);
+    expect(unique(extractA11yTree(root))).toEqual([]);
   });
 });
 

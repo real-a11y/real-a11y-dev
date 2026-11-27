@@ -77,6 +77,8 @@ test("login form is fully labeled", () => {
 });
 ```
 
+`assertDialogsLabeled`, `assertLandmarkStructure` and `assertUniqueInteractiveNames` (no two buttons, links, checkboxes or switches with one accessible name) work the same way, and each has an `expect` matcher in `@real-a11y-dev/testing/matchers`. [Assertions](https://real-a11y.dev/packages/testing/assertions) says what each one checks.
+
 ## Assert what an interaction changed
 
 Capture the tree before, interact, then diff — assert the **effect** of the interaction (options appearing, `aria-expanded` flipping, focus moving), not just one element's final state:

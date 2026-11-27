@@ -37,6 +37,23 @@ export function isDocScopedRule(rule: string): boolean {
 }
 
 /**
+ * Node rules whose finding is ABOUT the node's name, so the name is part of
+ * its identity. Two identical rows renamed from "Accept" to "Edit" are a fix
+ * and a new duplicate, not one finding that changed; without the name, both
+ * snapshots give the same tuple and the diff's NEW gate never sees it. Only
+ * these rules carry it, so every other rule's fingerprint is unchanged.
+ */
+const NAME_IDENTITY_RULES: ReadonlySet<string> = new Set([
+  "unique-interactive-names",
+]);
+
+/** The name as a name-identity rule compares it: case and spacing folded. */
+function identityName(finding: Finding): string {
+  if (!NAME_IDENTITY_RULES.has(finding.rule)) return "";
+  return (finding.name ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+/**
  * The identity components a fingerprint was built from, as named fields —
  * so the diff matcher reads `anchor`/`occ` instead of magic tuple indices.
  * Derived from the finding's fields (same derivation the fingerprint uses),
@@ -81,6 +98,7 @@ export function componentsOf(finding: FingerprintedFinding): FindingComponents {
     tagName: finding.tagName ?? "",
     anchor: anchorOf(finding.locator),
     context: contextOf(finding.context),
+    name: identityName(finding),
   };
 }
 
@@ -138,7 +156,7 @@ function tupleBase(page: string, finding: Finding): FingerprintId {
   if (DOC_RULES.has(finding.rule)) {
     return ["v1", page, finding.rule, docKind(finding), finding.name ?? ""];
   }
-  return [
+  const tuple: FingerprintId = [
     "v1",
     page,
     finding.rule,
@@ -147,6 +165,8 @@ function tupleBase(page: string, finding: Finding): FingerprintId {
     anchorOf(finding.locator),
     contextOf(finding.context),
   ];
+  if (NAME_IDENTITY_RULES.has(finding.rule)) tuple.push(identityName(finding));
+  return tuple;
 }
 
 export function hashId(id: FingerprintId): string {
