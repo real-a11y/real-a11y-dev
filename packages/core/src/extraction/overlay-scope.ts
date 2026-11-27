@@ -266,8 +266,9 @@ export function countsAsOverlay(el: Element): boolean {
  * assertive and `status` or `log` polite. The role is read as
  * {@link countsAsOverlay} reads it, so the two agree about what is a region.
  *
- * @internal For the readers of live regions outside core: the extension's
- * live-region line and `testing`'s timeline. Not a stability promise.
+ * @internal For the readers of live regions: the extension's live-region
+ * line, outside core, and the timeline recorder (`observation/timeline.ts`).
+ * Not a stability promise.
  */
 export function liveRegionLevel(el: Element): "polite" | "assertive" | null {
   return liveLevelOf(el, getExplicitRole(el));
@@ -292,8 +293,9 @@ function liveLevelOf(
  * region at all. Revealing a pre-filled `role="alert"` is an attribute change
  * and nothing else, and Chromium announces it.
  *
- * @internal For the observers of live regions outside core: the extension's
- * live-region line and `testing`'s timeline. Not a stability promise.
+ * @internal For the extension's live-region line, which observes live
+ * regions outside core. The timeline recorder watches every attribute
+ * instead. Not a stability promise.
  */
 export const LIVE_REGION_ATTRIBUTES: readonly string[] = [
   "hidden",

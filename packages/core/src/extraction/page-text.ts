@@ -243,9 +243,9 @@ function visit(
  * words out but keeps the page's layout around them, its line breaks and the
  * white space at their edges that keeps the words either side apart.
  *
- * @internal For reads of a page's text outside core: the extension's
- * live-region line and field state, and `testing`'s timeline. Not a
- * stability promise.
+ * @internal For reads of a page's text: the extension's live-region line
+ * and field state, outside core, and the timeline recorder
+ * (`observation/timeline-regions.ts`). Not a stability promise.
  */
 export function pageText(
   root: Element,
