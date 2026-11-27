@@ -70,10 +70,11 @@ const entries: string[] = (() => {
   return [...block[1].matchAll(/["']([^"']+)["']/g)].map((m) => m[1]);
 })();
 
-const exportsMap = JSON.parse(read("../package.json")).exports as Record<
-  string,
-  unknown
->;
+const manifest = JSON.parse(read("../package.json")) as {
+  exports: Record<string, unknown>;
+  scripts: Record<string, string>;
+};
+const exportsMap = manifest.exports;
 
 /** Every matcher subpath, and the entry + emitted basename behind it. */
 const MATCHER_ENTRIES = [
@@ -85,6 +86,19 @@ const MATCHER_ENTRIES = [
     "src/matchers-jest-globals.ts",
     "matchers-jest-globals",
   ],
+] as const;
+
+/**
+ * Matcher subpaths whose declaration is hand-written rather than compiled, and
+ * the source file + emitted basename behind each.
+ *
+ * `./matchers/vitest4` merges into Vitest 4's `Assertion<T = any>`, and this
+ * repo is on Vitest 5, so it cannot be a tsup entry: tsup would compile it
+ * against Vitest 5 and fail with TS2428. `scripts/write-vitest4-types.mjs`
+ * copies it into `dist/` after tsup instead.
+ */
+const HAND_WRITTEN_ENTRIES = [
+  ["./matchers/vitest4", "types/matchers-vitest4.d.ts", "matchers-vitest4"],
 ] as const;
 
 describe("matcher type-augmentation entries", () => {
@@ -107,6 +121,22 @@ describe("matcher type-augmentation entries", () => {
     expect(code).not.toMatch(/namespace jest/);
   });
 
+  it("declares Vitest 4's Assertion shape in ./matchers/vitest4", () => {
+    // The whole entry is this one line. An interface merge must repeat the
+    // original's type parameters exactly, and Vitest 3 and 4 declare
+    // `Assertion<T = any>`; anything else is TS2428 on the versions this
+    // entry exists for. `<void>` for the reason `matchers-vitest.ts` gives.
+    const code = stripComments(read("../types/matchers-vitest4.d.ts"));
+    expect(code).toMatch(/declare module ["']vitest["']/);
+    expect(code).toMatch(
+      /interface Assertion<T = any> extends A11yMatchers<void> \{\s*\}/,
+    );
+    expect(code).toMatch(
+      /interface AsymmetricMatchersContaining extends A11yMatchers \{\s*\}/,
+    );
+    expect(code).not.toMatch(/namespace jest/);
+  });
+
   it("augments @jest/expect — not @jest/globals — in ./matchers/jest-globals", () => {
     const code = codeOf("matchers-jest-globals.ts");
     // `@jest/globals` re-exports an `expect` whose type comes from
@@ -115,22 +145,22 @@ describe("matcher type-augmentation entries", () => {
     expect(code).not.toMatch(/declare module ["']@jest\/globals["']/);
   });
 
-  it.each(MATCHER_ENTRIES.filter(([subpath]) => subpath !== "./matchers"))(
-    "keeps %s free of runtime code",
-    (_subpath, entry) => {
-      // These entries exist to be imported for their types alone, so every
-      // import must be `import type`. A single value import would make the
-      // built file emit, and pull the ~230 KB matchers chunk in behind it.
-      const code = codeOf(entry.replace("src/", ""));
-      const imports = [...code.matchAll(/(^|[;{} ])import\b[^;]*?from /g)];
-      expect(imports.length).toBeGreaterThan(0);
-      for (const [match] of imports) {
-        expect(match).toMatch(/import type\b/);
-      }
-      // …and nothing exported, so there is no value surface at all.
-      expect(code).not.toMatch(/\bexport (const|function|class|let|var) /);
-    },
-  );
+  it.each([
+    ...MATCHER_ENTRIES.filter(([subpath]) => subpath !== "./matchers"),
+    ...HAND_WRITTEN_ENTRIES,
+  ])("keeps %s free of runtime code", (_subpath, entry) => {
+    // These entries exist to be imported for their types alone, so every
+    // import must be `import type`. A single value import would make the
+    // built file emit, and pull the ~230 KB matchers chunk in behind it.
+    const code = stripComments(read(`../${entry}`));
+    const imports = [...code.matchAll(/(^|[;{} ])import\b[^;]*?from /g)];
+    expect(imports.length).toBeGreaterThan(0);
+    for (const [match] of imports) {
+      expect(match).toMatch(/import type\b/);
+    }
+    // …and nothing exported, so there is no value surface at all.
+    expect(code).not.toMatch(/\bexport (const|function|class|let|var) /);
+  });
 
   it("wires the same set of matcher entries into tsup and exports", () => {
     // Both directions. A tsup entry with no subpath is dead weight a consumer
@@ -145,10 +175,44 @@ describe("matcher type-augmentation entries", () => {
       Object.keys(exportsMap)
         .filter((k) => k.startsWith("./matchers"))
         .sort(),
-    ).toEqual(MATCHER_ENTRIES.map(([subpath]) => subpath).sort());
+    ).toEqual(
+      [...MATCHER_ENTRIES, ...HAND_WRITTEN_ENTRIES]
+        .map(([subpath]) => subpath)
+        .sort(),
+    );
   });
 
-  it.each(MATCHER_ENTRIES)(
+  it("writes the hand-written entries into dist after tsup", () => {
+    // The tsup half of the check above, for the entries tsup never sees: a
+    // subpath in `exports` with nothing behind it builds cleanly and 404s.
+    // It has to be the LAST step, not tsup's `onSuccess`: on a clean build
+    // tsup's declaration build deletes every `*.d.ts` in `dist/`, and it runs
+    // alongside `onSuccess`, so a declaration written there can vanish.
+    const steps = manifest.scripts.build.split("&&").map((s) => s.trim());
+    expect(steps.at(-1)).toBe("node scripts/write-vitest4-types.mjs");
+    expect(steps.slice(0, -1).every((s) => s.startsWith("tsup"))).toBe(true);
+    // …and the script copies the source this suite checks.
+    expect(read("../scripts/write-vitest4-types.mjs")).toContain(
+      "types/matchers-vitest4.d.ts",
+    );
+  });
+
+  it("rewrites the hand-written entries under `pnpm dev`, beside a bare tsup watch", () => {
+    // `pnpm dev` runs every `dev:*` script at once. The copy script watches
+    // `types/` itself, because a bare `tsup --watch` skips changes to files no
+    // entry imports, and nothing imports the hand-written declaration.
+    // tsup's watch stays BARE: naming paths turns off its re-read of
+    // `package.json`, so a dependency added mid-session would be bundled
+    // instead of left external.
+    const { scripts } = manifest;
+    expect(scripts.dev).toBe('pnpm run "/^dev:/"');
+    expect(scripts["dev:tsup"]).toBe("tsup --watch");
+    expect(scripts["dev:types"]).toBe(
+      "node scripts/write-vitest4-types.mjs --watch",
+    );
+  });
+
+  it.each([...MATCHER_ENTRIES, ...HAND_WRITTEN_ENTRIES])(
     "ships %s at the expected paths",
     (subpath, _e, base) => {
       expect(exportsMap[subpath]).toEqual({

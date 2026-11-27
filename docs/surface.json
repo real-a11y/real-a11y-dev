@@ -203,6 +203,11 @@
           "values": []
         },
         {
+          "subpath": "./matchers/vitest4",
+          "types": [],
+          "values": []
+        },
+        {
           "subpath": "./matchers/jest",
           "types": [],
           "values": []
@@ -2767,6 +2772,7 @@
         "./matchers/jest",
         "./matchers/jest-globals",
         "./matchers/vitest",
+        "./matchers/vitest4",
         "./playwright",
         "./reporter",
         "./reporter/jest"

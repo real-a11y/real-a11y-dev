@@ -101,7 +101,10 @@ main
   paragraph
     text "The second import is types-only, and there is one per runner:"
     code "./matchers/vitest"
-    text ","
+    text "(or"
+    link "./matchers/vitest4 on Vitest 3 or 4"
+      code "./matchers/vitest4"
+    text "),"
     code "./matchers/jest"
     text "for Jest's global"
     code "expect"

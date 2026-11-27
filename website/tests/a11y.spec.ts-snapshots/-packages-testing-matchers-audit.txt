@@ -63,11 +63,30 @@ main
     strong "Vitest 5 or newer"
     text "(which itself needs Node.js 22.12+): it merges into Vitest 5's"
     code "Assertion<R, T>"
-    text "interface, and an interface merge must repeat the original's type parameters. On Vitest 3 or 4 it fails with TS2428. The runtime"
+    text "interface, and an interface merge must repeat the original's type parameters. The runtime"
     code "registerA11yMatchers"
     text "has no such requirement."
   button "Copy Code"
   code "// vitest.setup.ts import { expect } from "vitest"; import { registerA11yMatchers } from "@real-a11y-dev/testing/matchers"; import "@real-a11y-dev/testing/matchers/vitest"; // types-only augmentation registerA11yMatchers(expect);"
+  paragraph
+    strong "On Vitest 3 or 4"
+    text ", import"
+    code "@real-a11y-dev/testing/matchers/vitest4"
+    text "in its place. It declares those versions'"
+    code "Assertion<T = any>"
+    text ", and is otherwise the same entry:"
+  button "Copy Code"
+  code "// vitest.setup.ts, on Vitest 3 or 4 import "@real-a11y-dev/testing/matchers/vitest4"; // instead of …/matchers/vitest"
+  paragraph
+    text "The Vitest 5 entry on Vitest 3 or 4 fails with TS2428 under"
+    code "skipLibCheck: false"
+    text ". Under"
+    code "skipLibCheck: true"
+    text ", the default in most templates, the error is suppressed and the matchers still type, but through a merge TypeScript has rejected, so use"
+    code "./matchers/vitest4"
+    text "there too. When you upgrade to Vitest 5, switch the import back to"
+    code "./matchers/vitest"
+    text ": the other way round fails with the same TS2428."
   button "Copy Code"
   code "// vitest.config.ts export default defineConfig({ test: { environment: "jsdom", setupFiles: ["./vitest.setup.ts"], }, });"
   heading "Jest" (level 3)
@@ -674,8 +693,9 @@ main
           code "registerA11yMatchers(expect)"
       row
         cell "Type augmentation"
-        cell "import "@real-a11y-dev/testing/matchers/vitest""
+        cell "import "@real-a11y-dev/testing/matchers/vitest" (…/matchers/vitest4 on Vitest 3 or 4)"
           code "import "@real-a11y-dev/testing/matchers/vitest""
+          code "…/matchers/vitest4"
         cell "import "@real-a11y-dev/testing/matchers/jest""
           code "import "@real-a11y-dev/testing/matchers/jest""
   paragraph
@@ -721,7 +741,13 @@ main
   paragraph
     text "Importing more than one entry is redundant but harmless. That is true because the augmentations now agree that every matcher returns"
     code "void"
-    text ", which is what Vitest and Jest both say about their own; making them agree is the fix, and keeping them separate is what stops a consumer carrying the other runner's types at all."
+    text ", which is what Vitest and Jest both say about their own; making them agree is the fix, and keeping them separate is what stops a consumer carrying the other runner's types at all. The one exception is"
+    code "./matchers/vitest"
+    text "and"
+    code "./matchers/vitest4"
+    text "together: each declares a different Vitest major's"
+    code "Assertion"
+    text ", and whichever doesn't match your Vitest reports TS2428. Import the one for the Vitest you have."
   paragraph
     text "None of these entries ships runtime code — importing one is a types-only statement, and"
     code "registerA11yMatchers(expect)"
@@ -742,6 +768,11 @@ main
       link "examples/testing-jest"
         code "examples/testing-jest"
       text "— the minimal Jest + ts-jest setup"
+    listitem
+      link "examples/testing-vitest4"
+        code "examples/testing-vitest4"
+      text "— the setup file for Vitest 3 or 4, type-checked against Vitest 4 with"
+      code "skipLibCheck: false"
   heading "See also" (level 2)
   list
     listitem

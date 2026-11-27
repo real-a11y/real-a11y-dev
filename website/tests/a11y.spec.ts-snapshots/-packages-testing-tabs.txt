@@ -23,6 +23,7 @@ generic
 link "matchers"
 button "Copy Code"
 generic
+link "./matchers/vitest4 on Vitest 3 or 4"
 link "which is a different type surface"
 link "a11yDiff"
 button "Copy Code"
