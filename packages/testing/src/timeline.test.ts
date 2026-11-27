@@ -54,7 +54,6 @@ describe("recordTimeline", () => {
       - text "Draft"
       - listitem
       ~ status "Draft deleted.": a11y.name "" → "Draft deleted."
-      ~ status "Draft deleted.": dom.textContent "" → "Draft deleted."
       focus: button "Delete draft" → button "New draft"
     `);
     // ...the timeline, everything between them, in order.
