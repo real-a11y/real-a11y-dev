@@ -41,7 +41,7 @@ const DEFAULT_RANGE_ROLES: ReadonlySet<string> = new Set([
 ]);
 
 const DECIMAL = /^[+-]?(\d+(?:\.\d*)?|\.\d+)([eE][+-]?\d+)?$/;
-/** HTML's floating-point number grammar: no whitespace, no leading `+`. */
+/** An input's number grammar: no whitespace, no leading `+`. */
 const HTML_NUMBER = /^-?(\d+(?:\.\d+)?|\.\d+)([eE][+-]?\d+)?$/;
 
 /** A bound as a string key value, or `null` when unparsable or empty. */
@@ -65,8 +65,12 @@ function htmlBounds(
   tag: string,
   role: string,
 ): { min: string | null; max: string | null } {
+  // An input's bounds follow its type's number grammar, while <meter> and
+  // <progress> take HTML's lenient floating-point parse, as Chromium does:
+  // a leading space or `+` is accepted there and rejected on an input.
+  const grammar = tag === "input" ? HTML_NUMBER : DECIMAL;
   const attr = (name: string) =>
-    parseBound(safeGetAttribute(element, name), HTML_NUMBER);
+    parseBound(safeGetAttribute(element, name), grammar);
   const min = attr("min");
   const max = attr("max");
   // HTML raises an effective max that falls below the min, as Chromium does.

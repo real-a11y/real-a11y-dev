@@ -3121,6 +3121,15 @@ describe("extractDomTree", () => {
       ).toEqual({ valuemin: "0", valuemax: "100" });
     });
 
+    it("accepts a leading space or plus on a meter or progress bound, as Chromium does", () => {
+      expect(
+        only('<progress max=" 10" value="5"></progress>').a11y.properties,
+      ).toEqual({ valuemin: "0", valuemax: "10" });
+      expect(
+        only('<meter min="+2" max=" 10" value="5"></meter>').a11y.properties,
+      ).toEqual({ valuemin: "2", valuemax: "10" });
+    });
+
     it("reads only decimal bounds, and HTML bounds only on the element's own role", () => {
       expect(
         only('<div role="slider" aria-valuemax="0x10" aria-label="s"></div>')

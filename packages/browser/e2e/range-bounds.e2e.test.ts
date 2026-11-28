@@ -91,6 +91,10 @@ describe("range bounds, against Chromium", () => {
       <progress id="indeterminate"></progress>
       <meter id="meter" min="0" max="10" value="6"></meter>
       <div id="bare" role="slider" aria-label="bare"></div>
+      <input id="range-space" type="range" max=" 10" aria-label="rs">
+      <input id="range-plus" type="range" max="+10" aria-label="rp">
+      <progress id="progress-space" max=" 10" value="5"></progress>
+      <meter id="meter-plus" min="+2" max="+10" value="5"></meter>
     `);
     const { dom, native } = await boundsById();
     const expected = {
@@ -102,6 +106,12 @@ describe("range bounds, against Chromium", () => {
       indeterminate: { valuemin: "0", valuemax: "1" },
       meter: { valuemin: "0", valuemax: "10" },
       bare: { valuemin: "0", valuemax: "100" },
+      // A range input rejects a leading space or plus; meter and progress
+      // accept them.
+      "range-space": { valuemin: "0", valuemax: "100" },
+      "range-plus": { valuemin: "0", valuemax: "100" },
+      "progress-space": { valuemin: "0", valuemax: "10" },
+      "meter-plus": { valuemin: "2", valuemax: "10" },
     };
     for (const [id, props] of Object.entries(expected)) {
       expect(native[id]?.props, `native ${id}`).toEqual(props);
