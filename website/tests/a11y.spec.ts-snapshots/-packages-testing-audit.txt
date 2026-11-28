@@ -273,7 +273,9 @@ main
       text "."
     listitem
       strong "Assert the order a user meets things in"
-      text "(focus dropping to the page, a status shown and cleared, a message before or after a focus move) →"
+      text "(focus dropping to the page, a status shown and cleared, a message before or after a focus move), and, with"
+      code "{ interactions: true }"
+      text ", the keys, clicks and typing that caused it →"
       link "recordTimeline"
         code "recordTimeline"
       text "."

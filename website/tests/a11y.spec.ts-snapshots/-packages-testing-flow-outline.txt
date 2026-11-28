@@ -12,6 +12,7 @@ h1 Flow API
     h3 Setting the options once
   h2 Recording what happened in between
     h3 recordTimeline(root, options?)
+    h3 Lines for what the user did
   h2 flow(root, options?)
   h2 Utilities
     h3 waitForMutations(root, options?)
