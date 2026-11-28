@@ -245,7 +245,12 @@ class TimelineRecorder {
     const k = this.records.length;
     const last = this.typing.reusable(k);
     const act = interactionOf(event, this.root, (el) => this.inRoot(el), last);
-    if (!act) return;
+    // Records taken for nothing still settle with their block: the
+    // observer won't deliver them again.
+    if (!act) {
+      if (k > 0) this.schedule();
+      return;
+    }
     const noted = { ...act, k, n: this.moves.length };
     this.typing.last = act.event.kind === "type" ? noted : null;
     this.acts.push(noted);

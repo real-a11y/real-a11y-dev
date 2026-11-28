@@ -1865,6 +1865,26 @@ describe("recordTimeline interactions", () => {
     `);
   });
 
+  it("keeps an announcement a rejected interaction's handler made", async () => {
+    document.body.innerHTML = `<aside><input type="checkbox" id="f" aria-label="Filters"></aside><main><p role="status" id="s"></p></main>`;
+    await tick();
+    byId("f").addEventListener("click", () => {
+      byId("s").textContent = "Filters enabled.";
+    });
+    const timeline = recordTimeline(document.querySelector("main")!, {
+      interactions: true,
+    });
+    // Outside the root, and a checkbox's `input` types nothing: neither is
+    // an interaction, but the block it ran in still settles.
+    byId("f").click();
+    await tick();
+    byId("s").textContent = "";
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(
+      `announce  status "Filters enabled."`,
+    );
+  });
+
   it("records interactions alone with focus and announcements off", async () => {
     const main = await page(`<button id="b">Save</button>`);
     const timeline = recordTimeline(main, {
