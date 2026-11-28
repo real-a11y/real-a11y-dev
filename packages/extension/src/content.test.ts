@@ -710,6 +710,22 @@ describe("content: live regions", () => {
     ]);
   });
 
+  it("names a region by its author's role, and one with none a status", async () => {
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<p id="para" aria-live="polite"></p>` +
+        `<section id="sect" role="region" aria-label="Updates" aria-live="polite"></section>`,
+    );
+    await flush();
+    h.sent.length = 0;
+    document.getElementById("para")!.textContent = "Draft saved";
+    document.getElementById("sect")!.textContent = "2 new";
+    expect(await flush()).toEqual([
+      { text: "Draft saved", level: "polite", role: "status" },
+      { text: "2 new", level: "polite", role: "region" },
+    ]);
+  });
+
   it("announces no region that nothing changed in", async () => {
     // `#ready` held its text before the panel opened. A screen reader never
     // announces that, and reading every region on each change used to log it
@@ -2351,12 +2367,32 @@ describe("content: the TIMELINE view's recording", () => {
     expect(await lines()).toBe('focus     button "Delete draft"');
   });
 
-  it("starts afresh, the earlier recording stopped", async () => {
+  it("starts afresh, the earlier recording stopped and its panel told", async () => {
     start("s1");
     start("s2");
     document.getElementById("delete")!.focus();
     expect(await items("s1")).toEqual([]);
     expect(await lines("s2")).toBe('focus     button "Delete draft"');
+    expect(h.sent.filter((m) => m.type === "TIMELINE_ENDED")).toEqual([
+      {
+        type: "TIMELINE_ENDED",
+        payload: { session: "s1", reason: "replaced" },
+      },
+    ]);
+  });
+
+  it("stops whatever its last run throws, and goes on", async () => {
+    start();
+    document.getElementById("delete")!.focus();
+    // The run the stop settles can't be sent.
+    (
+      h.chromeMock as { runtime: { sendMessage: () => void } }
+    ).runtime.sendMessage = () => {
+      throw new Error("send failed");
+    };
+    expect(() =>
+      h.send({ type: "SET_OBSERVING", payload: { enabled: false } }),
+    ).not.toThrow();
   });
 
   it("ends when the document leaves, with what it settled last", async () => {

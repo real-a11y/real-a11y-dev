@@ -2434,6 +2434,60 @@ describe("background: the TIMELINE view's recording", () => {
     ]);
   });
 
+  /** A port the panel at `url` opens by `name`: what the worker does with
+   *  it, and how to close it. */
+  function openPort(name: string, url: string) {
+    const onMessage: Array<(m: unknown) => void> = [];
+    const onDisconnect: Array<() => void> = [];
+    const port = {
+      name,
+      sender: { id: EXTENSION_ID, url },
+      disconnected: false,
+      onMessage: {
+        addListener: (fn: (m: unknown) => void) => onMessage.push(fn),
+      },
+      onDisconnect: { addListener: (fn: () => void) => onDisconnect.push(fn) },
+      disconnect() {
+        port.disconnected = true;
+      },
+    };
+    for (const fn of h.connectListeners) fn(port as never);
+    return {
+      port,
+      post: (m: unknown) => onMessage.forEach((fn) => fn(m)),
+      close: () => onDisconnect.forEach((fn) => fn()),
+    };
+  }
+
+  it("stops a recording in the page when the panel holding it goes", async () => {
+    // Closing one window's panel while another's stays open stops nothing
+    // else: the worker stops observing only when the last panel goes.
+    const held = openPort("timeline-recording", PANEL_URL);
+    held.post({ tabId: TAB_ID, session: "s1" });
+    held.close();
+    await vi.runAllTimersAsync();
+    expect(sentSince(h, 0, "TIMELINE_STOP")).toEqual([
+      {
+        tabId: TAB_ID,
+        frameId: 0,
+        body: {
+          type: "TIMELINE_STOP",
+          tabId: TAB_ID,
+          payload: { session: "s1" },
+        },
+      },
+    ]);
+  });
+
+  it("holds no recording port a content script opens", async () => {
+    const held = openPort("timeline-recording", "https://example.com/");
+    expect(held.port.disconnected).toBe(true);
+    held.post({ tabId: TAB_ID, session: "s1" });
+    held.close();
+    await vi.runAllTimersAsync();
+    expect(sentSince(h, 0, "TIMELINE_STOP")).toEqual([]);
+  });
+
   it("forwards no recorded lines a second time", async () => {
     // A content script's message reaches the panel directly; a relayed copy
     // would show every line twice.

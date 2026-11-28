@@ -42,6 +42,7 @@ import {
 import { elementsFromTabSequence, sendKey } from "./send-key.js";
 import {
   recordLiveRegions,
+  stopQuietly,
   TimelineSession,
   type TimelineEndReason,
 } from "./timeline-recording.js";
@@ -771,7 +772,7 @@ function observeLiveRegions() {
 function unobserveLiveRegions() {
   const recording = liveRecording;
   liveRecording = null;
-  recording?.stop();
+  stopQuietly(recording);
 }
 
 /**

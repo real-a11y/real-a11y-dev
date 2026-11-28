@@ -10,69 +10,104 @@
  * status line says when recording starts and stops.
  */
 
+import { useEffect, useRef } from "preact/hooks";
+
 import { NativeViewToggle, type NativeView } from "./NativeTabView.js";
 import { isRecording, timelineStatus } from "./timeline-state.js";
 import type { Timeline } from "./use-timeline.js";
 
-/** The recording (`useTimeline`): its state, and what each control does.
- *  `highlight` shows a line's node on the page. */
-export function TimelineView({
+/** Where focus was when the view came up, if the switch to it left focus
+ *  nowhere: on the panel's body, or on the tree's toggle, which hides with
+ *  the tree. */
+function focusLost(): boolean {
+  const active = document.activeElement;
+  return (
+    !active ||
+    active === document.body ||
+    active.closest(".sn-view--hidden") !== null
+  );
+}
+
+type TimelineViewProps = Timeline & {
+  onViewChange: (view: NativeView) => void;
+};
+
+/** The view's toolbar: the view toggle, Record or Stop, Clear, Copy, and
+ *  the status line. */
+function TimelineControls({
   state,
   record: onRecord,
   stop: onStop,
   clear: onClear,
   copy: onCopy,
-  highlight: onHighlight,
   onViewChange,
-}: Timeline & { onViewChange: (view: NativeView) => void }) {
+}: TimelineViewProps) {
   const running = isRecording(state);
   const empty = state.lines.length === 0;
+  const toolbar = useRef<HTMLDivElement>(null);
+  // Chosen from the tree's toolbar, whose toggle hides with the tree: focus
+  // goes on to this view's own.
+  useEffect(() => {
+    if (!focusLost()) return;
+    toolbar.current
+      ?.querySelector<HTMLElement>('.sn-toggle-btn[aria-pressed="true"]')
+      ?.focus();
+  }, []);
+  return (
+    <div
+      ref={toolbar}
+      class="sn-toolbar sn-toolbar--wrap"
+      role="toolbar"
+      aria-label="Timeline controls"
+    >
+      <NativeViewToggle view="timeline" onViewChange={onViewChange} />
+      {/* One button, so focus stays on it as it turns from one to the
+          other. */}
+      <button
+        class={`sn-toolbar-btn ${running ? "sn-timeline-stop" : "sn-timeline-record"}`}
+        onClick={running ? onStop : onRecord}
+        title={
+          running
+            ? "Stop recording"
+            : "Record focus moves and announcements as you use the page"
+        }
+      >
+        {running ? "■ Stop" : "● Record"}
+      </button>
+      {/* `aria-disabled`, not `disabled`: a disabled button loses focus,
+          and Clear is pressed with focus on it. */}
+      <button
+        class="sn-toolbar-btn sn-timeline-clear"
+        aria-disabled={empty}
+        onClick={() => !empty && onClear()}
+      >
+        Clear
+      </button>
+      <button
+        class="sn-toolbar-btn sn-timeline-copy"
+        aria-disabled={empty}
+        onClick={() => !empty && onCopy()}
+        title="Copy the lines as text — the lines recordTimeline prints"
+      >
+        Copy
+      </button>
+      {/* Mounted before it has anything to say: a live region that arrives
+          holding text is not announced. It changes as recording starts and
+          stops, never per line. */}
+      <span class="sn-timeline-status" role="status">
+        {timelineStatus(state)}
+      </span>
+    </div>
+  );
+}
+
+/** The recording (`useTimeline`): its state, and what each control does.
+ *  `highlight` shows a line's node on the page. */
+export function TimelineView(props: TimelineViewProps) {
+  const { state, highlight: onHighlight } = props;
   return (
     <div class="sn-timeline">
-      <div
-        class="sn-toolbar sn-toolbar--wrap"
-        role="toolbar"
-        aria-label="Timeline controls"
-      >
-        <NativeViewToggle view="timeline" onViewChange={onViewChange} />
-        {running ? (
-          <button
-            class="sn-toolbar-btn sn-timeline-stop"
-            onClick={onStop}
-            title="Stop recording"
-          >
-            {"■ Stop"}
-          </button>
-        ) : (
-          <button
-            class="sn-toolbar-btn sn-timeline-record"
-            onClick={onRecord}
-            title="Record focus moves and announcements as you use the page"
-          >
-            {"● Record"}
-          </button>
-        )}
-        <button
-          class="sn-toolbar-btn sn-timeline-clear"
-          onClick={onClear}
-          disabled={empty}
-        >
-          Clear
-        </button>
-        <button
-          class="sn-toolbar-btn sn-timeline-copy"
-          onClick={onCopy}
-          disabled={empty}
-          title="Copy the lines as text — the lines recordTimeline prints"
-        >
-          Copy
-        </button>
-        {/* Mounted before it has anything to say: a live region that
-            arrives holding text is not announced. */}
-        <span class="sn-timeline-status" role="status">
-          {timelineStatus(state)}
-        </span>
-      </div>
+      <TimelineControls {...props} />
       <ol class="sn-timeline-lines" aria-label="Timeline">
         {state.lines.map((line) => (
           <li key={line.id} class="sn-timeline-item">

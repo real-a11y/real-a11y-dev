@@ -33,7 +33,7 @@ test("records a focus drop as the page makes it, and stops", async ({
   await expect(status).toHaveText("Press Record, then use the page.");
 
   await nav.panel.getByRole("button", { name: "● Record" }).click();
-  await expect(status).toHaveText("Recording — 0 lines");
+  await expect(status).toHaveText("Recording…");
   // The page's own recorder, not Chrome's tree: recording reads nothing
   // natively. (A click on the page then does, as ever: Chrome's tree
   // follows what the page does after the user acts on it.)
@@ -88,7 +88,7 @@ test("ends at a navigation, keeping what came before it", async ({ nav }) => {
     .click();
   await nav.panel.getByRole("button", { name: "● Record" }).click();
   await expect(nav.panel.locator(".sn-timeline-status")).toHaveText(
-    "Recording — 0 lines",
+    "Recording…",
   );
 
   await page.bringToFront();

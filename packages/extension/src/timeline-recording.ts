@@ -24,6 +24,8 @@
  */
 
 import {
+  getExplicitRole,
+  getImplicitRole,
   liveRegionLevel,
   pageText,
   startTimeline,
@@ -31,8 +33,10 @@ import {
   type TimelineRecording,
 } from "@real-a11y-dev/core";
 
-/** Why a recording ended without the panel stopping it. */
-export type TimelineEndReason = "navigated" | "document";
+/** Why a recording ended without the panel stopping it: the document it
+ *  read left (`navigated`) or was replaced under the script (`document`), or
+ *  another recording of the page took its place (`replaced`). */
+export type TimelineEndReason = "navigated" | "document" | "replaced";
 
 /** One event as the panel gets it: the event as core recorded it, and the
  *  node id its line highlights, when one was found. */
@@ -55,6 +59,7 @@ export interface TimelineHooks {
 // `<img name="createTreeWalker">` shadows the document's own, and a form
 // control named `shadowRoot` the form's.
 const createTreeWalker = Document.prototype.createTreeWalker;
+const getAttribute = Element.prototype.getAttribute;
 const shadowRootOf = Object.getOwnPropertyDescriptor(
   Element.prototype,
   "shadowRoot",
@@ -66,10 +71,15 @@ function oneLine(text: string): string {
   return text.replace(/[ \t\n\r\f]+/g, " ").trim();
 }
 
-/** Is `el` a live region, as the recorder counts one: an authored region, or
- *  an `<output>`. */
-function isRegion(el: Element): boolean {
-  return liveRegionLevel(el) !== null || el.localName === "output";
+/** Does `el` announce, as the recorder counts a region that does: core's
+ *  rule (`regionLevel` in core's timeline-regions.ts, which core keeps
+ *  private), an authored region or an `<output>` that is a status, and not
+ *  one whose `aria-live` is off. */
+function announces(el: Element): boolean {
+  const live = getAttribute.call(el, "aria-live")?.trim().toLowerCase();
+  if (live === "off") return false;
+  if (liveRegionLevel(el) !== null) return true;
+  return el.localName === "output" && getImplicitRole(el) === "status";
 }
 
 /** The live region under `root`, open shadow trees included, that shows
@@ -90,7 +100,7 @@ export function regionSaying(root: Element, text: string): Element | null {
     ) {
       const el = n as Element;
       if (
-        isRegion(el) &&
+        announces(el) &&
         oneLine(pageText(el, { announced: true, lines: true })) === text
       ) {
         found = el;
@@ -169,12 +179,13 @@ export function recordLiveRegions(
       onEvents: (events) => {
         for (const event of events) {
           if (event.kind !== "announce") continue;
+          // The line has always named a region by the role its author gave
+          // it, and one with none (an `aria-live` <p> or <div>) a status.
+          const region = regionSaying(root, event.text);
           send({
             text: event.text,
             level: event.live,
-            // The line has always named a region with no role of its own
-            // (an `aria-live` <div>) a status.
-            role: event.role === "generic" ? "status" : event.role,
+            role: (region && getExplicitRole(region)) ?? "status",
           });
         }
       },
@@ -214,7 +225,9 @@ export class TimelineSession {
     session: string,
     root: Element,
   ): { success: true } | { success: false; error: string } {
-    this.end();
+    // The panel that started the one before is told, rather than left
+    // waiting on lines that will never come.
+    this.end("replaced");
     try {
       const recording = recordTimeline(root, {
         ...this.hooks,
@@ -245,15 +258,25 @@ export class TimelineSession {
       return;
     }
     this.current = null;
-    try {
-      current.recording.stop();
-    } finally {
-      if (reason) {
-        this.hooks.post({
-          type: "TIMELINE_ENDED",
-          payload: { session: current.session, reason },
-        });
-      }
+    stopQuietly(current.recording);
+    if (reason) {
+      this.hooks.post({
+        type: "TIMELINE_ENDED",
+        payload: { session: current.session, reason },
+      });
     }
+  }
+}
+
+/**
+ * Stop `recording`, whatever its last `onEvents` call throws: `stop()`
+ * rethrows it once every run is out, and the callers end a recording midway
+ * through work of their own (a rebind, a teardown), which must go on.
+ */
+export function stopQuietly(recording: TimelineRecording | null): void {
+  try {
+    recording?.stop();
+  } catch {
+    // The run that threw was the panel's to show; the page is unaffected.
   }
 }

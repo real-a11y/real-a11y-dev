@@ -79,7 +79,10 @@ describe("the TIMELINE view", () => {
     return found;
   };
   const press = async (label: string) => {
-    act(() => button(label).click());
+    act(() => {
+      button(label).focus();
+      button(label).click();
+    });
     await flush();
   };
   const sent = (type: string) =>
@@ -146,7 +149,7 @@ describe("the TIMELINE view", () => {
         payload: { session: expect.any(String) },
       },
     ]);
-    expect(status()).toBe("Recording — 0 lines");
+    expect(status()).toBe("Recording…");
 
     const session = sent("TIMELINE_START")[0]!.payload.session;
     deliver(session, [
@@ -157,7 +160,8 @@ describe("the TIMELINE view", () => {
       'focus     button "Delete draft"',
       "focus     (none)",
     ]);
-    expect(status()).toBe("Recording — 2 lines");
+    // Not the count: the status is a live region.
+    expect(status()).toBe("Recording…");
   });
 
   it("says when the page can't record", async () => {
@@ -202,8 +206,10 @@ describe("the TIMELINE view", () => {
 
     await press("Clear");
     expect(lines()).toEqual([]);
-    expect(button("Copy").disabled).toBe(true);
-    expect(button("Clear").disabled).toBe(true);
+    expect(button("Copy").getAttribute("aria-disabled")).toBe("true");
+    expect(button("Clear").getAttribute("aria-disabled")).toBe("true");
+    // Focus stays on Clear: a disabled button would have dropped it.
+    expect(document.activeElement).toBe(button("Clear"));
   });
 
   it("shows a line's node on the page, leaving the page's focus alone", async () => {
@@ -277,5 +283,59 @@ describe("the TIMELINE view", () => {
     // Not a line, nor the name in one, in extension storage.
     expect(JSON.stringify(chromeMock.stored)).not.toContain("Delete draft");
     expect(JSON.stringify(chromeMock.stored)).not.toContain("focus");
+  });
+
+  it("takes focus to its own toggle when the tree's hides with the tree", async () => {
+    await mountTimeline();
+    // `mountTimeline` pressed the tree toolbar's TIMELINE, which is now out
+    // of sight.
+    const own = container.querySelector(
+      '.sn-timeline .sn-toggle-btn[aria-pressed="true"]',
+    );
+    expect(own?.textContent).toBe("TIMELINE");
+    expect(document.activeElement).toBe(own);
+  });
+
+  it("keeps focus on Record as it turns to Stop and back", async () => {
+    await mountTimeline();
+    await press("● Record");
+    expect(document.activeElement?.textContent).toBe("■ Stop");
+    await press("■ Stop");
+    expect(document.activeElement?.textContent).toBe("● Record");
+  });
+
+  it("holds a port while it records, which stops the page when the panel goes", async () => {
+    await mountTimeline();
+    const session = await recordTwoLines();
+    const [port] = chromeMock.otherPorts;
+    expect(port).toMatchObject({
+      name: "timeline-recording",
+      posted: [{ tabId: TAB_ID, session }],
+      closed: false,
+    });
+
+    // A service worker that restarts drops it: held again.
+    act(() => port!.drop());
+    expect(chromeMock.otherPorts).toHaveLength(2);
+    expect(chromeMock.otherPorts[1]!.posted).toEqual([
+      { tabId: TAB_ID, session },
+    ]);
+
+    await press("■ Stop");
+    expect(chromeMock.otherPorts[1]!.closed).toBe(true);
+  });
+
+  it("says when another panel's recording took its place", async () => {
+    await mountTimeline();
+    const session = await recordTwoLines();
+    act(() => {
+      chromeMock.emit({
+        type: "TIMELINE_ENDED",
+        payload: { session, reason: "replaced" },
+      } as ContentToPanel);
+    });
+    expect(status()).toBe(
+      "Recording ended: another side panel started recording this page. 2 lines.",
+    );
   });
 });

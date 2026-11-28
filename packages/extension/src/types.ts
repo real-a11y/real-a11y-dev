@@ -17,8 +17,12 @@ export interface TimelineEventsPayload {
   items: TimelineItem[];
 }
 
-/** The top frame's recording ended on its own: the document it recorded
- *  left (`navigated`) or was replaced under the script (`document`). */
+/** The name of the port a side panel holds open while it records, so the
+ *  service worker stops the recording when the panel goes
+ *  (`timeline-relay.ts`). It carries `{ tabId, session }`. */
+export const TIMELINE_PORT = "timeline-recording";
+
+/** The top frame's recording ended on its own (`TimelineEndReason`). */
 export interface TimelineEndedPayload {
   session: string;
   reason: TimelineEndReason;

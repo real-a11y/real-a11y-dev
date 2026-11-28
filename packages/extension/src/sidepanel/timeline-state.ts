@@ -108,6 +108,7 @@ function readItems(items: readonly unknown[]): TimelineItem[] {
 const CAUSES: Record<TimelineStopCause, string> = {
   navigated: "Recording ended: the page navigated.",
   document: "Recording ended: the page replaced its document.",
+  replaced: "Recording ended: another side panel started recording this page.",
   tab: "Recording ended: the panel moved to another tab.",
 };
 
@@ -204,7 +205,9 @@ export function timelineStatus(state: TimelineState): string {
     case "starting":
       return "Starting…";
     case "recording":
-      return `Recording — ${lines}`;
+      // Not the count: this is a live region, and a count would be said
+      // over the page on every line.
+      return "Recording…";
     case "stopped":
       return state.note ? `${state.note} ${lines}.` : `Stopped — ${lines}.`;
     case "idle":

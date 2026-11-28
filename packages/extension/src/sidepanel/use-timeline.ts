@@ -9,7 +9,11 @@ import type { Dispatch } from "preact/hooks";
 import { useCallback, useEffect, useReducer, useRef } from "preact/hooks";
 
 import { isTrustedSender, shouldPanelAcceptMessage } from "../routing.js";
-import type { ContentToPanel, PanelToContent } from "../types.js";
+import {
+  TIMELINE_PORT,
+  type ContentToPanel,
+  type PanelToContent,
+} from "../types.js";
 
 import {
   initialTimeline,
@@ -65,7 +69,9 @@ export function timelineActionFor(
   if (message.type === "TIMELINE_EVENTS") {
     return Array.isArray(items) ? { type: "events", session, items } : null;
   }
-  return reason === "navigated" || reason === "document"
+  return reason === "navigated" ||
+    reason === "document" ||
+    reason === "replaced"
     ? { type: "ended", session, cause: reason }
     : null;
 }
@@ -108,6 +114,39 @@ function useTimelineMessages(
   }, [myTabId, dispatch, stopInPage]);
 }
 
+/**
+ * The port held open while a recording runs (`TIMELINE_PORT`): the service
+ * worker stops the recording in the page when it closes, which it does
+ * however the panel goes. Held again if the service worker restarts, which
+ * closes it too, while the recording still runs.
+ */
+function useRecordingPort(stateRef: { current: TimelineState }) {
+  const port = useRef<chrome.runtime.Port | null>(null);
+  const release = useCallback(() => {
+    const held = port.current;
+    port.current = null;
+    held?.disconnect();
+  }, []);
+  const hold = useCallback(
+    function holdPort(tabId: number, session: string) {
+      release();
+      const opened = chrome.runtime.connect({ name: TIMELINE_PORT });
+      port.current = opened;
+      opened.postMessage({ tabId, session });
+      opened.onDisconnect.addListener(() => {
+        if (port.current !== opened) return;
+        port.current = null;
+        const now = stateRef.current;
+        if (isRecording(now) && now.session === session) {
+          holdPort(tabId, session);
+        }
+      });
+    },
+    [release, stateRef],
+  );
+  return { hold, release };
+}
+
 /** Record and Stop, and the stops the panel makes itself. */
 function useRecordStop(
   myTabId: number | null,
@@ -118,6 +157,10 @@ function useRecordStop(
   // The tab the recording runs in, where a Stop goes whichever tab the panel
   // shows by then.
   const recordingTab = useRef<number | null>(null);
+  // The latest Record's session, until Stop: what a start's answer is
+  // checked against, whenever it comes.
+  const awaitedSession = useRef<string | null>(null);
+  const { hold, release } = useRecordingPort(stateRef);
 
   /** Tell the recording's tab to stop, if it still runs. */
   const stopInPage = useCallback(() => {
@@ -141,21 +184,28 @@ function useRecordStop(
     if (myTabId === null) return;
     const session = newSession();
     recordingTab.current = myTabId;
+    awaitedSession.current = session;
     dispatch({ type: "start", session });
     sendToBoundTab(
       { type: "TIMELINE_START", payload: { session } },
       (response) => {
         const reply = response as { success?: boolean; error?: string };
+        const started = reply?.success === true;
+        // Before the state says so: a panel that goes now still stops it.
+        if (started && awaitedSession.current === session) {
+          hold(myTabId, session);
+        }
         dispatch(
-          reply?.success === true
+          started
             ? { type: "started", session }
             : { type: "failed", session, error: reply?.error },
         );
       },
     );
-  }, [myTabId, sendToBoundTab, dispatch]);
+  }, [myTabId, sendToBoundTab, dispatch, hold]);
 
   const stop = useCallback(() => {
+    awaitedSession.current = null;
     stopInPage();
     dispatch({ type: "stop" });
   }, [stopInPage, dispatch]);
@@ -170,8 +220,12 @@ function useRecordStop(
     recordingTab.current = null;
   }, [myTabId, stopInPage, dispatch]);
 
-  // A panel closing stops the recording: nothing would show its lines. The
-  // service worker stops observing the page too, which stops it as well.
+  // No recording, no port. A panel closing closes it anyway, which stops
+  // the recording in the page (`useRecordingPort`).
+  const running = isRecording(stateRef.current);
+  useEffect(() => {
+    if (!running) release();
+  }, [running, release]);
   useEffect(() => () => stopInPage(), [stopInPage]);
 
   return { record, stop, stopInPage };
