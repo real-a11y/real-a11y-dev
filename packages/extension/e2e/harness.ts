@@ -547,8 +547,8 @@ export class NativeHarness {
     });
   }
 
-  /** Chrome's tree's A11Y or TAB view button. */
-  viewButton(name: "A11Y" | "TAB"): Locator {
+  /** Chrome's tree's A11Y, TAB or TIMELINE view button. */
+  viewButton(name: "A11Y" | "TAB" | "TIMELINE"): Locator {
     return this.panel
       .getByRole("group", { name: "Native tree view" })
       .getByRole("button", { name, exact: true });

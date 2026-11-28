@@ -44,6 +44,16 @@ While it reads, Chrome shows a bar across every window: “Semantic Navigator”
 
 Chrome's tree is read when the panel opens, when the page navigates, and for a few seconds after you act. For any other change press **↻**, or turn on **Follow page changes** (**⟳**). It has no tab order of its own, because `tabindex` never reaches a native node, so its **TAB** view, next to **A11Y** in its toolbar, lists the tab stops of the extension's own reading of the page, in tab order, as [the TAB view](./reading-the-tab-view.md#how-tab-order-works) of the other panels does: a positive `tabindex` first, then document order. A frame is one stop where Tab enters it. Neither models shadow roots, focus traps or keyboard-focusable scrollers. Showing it reads nothing through Chrome, so the bar doesn't come up for it, and it works on a page Chrome's tree can't read. It takes a moment to read the page as it comes up. Chrome's tree and the other panels' trees never match exactly, by design: see [Two producers](./reading-the-a11y-view.md#two-producers).
 
+The **TIMELINE** view, next to **TAB**, records what a keyboard and screen-reader user meets while you use the page: where focus goes and what live regions announce, one line each, in the order the page made them. Press **● Record**, use the page, then **■ Stop**. It shows what a tree read at one moment can't, such as focus dropping to nothing when the focused element is deleted:
+
+```
+focus     button "Delete draft"
+focus     (none)
+announce  status "Draft deleted."
+```
+
+**Copy** puts exactly these lines on the clipboard, the lines [`recordTimeline`](/packages/testing/flow#recording-what-happened-in-between) prints, so a finding pastes straight into a test. **Clear** empties the list, and each **Record** starts a new one. Clicking a line outlines its element on the page and scrolls to it, without moving focus, which would record a move of its own. Like the TAB view, it is the extension's own reading of the page, so it reads nothing through Chrome and its names come from this project's accessible-name rules, which can differ from Chrome's tree's. It records the top frame alone, not iframes. A recording covers one page: navigating ends it, and its lines stay until you clear them or record again. The lines live in the side panel's memory and nowhere else, and are gone when it closes.
+
 Up to version 0.1.17, **Settings ▾** could switch the panel to the extension's own in-page tree, with its DOM view. Chrome's tree is the only one now.
 
 ## Using the panel
@@ -61,7 +71,7 @@ Only the extension has these:
 
 - **Focus sync.** Focus moving on the page, by Tab, a click or the page's own script, selects that element's row.
 - **Scoping.** Double-click a container row, or press `Ctrl`/`Cmd`+`Enter`, to show only that part of the page. Search, filters and **Copy** follow the scope. The breadcrumb above the tree, or `Esc`, takes you back. In the other panels, scope with the inspector's [`setRoot()`](/packages/inspector#setroot-root) or a different `root` for `<SemanticNavigator />`.
-- **The live log.** When a live region (`role="status"`, `"alert"` or `"log"`, or `aria-live`) changes, its text appears at the bottom of the panel, assertive in red and polite in blue. Use it to check that toasts, validation errors and loading messages are announced. It approximates a screen reader: it shows the region's whole text, and doesn't watch iframes.
+- **The live log.** When a live region (`role="status"`, `"alert"` or `"log"`, or `aria-live`) shows text it hasn't said, its text appears at the bottom of the panel, assertive in red and polite in blue. Use it to check that toasts, validation errors and loading messages are announced. It reads the page by the same rule as the **TIMELINE** view's `announce` lines. It approximates a screen reader: it shows the region's whole text, and doesn't watch iframes.
 - **The key bar.** `Esc`, `Tab`, `Shift+Tab`, `Enter`, `Space`, `↓` and `↑` go to whatever has focus on the page, for example to open a combobox and pick an option.
 - **Copy ▾** puts the tree on the clipboard as a Markdown report for a bug tracker, headed by the URL, which tree it came from and the scope, with the tab sequence too while the **TAB** view shows. Field values are left out.
 - **Frames.** Each iframe's tree sits under its `<iframe>` row, cross-origin frames included.

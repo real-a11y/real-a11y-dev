@@ -359,8 +359,9 @@ export function NativeTreeView({
       }
       setQuery("");
       setRoleFilter(null);
-      // The row is in the tree, which the tab order stands in for.
-      if (view === "tab") onViewChange?.("a11y");
+      // The row is in the tree, which the tab order and the timeline stand
+      // in for.
+      if (view !== "a11y") onViewChange?.("a11y");
       expandTo(nodeId);
       setSelectedId(nodeId);
       setFollowNonce((n) => n + 1);

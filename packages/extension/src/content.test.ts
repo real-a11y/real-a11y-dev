@@ -9,22 +9,31 @@
  * registers.
  */
 
-import type { SemanticNode } from "@real-a11y-dev/core";
+import {
+  getElementRefs,
+  type SemanticNode,
+  type TimelineEvent,
+} from "@real-a11y-dev/core";
+import { serializeTimeline } from "@real-a11y-dev/serialize";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 const EXTENSION_ID = "test-extension-id";
 
 type MessageListener = (
   message: { type: string; payload?: unknown },
-  sender: { id?: string; tab?: { id: number }; frameId?: number },
+  sender: { id?: string; url?: string; tab?: { id: number }; frameId?: number },
   sendResponse: (response?: unknown) => void,
 ) => unknown;
 
 interface Harness {
   /** Everything the content script sent to the background. */
   sent: Array<{ type: string; payload?: unknown }>;
-  /** Deliver a message as the background would, returning the response. */
-  send: (message: { type: string; payload?: unknown }) => unknown;
+  /** Deliver a message as the background would, returning the response.
+   *  `sender` stands in for who sent it: the service worker by default. */
+  send: (
+    message: { type: string; payload?: unknown },
+    sender?: { id?: string; url?: string; tab?: { id: number } },
+  ) => unknown;
   chromeMock: unknown;
 }
 
@@ -35,6 +44,7 @@ function makeHarness(): Harness {
   const chromeMock = {
     runtime: {
       id: EXTENSION_ID,
+      getURL: (path: string) => `chrome-extension://${EXTENSION_ID}/${path}`,
       onMessage: {
         addListener: (fn: MessageListener) => listeners.push(fn),
       },
@@ -47,11 +57,11 @@ function makeHarness(): Harness {
   return {
     sent,
     chromeMock,
-    send(message) {
+    send(message, sender = { id: EXTENSION_ID }) {
       let response: unknown;
       for (const fn of listeners) {
         // The real background is the only sender the content script trusts.
-        fn(message, { id: EXTENSION_ID }, (r) => {
+        fn(message, sender, (r) => {
           response = r;
         });
       }
@@ -2235,5 +2245,164 @@ describe("content: a page that replaces its document", () => {
 
     await rewrite(`<button id="new">New</button>`);
     expect(names(trees().at(-1)!)).toContain("New");
+  });
+});
+
+describe("content: the TIMELINE view's recording", () => {
+  let h: Harness;
+  // The service worker relays the panel's messages with the panel's own
+  // sender: an extension page.
+  const PANEL = {
+    id: EXTENSION_ID,
+    url: `chrome-extension://${EXTENSION_ID}/sidepanel/index.html`,
+  };
+
+  beforeEach(async () => {
+    vi.useFakeTimers();
+    vi.resetModules();
+    document.body.innerHTML =
+      `<button id="delete">Delete draft</button>` +
+      `<button id="other">New draft</button>` +
+      `<div id="status" role="status"></div>`;
+    h = makeHarness();
+    (globalThis as { chrome?: unknown }).chrome = h.chromeMock;
+    await import("./content.js");
+    h.send({ type: "REQUEST_TREE", payload: { framesOnly: true } });
+    h.sent.length = 0;
+  });
+
+  afterEach(() => {
+    h.send({ type: "SET_OBSERVING", payload: { enabled: false } });
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    delete (globalThis as { chrome?: unknown }).chrome;
+    (document.activeElement as HTMLElement | null)?.blur();
+    document.body.innerHTML = "";
+  });
+
+  type Item = { event: TimelineEvent; nodeId?: string };
+
+  /** Let the recorder's settles run; every item sent so far, for `session`. */
+  async function items(session = "s1"): Promise<Item[]> {
+    await vi.advanceTimersByTimeAsync(0);
+    return h.sent
+      .filter((m) => m.type === "TIMELINE_EVENTS")
+      .map((m) => m.payload as { session: string; items: Item[] })
+      .filter((p) => p.session === session)
+      .flatMap((p) => p.items);
+  }
+
+  const lines = async (session?: string) =>
+    serializeTimeline((await items(session)).map((i) => i.event));
+
+  const start = (session = "s1", sender: object = PANEL) =>
+    h.send({ type: "TIMELINE_START", payload: { session } }, sender);
+
+  it("records a focus drop, each line with the node it names", async () => {
+    const button = document.getElementById("delete") as HTMLButtonElement;
+    button.focus();
+    expect(start()).toEqual({ success: true });
+    await items();
+    button.remove();
+
+    expect(await lines()).toBe(
+      ['focus     button "Delete draft"', "focus     (none)"].join("\n"),
+    );
+    const [first, drop] = await items();
+    expect(getElementRefs().get(first!.nodeId!)).toBe(button);
+    expect(drop!.nodeId).toBeUndefined();
+  });
+
+  it("records an announcement with the region it came from", async () => {
+    expect(start()).toEqual({ success: true });
+    const region = document.getElementById("status")!;
+    region.textContent = "Draft deleted.";
+
+    expect(await lines()).toBe('announce  status "Draft deleted."');
+    const [said] = await items();
+    expect(getElementRefs().get(said!.nodeId!)).toBe(region);
+  });
+
+  it("starts for no one but the extension's own pages", async () => {
+    // What a content script, which runs in the page's process, would send.
+    const page = {
+      id: EXTENSION_ID,
+      url: "https://example.com/",
+      tab: { id: 1 },
+    };
+    expect(start("s1", page)).toBe(undefined);
+    expect(start("s1", { id: "another-extension", url: PANEL.url })).toBe(
+      undefined,
+    );
+    document.getElementById("delete")!.focus();
+    expect(await items()).toEqual([]);
+  });
+
+  it("stops at the panel's word, and for no other session", async () => {
+    start();
+    h.send({ type: "TIMELINE_STOP", payload: { session: "s0" } }, PANEL);
+    document.getElementById("delete")!.focus();
+    expect(await lines()).toBe('focus     button "Delete draft"');
+
+    expect(
+      h.send({ type: "TIMELINE_STOP", payload: { session: "s1" } }, PANEL),
+    ).toEqual({ success: true });
+    document.getElementById("other")!.focus();
+    expect(await lines()).toBe('focus     button "Delete draft"');
+  });
+
+  it("starts afresh, the earlier recording stopped", async () => {
+    start("s1");
+    start("s2");
+    document.getElementById("delete")!.focus();
+    expect(await items("s1")).toEqual([]);
+    expect(await lines("s2")).toBe('focus     button "Delete draft"');
+  });
+
+  it("ends when the document leaves, with what it settled last", async () => {
+    start();
+    document.getElementById("delete")!.focus();
+    window.dispatchEvent(new PageTransitionEvent("pagehide"));
+    expect(await lines()).toBe('focus     button "Delete draft"');
+    expect(h.sent.filter((m) => m.type === "TIMELINE_ENDED")).toEqual([
+      {
+        type: "TIMELINE_ENDED",
+        payload: { session: "s1", reason: "navigated" },
+      },
+    ]);
+    document.getElementById("other")!.focus();
+    expect(await items()).toHaveLength(1);
+  });
+
+  it("ends when the panel stops observing the page", async () => {
+    start();
+    h.send({ type: "SET_OBSERVING", payload: { enabled: false } });
+    document.getElementById("delete")!.focus();
+    expect(await items()).toEqual([]);
+  });
+
+  it("highlights a line's node without moving focus", async () => {
+    const other = document.getElementById("other") as HTMLButtonElement;
+    other.focus();
+    start();
+    const [first] = await items();
+    expect(getElementRefs().get(first!.nodeId!)).toBe(other);
+    const button = document.getElementById("delete") as HTMLButtonElement;
+    button.focus();
+    // jsdom lays nothing out, and has no `scrollIntoView`.
+    const scrolled: Element[] = [];
+    Element.prototype.scrollIntoView = function (this: Element) {
+      scrolled.push(this);
+    };
+    try {
+      h.send({
+        type: "HIGHLIGHT_NODE",
+        payload: { nodeId: first!.nodeId!, keepFocus: true },
+      });
+    } finally {
+      delete (Element.prototype as Partial<Element>).scrollIntoView;
+    }
+    expect(scrolled).toEqual([other]);
+    expect(document.activeElement).toBe(button);
   });
 });

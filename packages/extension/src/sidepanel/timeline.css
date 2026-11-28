@@ -1,0 +1,59 @@
+/* ---- The tree, while the TIMELINE view shows in its place ----
+   Kept mounted (App.tsx), and laid out as if the wrapper weren't there. */
+.sn-view {
+  display: contents;
+}
+
+.sn-view--hidden {
+  display: none;
+}
+
+/* ---- The TIMELINE view (TimelineView.tsx) ----
+   One line per event, in the monospace the lines are pasted as, so what is on
+   screen lines up as the copied text does. */
+.sn-timeline {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.sn-timeline-status {
+  color: var(--sn-text-muted);
+  font-size: 12px;
+}
+
+.sn-timeline-lines {
+  flex: 1;
+  overflow: auto;
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+}
+
+.sn-timeline-line {
+  display: block;
+  box-sizing: border-box;
+  min-width: 100%;
+  padding: 3px 12px;
+  border: 0;
+  background: none;
+  color: var(--sn-text);
+  font-family: var(--sn-font-mono);
+  font-size: 12px;
+  text-align: start;
+  white-space: pre;
+}
+
+button.sn-timeline-line {
+  cursor: pointer;
+}
+
+button.sn-timeline-line:hover {
+  background: var(--sn-bg-hover);
+}
+
+button.sn-timeline-line:focus-visible {
+  outline: 2px solid var(--sn-border-focus);
+  outline-offset: -2px;
+}

@@ -7,16 +7,11 @@ import {
   DomObserver,
   DOM_OBSERVER_DEBOUNCE_MS,
   getElementRefs,
-  getExplicitRole,
   getNodeId,
-  LIVE_REGION_ATTRIBUTES,
-  liveRegionLevel,
-  pageText,
   renderingParent,
-  safeNodeType,
   safeParentElement,
 } from "@real-a11y-dev/core";
-import type { TreeChange } from "@real-a11y-dev/core";
+import type { TimelineRecording, TreeChange } from "@real-a11y-dev/core";
 
 import { liftCurtain, showCurtain } from "./curtain.js";
 import { actOnItem, computeFieldState } from "./field-state.js";
@@ -39,8 +34,17 @@ import {
   pageInputFilter,
   typingClock,
 } from "./page-input.js";
-import { isTrustedSender, planHighlight } from "./routing.js";
+import {
+  isExtensionPageSender,
+  isTrustedSender,
+  planHighlight,
+} from "./routing.js";
 import { elementsFromTabSequence, sendKey } from "./send-key.js";
+import {
+  recordLiveRegions,
+  TimelineSession,
+  type TimelineEndReason,
+} from "./timeline-recording.js";
 import type { PanelToContent, TreeRequest } from "./types.js";
 
 const isSubFrame = window !== window.top;
@@ -130,7 +134,6 @@ const pageKeys = new PageKeySnapshots(
   renderingParent,
   frameOwnerMark,
 );
-let liveObserver: MutationObserver | null = null;
 // Whether live tree observation is armed. Starts OFF — deferred until the
 // side panel connects for this tab, so a page whose panel is never opened
 // does no extraction at all.
@@ -191,6 +194,8 @@ function teardown(): void {
   tornDown = true;
   observer?.stop();
   unobserveLiveRegions();
+  // Nothing is left to hand its lines to.
+  endTimeline();
   documentObserver.disconnect();
   // No panel can lift the curtain any more: the extension it belonged to is
   // gone, and no new script comes to a page already open.
@@ -327,7 +332,7 @@ chrome.runtime.onMessage.addListener(
       }
 
       case "HIGHLIGHT_NODE": {
-        const { nodeId, hover } = message.payload;
+        const { nodeId, hover, keepFocus } = message.payload;
 
         // Skip visual indicator and focus() when the curtain is on —
         // the page is hidden so there's nothing to highlight, and calling
@@ -335,7 +340,7 @@ chrome.runtime.onMessage.addListener(
         if (!curtainVisible) {
           // Hover previews the element in place; only a selection may move the
           // viewport or real focus. See planHighlight for why.
-          const { scroll, moveFocus } = planHighlight({ hover });
+          const { scroll, moveFocus } = planHighlight({ hover, keepFocus });
           focusManager.highlightElement(nodeId, { scroll });
 
           const element = elementRefs.get(nodeId);
@@ -468,6 +473,34 @@ chrome.runtime.onMessage.addListener(
         setTimeout(() => sendTree(undefined, { reread: true }), 200);
         break;
       }
+      case "TIMELINE_START":
+      case "TIMELINE_STOP": {
+        // A recording is started, stopped and read by the panel alone. The
+        // service worker relays these only from the extension's own pages;
+        // this checks again, as it does nowhere else, because a recording
+        // reads everything the user meets on the page from now on.
+        if (
+          !isExtensionPageSender(
+            sender,
+            chrome.runtime.id,
+            chrome.runtime.getURL?.(""),
+          )
+        ) {
+          return false;
+        }
+        if (message.type === "TIMELINE_START") {
+          sendResponse(
+            isSubFrame || tornDown || !boundRoot
+              ? { success: false, error: "this page can't be recorded" }
+              : timeline.begin(message.payload.session, boundRoot),
+          );
+        } else {
+          timeline.end(undefined, message.payload.session);
+          sendResponse({ success: true });
+        }
+        break;
+      }
+
       case "CLOSE_TAB":
         // The background closes the tab itself and never relays this to a
         // frame, so there is no response coming from here.
@@ -694,98 +727,51 @@ function highlightFromNativeEvent(e: Event, kind: "reveal" | "preview"): void {
 const onNativeReveal = (e: Event) => highlightFromNativeEvent(e, "reveal");
 const onNativePreview = (e: Event) => highlightFromNativeEvent(e, "preview");
 
-// ---- Live region observer (top frame only) ----
+// ---- The TIMELINE view's recording, and the live-region line ----
+//
+// Both run core's recorder in the top frame (ADR-0002): the panel's TIMELINE
+// view, started and stopped by the panel, and the line under its views,
+// announcements alone, while the panel observes the page. See
+// timeline-recording.ts.
 
-if (!isSubFrame) {
-  // Through the prototype: a `<form>` whose control is named `isConnected`
-  // shadows its own. Core's readers cover the rest. A selector engine is no
-  // help: `closest` in jsdom climbs through a form's shadowed `parentElement`.
-  const isConnected = Object.getOwnPropertyDescriptor(
-    Node.prototype,
-    "isConnected",
-  )!.get!;
-  const createTreeWalker = Document.prototype.createTreeWalker;
+const timeline = new TimelineSession({
+  // Where focus rests, for a focus line's node: null on `<body>`, `<html>`
+  // or nothing, as the recorder reads it.
+  focused: () => {
+    const el = deepActiveElement();
+    return el === documentBody() || el === boundRoot ? null : el;
+  },
+  // The id `HIGHLIGHT_NODE` finds the element by, as an overlay's.
+  idFor: (el) => {
+    const id = elementRefs.findId(el) ?? getNodeId(el);
+    elementRefs.set(id, el);
+    return id;
+  },
+  post: safeSendMessage,
+});
 
-  let liveDebounce: ReturnType<typeof setTimeout> | null = null;
-  const lastLiveText = new WeakMap<Element, string>();
-  // The regions a mutation touched since the last read. Only these are read
-  // again: a region nothing changed in has nothing new to announce, and
-  // reading every region on the page each time costs a styled walk of each.
-  const touched = new Set<Element>();
-  // Elements whose attributes changed. Each may have shown or hidden regions
-  // inside it, so each is walked, once per read rather than once per change:
-  // a page can restyle the same container every frame.
-  const restyled = new Set<Element>();
+/** Stop the recording, if there is one; with `reason`, the panel is told it
+ *  ended on its own. */
+function endTimeline(reason?: TimelineEndReason): void {
+  timeline.end(reason);
+}
 
-  /** Mark every region that renders `node`, and with `inside`, every region
-   *  in its subtree too. */
-  const touch = (node: Node, inside: boolean) => {
-    let element: Element | null;
-    if (safeNodeType(node) === Node.ELEMENT_NODE) element = node as Element;
-    else {
-      // Text a slot renders belongs to the region around the slot.
-      // eslint-disable-next-line no-restricted-properties -- one read, and a text node is never a form
-      const slot = (node as Partial<Text>).assignedSlot;
-      element = slot ?? safeParentElement(node);
-    }
-    // Up the tree that renders it, slots included, into a shadow tree's region.
-    for (let el = element; el; el = renderingParent(el)) {
-      if (liveRegionLevel(el)) touched.add(el);
-    }
-    if (inside && element && element === node) {
-      const walker = createTreeWalker.call(
-        document,
-        element,
-        NodeFilter.SHOW_ELEMENT,
-      );
-      while (walker.nextNode()) {
-        const el = walker.currentNode as Element;
-        if (liveRegionLevel(el)) touched.add(el);
-      }
-    }
-  };
+let liveRecording: TimelineRecording | null = null;
 
-  liveObserver = new MutationObserver((records) => {
-    for (const record of records) {
-      if (record.type === "attributes") {
-        restyled.add(record.target as Element);
-        continue;
-      }
-      touch(record.target, false);
-      record.addedNodes.forEach((node) => touch(node, true));
-    }
-    if (liveDebounce) clearTimeout(liveDebounce);
-    liveDebounce = setTimeout(() => {
-      for (const element of restyled) {
-        if (isConnected.call(element)) touch(element, true);
-      }
-      restyled.clear();
-      const regions = [...touched];
-      touched.clear();
-      for (const region of regions) {
-        if (!isConnected.call(region)) continue;
-        const level = liveRegionLevel(region);
-        if (!level) continue;
-        // What a screen reader could announce, never raw `textContent`: that
-        // also holds a <textarea>'s markup default — the secret, for a
-        // sensitive field — and hidden, script and style text, none of which
-        // belongs on the message channel.
-        const text = pageText(region, { announced: true }).trim();
-        // Emptied or hidden: the same text shown again is news again.
-        if (!text) {
-          lastLiveText.delete(region);
-          continue;
-        }
-        if (text === lastLiveText.get(region)) continue;
-        lastLiveText.set(region, text);
+function observeLiveRegions() {
+  if (isSubFrame) return;
+  unobserveLiveRegions();
+  if (boundRoot) {
+    liveRecording = recordLiveRegions(boundRoot, (payload) =>
+      safeSendMessage({ type: "LIVE_REGION", payload }),
+    );
+  }
+}
 
-        safeSendMessage({
-          type: "LIVE_REGION",
-          payload: { text, level, role: getExplicitRole(region) ?? "status" },
-        });
-      }
-    }, 200);
-  });
+function unobserveLiveRegions() {
+  const recording = liveRecording;
+  liveRecording = null;
+  recording?.stop();
 }
 
 /**
@@ -820,51 +806,14 @@ function documentBody(): Element | null {
   return body instanceof Element ? body : null;
 }
 
-/** The body the live-region observer watches now. */
-let liveBody: Element | null = null;
-/** Hears the root element's own children change, for a body that comes
- *  after it or takes another's place. */
-let bodyObserver: MutationObserver | null = null;
-
-/**
- * Watch the document's body for live regions (top frame only), and the root
- * element for another body. A document written in stages has a root before
- * it has a body, and nothing else says when the body arrives: the root is
- * the same element, so `rebindDocument` has nothing to do.
- */
-function observeLiveRegions() {
-  if (!liveObserver) return;
-  unobserveLiveRegions();
-  if (boundRoot) {
-    bodyObserver = new MutationObserver(() => {
-      if (documentBody() !== liveBody) observeLiveRegions();
-    });
-    bodyObserver.observe(boundRoot, { childList: true });
-  }
-  liveBody = documentBody();
-  if (!liveBody) return;
-  liveObserver.observe(liveBody, {
-    childList: true,
-    subtree: true,
-    characterData: true,
-    attributes: true,
-    attributeFilter: [...LIVE_REGION_ATTRIBUTES],
-  });
-}
-
-function unobserveLiveRegions() {
-  liveObserver?.disconnect();
-  bodyObserver?.disconnect();
-  bodyObserver = null;
-  liveBody = null;
-}
-
 /** Disarm observation when the panel disconnects. Idempotent. */
 function stopObserving() {
   if (!observingEnabled) return;
   observingEnabled = false;
   observer?.stop();
   unobserveLiveRegions();
+  // The panel that started it is going: nothing would show its lines.
+  endTimeline();
 }
 
 function onNavigated() {
@@ -902,6 +851,10 @@ const onPageHide = (e: Event) => {
   if (frameMark !== null && !(e as PageTransitionEvent).persisted) {
     unmarkFrameOwner(window, frameMark);
   }
+  // The recording covers this document, which is leaving, into the
+  // back/forward cache or for good. What it settles now still reaches the
+  // panel: a click that follows a link moved focus first.
+  endTimeline("navigated");
 };
 
 const isPageInput = pageInputFilter();
@@ -989,6 +942,8 @@ function rebindDocument(): void {
   observer?.stop();
   observer = observerOf(root);
   unobserveLiveRegions();
+  // The document the recording read is gone.
+  endTimeline("document");
   // The curtain was an element of the document that is gone.
   drawCurtain();
   if (!observingEnabled) return;

@@ -51,6 +51,7 @@ main
     strong "What it does on the page:"
   list
     listitem "Reads the page's DOM (including iframes you can access): which frames the page shows, the text of its live regions, and, for the TAB view, its elements' roles, accessible names, states, and interaction info."
+    listitem "While you record with the TIMELINE view, reads where focus goes and what live regions announce in the page's top frame, and hands each line to the side panel. The lines stay in the side panel's memory until you clear them or close it: they are never stored, and only you can start or stop a recording, never the page."
     listitem
       text "Reads Chromium's accessibility tree for the active tab over"
       code "chrome.debugger"
@@ -70,7 +71,12 @@ main
     strong "What it does NOT do:"
   list
     listitem "It does not send page content, URLs, DOM snapshots, accessibility-tree data, or any other data to any external server — everything above stays local to your browser."
-    listitem "It does not read from or write to the clipboard."
+    listitem
+      text "It does not read from the clipboard, and writes to it only when you press"
+      strong "Copy"
+      text "or pick from"
+      strong "Copy ▾"
+      text "."
     listitem
       text "It does not use cookies, local storage, or IndexedDB for any personal data."
       code "chrome.storage.local"

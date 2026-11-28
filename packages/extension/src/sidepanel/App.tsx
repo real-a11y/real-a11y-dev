@@ -80,6 +80,7 @@ import {
 import { SHOW_FULL_NAMES_KEY } from "./full-names.js";
 import { InputPanel, domTextInputState } from "./InputPanel.js";
 import type { InputPanelState } from "./InputPanel.js";
+import { LiveLog, useLiveLog } from "./LiveLog.js";
 import {
   AUTO_REFRESH_QUIET_MS,
   decideAutoRefresh,
@@ -97,8 +98,10 @@ import { NativeTreeView, type NativeReveal } from "./NativeTreeView.js";
 import { describeNode } from "./scope.js";
 import { KEYS } from "./SendKeyBar.js";
 import { dispatchTabAction, tabRowTarget } from "./tab-action.js";
+import { TimelineView } from "./TimelineView.js";
 import { readRun, useNativeChanges } from "./use-native-changes.js";
 import { useStoredFlag } from "./use-stored-flag.js";
+import { useTimeline } from "./use-timeline.js";
 import { useNativeOverlay } from "./useNativeOverlay.js";
 
 /** How many settle windows (~5s) `whenNativeIdle` waits for a native read or
@@ -195,10 +198,8 @@ export function App() {
   const [inputState, setInputState] = useState<InputPanelState | null>(null);
   const [pageTitle, setPageTitle] = useState<string>("");
   const [pageUrl, setPageUrl] = useState<string>("");
-  const [liveAnnouncements, setLiveAnnouncements] = useState<
-    Array<{ id: number; text: string; level: string; role: string }>
-  >([]);
-  const announcementId = useRef(0);
+  // The line relaying the page's live-region announcements.
+  const liveLog = useLiveLog();
 
   // ---- Chrome's tree ----
   // The Settings menu.
@@ -904,6 +905,9 @@ export function App() {
     // sendToBoundTab is stable (empty deps); the toggle is read through its ref.
   }, []);
 
+  // The TIMELINE view's recording, in the panel's memory only.
+  const timeline = useTimeline(myTabId, sendToBoundTab, announce);
+
   // Listen for tree data and focus changes from content script
   useEffect(() => {
     const handler = (
@@ -1080,15 +1084,7 @@ export function App() {
         a.follow = followTyping(a.follow, at, pressedAt, now);
       }
 
-      if (message.type === "LIVE_REGION") {
-        const id = ++announcementId.current;
-        const entry = { id, ...message.payload };
-        setLiveAnnouncements((prev) => [...prev.slice(-4), entry]);
-        // Auto-remove after 8 seconds
-        setTimeout(() => {
-          setLiveAnnouncements((prev) => prev.filter((a) => a.id !== id));
-        }, 8000);
-      }
+      if (message.type === "LIVE_REGION") liveLog.take(message);
 
       if (message.type === "FOCUS_CHANGED" && focusTrackerOnRef.current) {
         const numbered = nativePageKeys.current;
@@ -2713,62 +2709,58 @@ export function App() {
         />
       )}
 
-      <NativeTreeView
-        nodes={nativeNodes}
-        rootId={nativeRootId}
-        busy={nativeBusy}
-        capability={nativeCapability}
-        status={nativeStatus}
-        onRefresh={() => {
-          if (myTabId !== null) void loadNativeTree(myTabId);
-        }}
-        onActivate={handleNativeActivate}
-        reveal={nativePickReveal}
-        pageFocus={nativePageFocus}
-        onRevealMiss={() =>
-          announce(
-            "The picked element isn't in this tree — refresh the native tree, then pick again.",
-            5000,
-          )
-        }
-        onSelectionReveal={revealNativeRow}
-        onHoverPreview={previewNativeRow}
-        scopedRootId={nativeScopedRootId}
-        onScope={handleNativeScope}
-        pickArmed={pickModeOn}
-        onSendKey={handleNativeSendKey}
-        onDialogEscape={handleNativeDialogEscape}
-        followPageChanges={followPageChanges}
-        onToggleFollowPageChanges={toggleFollowPageChanges}
-        showFullNames={showFullNames}
-        // Its TAB view is the page's own walk's: Chrome's tree has no tab
-        // order.
-        tabOrder={{
-          nodes: treePending ? NO_NODES : nodes,
-          rootId,
-          pending: treePending,
-          onHighlight: handleSelect,
-          onActivate: handleActivate,
-        }}
-        view={view}
-        onViewChange={setView}
-        changes={nativeChanges}
-      />
-
-      {/* Live region announcements, mounted before the first one arrives —
-          see the search count above. Relaying the page's live regions through
-          one that is not itself announced defeats the whole feature. */}
-      <div class="sn-live-log" role="log" aria-label="Live announcements">
-        {liveAnnouncements.map((a) => (
-          <div
-            key={a.id}
-            class={`sn-live-entry ${a.level === "assertive" ? "sn-live-entry--assertive" : ""}`}
-          >
-            <span class="sn-live-role">{a.role}</span>
-            <span class="sn-live-text">{a.text}</span>
-          </div>
-        ))}
+      {/* Kept mounted while the timeline shows, so its selection, expansion
+          and scope are there when the tree comes back. */}
+      <div class={view === "timeline" ? "sn-view--hidden" : "sn-view"}>
+        <NativeTreeView
+          nodes={nativeNodes}
+          rootId={nativeRootId}
+          busy={nativeBusy}
+          capability={nativeCapability}
+          status={nativeStatus}
+          onRefresh={() => {
+            if (myTabId !== null) void loadNativeTree(myTabId);
+          }}
+          onActivate={handleNativeActivate}
+          reveal={nativePickReveal}
+          pageFocus={nativePageFocus}
+          onRevealMiss={() =>
+            announce(
+              "The picked element isn't in this tree — refresh the native tree, then pick again.",
+              5000,
+            )
+          }
+          onSelectionReveal={revealNativeRow}
+          onHoverPreview={previewNativeRow}
+          scopedRootId={nativeScopedRootId}
+          onScope={handleNativeScope}
+          pickArmed={pickModeOn}
+          onSendKey={handleNativeSendKey}
+          onDialogEscape={handleNativeDialogEscape}
+          followPageChanges={followPageChanges}
+          onToggleFollowPageChanges={toggleFollowPageChanges}
+          showFullNames={showFullNames}
+          // Its TAB view is the page's own walk's: Chrome's tree has no tab
+          // order.
+          tabOrder={{
+            nodes: treePending ? NO_NODES : nodes,
+            rootId,
+            pending: treePending,
+            onHighlight: handleSelect,
+            onActivate: handleActivate,
+          }}
+          view={view}
+          onViewChange={setView}
+          changes={nativeChanges}
+        />
       </div>
+      {/* The page's own recording, as the TAB view is its own walk: Chrome
+          has no order of focus moves or announcements (ADR-0002). */}
+      {view === "timeline" && (
+        <TimelineView {...timeline} onViewChange={setView} />
+      )}
+
+      <LiveLog entries={liveLog.entries} />
     </div>
   );
 }

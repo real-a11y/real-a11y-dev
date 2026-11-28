@@ -11,6 +11,7 @@ import { registerNativeMode, releaseDebugger } from "./native/index.js";
 import {
   type PlannedTabMessage,
   describeBroadcastDelivery,
+  handledByOwnListener,
   isTrustedSender,
   lookupOrder,
   panelWindowFor,
@@ -33,6 +34,9 @@ import {
   removeFrame,
   unplaceableFrames,
 } from "./tab-state.js";
+// Registers the TIMELINE view's relay, the listener its Record and Stop go
+// to, on import.
+import "./timeline-relay.js";
 import type { ContentToPanel, TreeRequest } from "./types.js";
 
 // `chrome.debugger` native mode (RFC PR H) ships in every build now that the
@@ -738,10 +742,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // guard they fall through to the catch-all fallback below, which would
   // forward a meaningless message to the active tab or, with no active tab,
   // race a synchronous `{ success:false }` reply against the native handler's
-  // slower async one. Leave them to the native listener.
-  if (typeof message?.type === "string" && message.type.startsWith("NATIVE_")) {
-    return false;
-  }
+  // slower async one. Leave them to the native listener. The TIMELINE view's
+  // likewise (timeline-relay.ts): its Record and Stop go to the top frame
+  // alone, and its lines reach the panel straight from the page, where a
+  // forwarded copy would show each twice.
+  if (handledByOwnListener(message)) return false;
 
   // ---- Messages from content script frames ----
   if (sender.tab?.id) {

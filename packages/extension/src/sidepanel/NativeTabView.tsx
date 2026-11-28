@@ -13,8 +13,15 @@ import { useMemo } from "preact/hooks";
 import { matchCountLabel } from "./scope.js";
 import { TabSequenceView, tabStops } from "./TabSequenceView.js";
 
-/** Chrome's tree, or the page's tab order in its place. */
-export type NativeView = "a11y" | "tab";
+/** Chrome's tree, the page's tab order in its place, or the page's
+ *  timeline (`TimelineView.tsx`). */
+export type NativeView = "a11y" | "tab" | "timeline";
+
+const VIEW_LABELS: Record<NativeView, string> = {
+  a11y: "A11Y",
+  tab: "TAB",
+  timeline: "TIMELINE",
+};
 
 /** The page's tab order: the walk it comes from, and what selecting and
  *  activating a stop does there. */
@@ -23,7 +30,9 @@ export type NativeTabOrder = Pick<
   "nodes" | "rootId" | "pending" | "onHighlight" | "onActivate"
 >;
 
-/** The toolbar's A11Y / TAB switch. */
+/** The toolbar's A11Y / TAB / TIMELINE switch: in the tree's toolbar, and
+ *  in the timeline's (`TimelineView.tsx`), which App shows in the tree's
+ *  place. */
 export function NativeViewToggle({
   view,
   onViewChange,
@@ -33,14 +42,14 @@ export function NativeViewToggle({
 }) {
   return (
     <div class="sn-toggle-group" role="group" aria-label="Native tree view">
-      {(["a11y", "tab"] as const).map((v) => (
+      {(["a11y", "tab", "timeline"] as const).map((v) => (
         <button
           key={v}
           class="sn-toggle-btn"
           aria-pressed={view === v}
           onClick={() => onViewChange(v)}
         >
-          {v === "a11y" ? "A11Y" : "TAB"}
+          {VIEW_LABELS[v]}
         </button>
       ))}
     </div>

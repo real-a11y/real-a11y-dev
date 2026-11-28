@@ -23,6 +23,7 @@ The side panel's TAB view, which lists the page's tab order, reads the page's DO
 **What it does on the page:**
 
 - Reads the page's DOM (including iframes you can access): which frames the page shows, the text of its live regions, and, for the TAB view, its elements' roles, accessible names, states, and interaction info.
+- While you record with the TIMELINE view, reads where focus goes and what live regions announce in the page's top frame, and hands each line to the side panel. The lines stay in the side panel's memory until you clear them or close it: they are never stored, and only you can start or stop a recording, never the page.
 - Reads Chromium's accessibility tree for the active tab over `chrome.debugger`, while it's attached.
 - On your explicit action (clicking a tree node's action button, pressing `Enter`, etc.), dispatches the corresponding event on the element — e.g. click a button, focus a field, submit a form.
 - Draws a highlight overlay on the element under the cursor in the tree.
@@ -31,7 +32,7 @@ The side panel's TAB view, which lists the page's tab order, reads the page's DO
 **What it does NOT do:**
 
 - It does not send page content, URLs, DOM snapshots, accessibility-tree data, or any other data to any external server — everything above stays local to your browser.
-- It does not read from or write to the clipboard.
+- It does not read from the clipboard, and writes to it only when you press **Copy** or pick from **Copy ▾**.
 - It does not use cookies, local storage, or IndexedDB for any personal data. `chrome.storage.local` holds only the side panel's settings: whether names show in full, whether the tree follows page changes on its own, and whether you've dismissed the note about Chrome's debugging bar. While the debugger is attached, `chrome.storage.session` holds content-free bookkeeping about that attachment (which tab, since when), and while the screen curtain is on, which tabs it covers, so that closing the side panel still lifts it after Chrome has stopped the extension's background worker. Chrome clears both when the browser closes. No log of how you use the extension is kept.
 - It does not track you across sites or sessions.
 - It contains no analytics, telemetry, advertising, or third-party scripts.

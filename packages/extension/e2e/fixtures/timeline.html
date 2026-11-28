@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Timeline — focus drop fixture</title>
+  </head>
+  <body>
+    <h1>Drafts</h1>
+
+    <!--
+      The TIMELINE view's case: deleting the focused item drops focus to
+      nothing, which nothing on screen shows. The click handler removes the
+      draft, its button with it, and says so in a status, in one task.
+    -->
+    <ul id="drafts">
+      <li><span>Draft 1</span> <button id="delete">Delete draft</button></li>
+    </ul>
+    <button id="new">New draft</button>
+    <div id="status" role="status"></div>
+
+    <script>
+      document.getElementById("delete").addEventListener("click", (event) => {
+        event.currentTarget.closest("li").remove();
+        document.getElementById("status").textContent = "Draft deleted.";
+      });
+    </script>
+  </body>
+</html>

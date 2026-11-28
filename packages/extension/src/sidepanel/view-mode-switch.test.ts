@@ -116,6 +116,36 @@ describe("switching Chrome's tree between A11Y and TAB", () => {
     expect(reads()).toHaveLength(readsBefore);
   });
 
+  it("keeps Chrome's tree, its selection and its scope through the TIMELINE view", async () => {
+    await mountLoadedPanel();
+    const readsBefore = reads().length;
+
+    act(() => {
+      toggleButton("TIMELINE").click();
+    });
+    await flush();
+    // The timeline in the tree's place, and the tree out of sight.
+    expect(container.querySelector(".sn-timeline")).not.toBeNull();
+    expect(
+      row("ax-3").closest(".sn-view--hidden"),
+      "the tree is hidden, not gone",
+    ).not.toBeNull();
+    // The timeline needs only the page's frames, as Chrome's tree does.
+    expect(chromeMock.sent.filter((m) => m.type === "SET_VIEW_MODE")).toEqual(
+      [],
+    );
+
+    act(() => {
+      toggleButton("A11Y").click();
+    });
+    await flush();
+    expect(container.querySelector(".sn-timeline")).toBeNull();
+    expect(row("ax-3").closest(".sn-view--hidden")).toBeNull();
+    expect(row("ax-3").getAttribute("aria-selected")).toBe("true");
+    expect(container.querySelector(".sn-scope-bar")).not.toBeNull();
+    expect(reads()).toHaveLength(readsBefore);
+  });
+
   it("still tears the panel down when the bound tab changes", async () => {
     await mountLoadedPanel();
 

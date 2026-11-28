@@ -174,6 +174,8 @@ function makeHarness() {
     getAllFramesDelayMs: 0,
     /** `chrome.runtime.lastError` seen by a `tabs.sendMessage` callback. */
     sendError: undefined as undefined | { message: string },
+    /** What the addressed frame answers a `tabs.sendMessage` with. */
+    tabReply: undefined as unknown,
     /** The windows `chrome.windows.get` knows. */
     windows: new Map<number, FakeWindow>([
       [1, { type: "normal", activeTabId: TAB_ID }],
@@ -218,6 +220,7 @@ function makeHarness() {
     runtime: {
       id: EXTENSION_ID,
       lastError: undefined as undefined | { message: string },
+      getURL: (path: string) => `chrome-extension://${EXTENSION_ID}/${path}`,
       onMessage: {
         addListener: (fn: MessageListener) => messageListeners.push(fn),
       },
@@ -316,7 +319,9 @@ function makeHarness() {
         setTimeout(() => {
           chromeMock.runtime.lastError = knobs.sendError;
           try {
-            cb?.();
+            (cb as ((response?: unknown) => void) | undefined)?.(
+              knobs.sendError ? undefined : knobs.tabReply,
+            );
           } finally {
             chromeMock.runtime.lastError = undefined;
           }
@@ -2316,5 +2321,133 @@ describe("background: which tab each window's side panel is told", () => {
     focus(3);
     await vi.runAllTimersAsync();
     expect(told()).toEqual([]);
+  });
+});
+
+describe("background: the TIMELINE view's recording", () => {
+  let h: Harness;
+  const PANEL_URL = `chrome-extension://${EXTENSION_ID}/sidepanel/index.html`;
+
+  beforeEach(async () => {
+    vi.useFakeTimers();
+    vi.resetModules();
+    h = makeHarness();
+    (globalThis as { chrome?: unknown }).chrome = h.chromeMock;
+    await import("./background.js");
+    await vi.runAllTimersAsync();
+    h.panelMessages.length = 0;
+    h.tabMessages.length = 0;
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    delete (globalThis as { chrome?: unknown }).chrome;
+  });
+
+  /** Deliver `message` from `sender`; what the worker answered, and whether
+   *  it kept the channel open. */
+  async function deliver(
+    message: { type: string; [k: string]: unknown },
+    sender: {
+      id?: string;
+      url?: string;
+      tab?: { id: number };
+      frameId?: number;
+    },
+  ): Promise<{ replies: unknown[]; open: boolean[] }> {
+    const replies: unknown[] = [];
+    const open = h.messageListeners.map(
+      (fn) => fn(message, sender, (r?: unknown) => replies.push(r)) === true,
+    );
+    await vi.runAllTimersAsync();
+    return { replies, open };
+  }
+
+  const start = {
+    type: "TIMELINE_START",
+    tabId: TAB_ID,
+    payload: { session: "s1" },
+  };
+
+  it("relays a start from the panel to the top frame alone, with its answer", async () => {
+    h.knobs.tabReply = { success: true };
+    const { replies } = await deliver(start, {
+      id: EXTENSION_ID,
+      url: PANEL_URL,
+    });
+    expect(sentSince(h, 0, "TIMELINE_START")).toEqual([
+      { tabId: TAB_ID, frameId: 0, body: start },
+    ]);
+    expect(replies).toEqual([{ success: true }]);
+  });
+
+  it("relays a start from the panel opened as a tab", async () => {
+    // The e2e harness opens the panel as a tab, so `sender.tab` is no sign of
+    // a content script.
+    h.knobs.tabReply = { success: true };
+    await deliver(start, {
+      id: EXTENSION_ID,
+      url: PANEL_URL,
+      tab: { id: 99 },
+      frameId: 0,
+    });
+    expect(sentSince(h, 0, "TIMELINE_START")).toHaveLength(1);
+  });
+
+  it("never relays a start or a stop from a content script", async () => {
+    // A content script carries the extension's id too, and runs in the
+    // page's process: a page must never start a recording.
+    for (const type of ["TIMELINE_START", "TIMELINE_STOP"]) {
+      await deliver(
+        { ...start, type },
+        {
+          id: EXTENSION_ID,
+          url: "https://example.com/",
+          tab: { id: TAB_ID },
+          frameId: 0,
+        },
+      );
+    }
+    expect(sentSince(h, 0, "TIMELINE_START")).toEqual([]);
+    expect(sentSince(h, 0, "TIMELINE_STOP")).toEqual([]);
+    expect(h.panelMessages).toEqual([]);
+  });
+
+  it("sends a start that names no tab nowhere", async () => {
+    // Never to whichever tab happens to be active.
+    const { replies } = await deliver(
+      { type: "TIMELINE_START", payload: { session: "s1" } },
+      { id: EXTENSION_ID, url: PANEL_URL },
+    );
+    expect(sentSince(h, 0, "TIMELINE_START")).toEqual([]);
+    expect(replies).toEqual([{ success: false, error: "No tab named" }]);
+  });
+
+  it("answers a failure when the top frame has no content script", async () => {
+    h.knobs.sendError = { message: "Receiving end does not exist." };
+    const { replies } = await deliver(start, {
+      id: EXTENSION_ID,
+      url: PANEL_URL,
+    });
+    expect(replies).toEqual([
+      { success: false, error: "Content script not available" },
+    ]);
+  });
+
+  it("forwards no recorded lines a second time", async () => {
+    // A content script's message reaches the panel directly; a relayed copy
+    // would show every line twice.
+    for (const type of ["TIMELINE_EVENTS", "TIMELINE_ENDED"]) {
+      await deliver(
+        { type, payload: { session: "s1", items: [] } },
+        {
+          id: EXTENSION_ID,
+          url: "https://example.com/",
+          tab: { id: TAB_ID },
+          frameId: 0,
+        },
+      );
+    }
+    expect(h.panelMessages).toEqual([]);
   });
 });

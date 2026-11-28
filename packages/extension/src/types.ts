@@ -5,6 +5,24 @@ import type {
 } from "@real-a11y-dev/core";
 
 import type { NativeUnavailableReason } from "./native/capability.js";
+import type { TimelineEndReason, TimelineItem } from "./timeline-recording.js";
+
+/**
+ * A run of the TIMELINE view's events, from the top frame's recorder
+ * (`timeline-recording.ts`), for the recording `session` names. Sent as each
+ * block settles. The panel holds the lines in memory only.
+ */
+export interface TimelineEventsPayload {
+  session: string;
+  items: TimelineItem[];
+}
+
+/** The top frame's recording ended on its own: the document it recorded
+ *  left (`navigated`) or was replaced under the script (`document`). */
+export interface TimelineEndedPayload {
+  session: string;
+  reason: TimelineEndReason;
+}
 
 /**
  * Where the page's focus went (Focus sync), for the native tree.
@@ -85,7 +103,9 @@ export type FrameToBackground =
   | {
       type: "LIVE_REGION";
       payload: { text: string; level: "polite" | "assertive"; role: string };
-    };
+    }
+  | { type: "TIMELINE_EVENTS"; payload: TimelineEventsPayload }
+  | { type: "TIMELINE_ENDED"; payload: TimelineEndedPayload };
 
 /**
  * Messages from background → side panel (merged tree).
@@ -136,6 +156,8 @@ export type ContentToPanel =
       tabId?: number;
       payload: { text: string; level: "polite" | "assertive"; role: string };
     }
+  | { type: "TIMELINE_EVENTS"; tabId?: number; payload: TimelineEventsPayload }
+  | { type: "TIMELINE_ENDED"; tabId?: number; payload: TimelineEndedPayload }
   | {
       // Background → panel push: the tab window `windowId`'s side panel
       // shows has changed. Every panel hears it and only that window's
@@ -259,8 +281,12 @@ export type PanelToContent =
        * than a selection. Previews draw the overlay only — they must not
        * scroll the host page or move real focus, since a pointer sweeping the
        * tree would otherwise scroll-jump and fire focus handlers once per row.
+       *
+       * `keepFocus: true` scrolls to the element and draws the overlay, and
+       * leaves focus where it is: a TIMELINE line's node, which moving focus
+       * to would record a focus move of the panel's own.
        */
-      payload: { nodeId: string; hover?: boolean };
+      payload: { nodeId: string; hover?: boolean; keepFocus?: boolean };
     })
   | (BoundTab & { type: "CLEAR_HIGHLIGHT" })
   | (BoundTab & { type: "SET_VIEW_MODE"; payload: TreeRequest })
@@ -319,7 +345,14 @@ export type PanelToContent =
        *  armed after it was asked sends. Absent, the frame's own stands. */
       payload: { enabled: boolean; tree?: TreeRequest };
     })
-  | (BoundTab & { type: "CLOSE_TAB" });
+  | (BoundTab & { type: "CLOSE_TAB" })
+  // The TIMELINE view's recording, in the top frame alone. Honoured only
+  // from the extension's own pages (`isExtensionPageSender`), in the service
+  // worker and again in the content script: a page script must never be able
+  // to start a recording or read one. `session` is the panel's, so the lines
+  // of an earlier recording never land in a later one.
+  | (BoundTab & { type: "TIMELINE_START"; payload: { session: string } })
+  | (BoundTab & { type: "TIMELINE_STOP"; payload: { session: string } });
 
 export type ExtensionMessage =
   ContentToPanel | PanelToContent | FrameToBackground;

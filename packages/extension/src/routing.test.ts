@@ -6,6 +6,7 @@ import {
   normalizeUrl,
   urlsMatch,
   planFrameAnnouncementResponse,
+  handledByOwnListener,
   planHighlight,
   planFrameHello,
   isExtensionPageSender,
@@ -647,6 +648,15 @@ describe("planHighlight", () => {
     // because it preserves the click/arrow-key behaviour.
     expect(planHighlight({})).toEqual({ scroll: true, moveFocus: true });
   });
+
+  it("scrolls to a TIMELINE line's node and leaves focus where it is", () => {
+    // Focusing the node would record a focus move the panel made, not the
+    // page.
+    expect(planHighlight({ keepFocus: true })).toEqual({
+      scroll: true,
+      moveFocus: false,
+    });
+  });
 });
 
 describe("shouldPanelAcceptMessage", () => {
@@ -966,5 +976,25 @@ describe("isUnreachablePageResponse", () => {
     // The reply is `undefined` when the MV3 worker died before answering.
     expect(isUnreachablePageResponse(undefined)).toBe(false);
     expect(isUnreachablePageResponse(null)).toBe(false);
+  });
+});
+
+describe("handledByOwnListener", () => {
+  it("leaves native mode's and the TIMELINE view's messages to their own listeners", () => {
+    for (const type of ["NATIVE_READ", "TIMELINE_START", "TIMELINE_EVENTS"]) {
+      expect(handledByOwnListener({ type })).toBe(true);
+    }
+  });
+
+  it("routes everything else", () => {
+    for (const message of [
+      { type: "LIVE_REGION" },
+      { type: "FRAME_TREE_DATA" },
+      { type: 3 },
+      null,
+      undefined,
+    ]) {
+      expect(handledByOwnListener(message)).toBe(false);
+    }
   });
 });
