@@ -106,6 +106,19 @@ describe("toBeValidA11yTree", () => {
     expect(mount(`<button></button>`)).not.toBeValidA11yTree();
   });
 
+  it("reports a role=heading with no aria-level", () => {
+    // heading-order compares it at level 2; this is where the missing
+    // attribute itself is reported.
+    expect(
+      mount(`<main><h1>t</h1><div role="heading">x</div></main>`),
+    ).not.toBeValidA11yTree();
+    expect(
+      mount(
+        `<main><h1>t</h1><div role="heading" aria-level="2">x</div></main>`,
+      ),
+    ).toBeValidA11yTree();
+  });
+
   it("raises nothing for an invalid field", () => {
     const root = mount(
       `<main>

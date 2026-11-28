@@ -342,6 +342,71 @@ describe("collectFindings — heading-order", () => {
   });
 });
 
+describe("collectFindings — heading-order, headings without a usable level", () => {
+  // The DOM producer emits no `level` for a `role="heading"` whose
+  // `aria-level` is missing, empty or out of range. AT still reaches the
+  // heading (Chromium computes level 2), so the rule compares it at 2.
+  for (const attr of ["", ` aria-level=""`, ` aria-level="12"`]) {
+    it(`does not report a skip from h1 to h3 across an unlevelled heading${attr}`, () => {
+      const root = mount(
+        `<main><h1>t</h1><div role="heading"${attr}>x</div><h3>three</h3></main>`,
+      );
+      expect(collectFindings(root, ["heading-order"])).toEqual([]);
+    });
+  }
+
+  it("reports a skip right after an unlevelled heading as from h2", () => {
+    const root = mount(
+      `<main><h1>t</h1><div role="heading">x</div><h4>four</h4></main>`,
+    );
+    expect(
+      collectFindings(root, ["heading-order"]).map((f) => f.message),
+    ).toEqual([
+      'Heading level skipped: "four" is h4 but the previous heading was h2.',
+    ]);
+  });
+
+  it("does not count an unlevelled heading as an h1", () => {
+    const root = mount(`<main><div role="heading">x</div><h2>two</h2></main>`);
+    expect(
+      collectFindings(root, ["heading-order"]).map((f) => f.message),
+    ).toEqual([
+      "Missing <h1>: every document should have exactly one top-level heading.",
+    ]);
+  });
+
+  it("reads a non-numeric aria-level as 1, as Chromium does", () => {
+    const root = mount(
+      `<main><h1>t</h1><div role="heading" aria-level="abc">x</div></main>`,
+    );
+    expect(
+      collectFindings(root, ["heading-order"]).map((f) => f.message),
+    ).toEqual(['Expected exactly one <h1>, found 2: "t", "x"']);
+  });
+
+  it("lets aria-level on an h2 override the tag", () => {
+    const root = mount(
+      `<main><h1>t</h1><h2 aria-level="3">three</h2><h4>four</h4></main>`,
+    );
+    expect(
+      collectFindings(root, ["heading-order"]).map((f) => f.message),
+    ).toEqual([
+      'Heading level skipped: "three" is h3 but the previous heading was h1.',
+    ]);
+  });
+
+  it("still gives Missing <h1> for an aria-hidden h1", () => {
+    const root = mount(
+      `<main><h1 aria-hidden="true">t</h1><h2>two</h2></main>`,
+    );
+    expect(
+      collectFindings(root, ["heading-order"]).map((f) => f.message),
+    ).toEqual([
+      "Missing <h1>: every document should have exactly one top-level heading.",
+    ]);
+  });
+});
+
 describe("collectFindings — dialog-labeled", () => {
   it("flags an unlabeled dialog", () => {
     const root = mount(`<div role="dialog"></div>`);

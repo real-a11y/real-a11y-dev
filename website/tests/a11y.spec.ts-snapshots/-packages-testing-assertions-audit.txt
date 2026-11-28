@@ -185,6 +185,16 @@ main
       text "followed directly by"
       code "h4"
       text ")"
+  paragraph
+    text "A"
+    code "role="heading""
+    text "with a missing, empty or out-of-range"
+    code "aria-level"
+    text "is compared as level 2, the level browsers expose. A non-numeric value such as"
+    code "abc"
+    text "reads as level 1, as in Chromium. The missing attribute itself is reported by"
+    code "toBeValidA11yTree"
+    text ", not by this assertion."
   button "Copy Code"
   code "assertHeadingOrder(document.body);"
   heading "assertDialogsLabeled(root)" (level 2)
