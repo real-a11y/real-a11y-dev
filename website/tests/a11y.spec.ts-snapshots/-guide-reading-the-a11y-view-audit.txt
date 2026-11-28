@@ -235,8 +235,8 @@ main
         cell "aria-valuemin, aria-valuemax"
           code "aria-valuemin"
           code "aria-valuemax"
-        cell "native"
-          code "native"
+        cell "both"
+          code "both"
       row
         cell "captions"
           code "captions"
