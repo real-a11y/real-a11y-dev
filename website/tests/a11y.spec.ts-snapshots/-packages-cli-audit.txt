@@ -176,7 +176,12 @@ main
     code "tabs"
     text ", which runs the in-page walk because tab"
     emphasis "order"
-    text "is the one thing that tree can't produce. See the"
+    text "is something that tree can't produce."
+    code "timeline"
+    text "is the other in-page read: on a"
+    link "--session"
+      code "--session"
+    text ", it records where focus went and what live regions announced between two commands, in the order the page made them. See the"
     link "command reference"
     text "for the full set."
   paragraph

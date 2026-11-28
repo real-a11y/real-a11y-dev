@@ -17,6 +17,7 @@ h1 Commands & flags
     h3 diff <base.json> <pr.json>
     h3 show-report [dir]
     h3 login <url> --save <file>
+    h3 timeline <subcommand>
     h3 session <subcommand>
   h2 Flags
     h3 All flags at a glance
