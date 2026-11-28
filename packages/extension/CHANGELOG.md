@@ -21,6 +21,10 @@
 
 ### Patch Changes
 
+- **Internal refactor, no behaviour change.** The read's types and the
+  transport-free enrichment helpers move out of `native-core.ts` into
+  `native-core-types.ts` and `native-ax-enrichment.ts`
+  ([#750](https://github.com/real-a11y/real-a11y-dev/pull/750)).
 - **Internal refactor, no behaviour change.** `dispatchNative` in `native-core.ts`
   is split into smaller helpers
   ([#734](https://github.com/real-a11y/real-a11y-dev/pull/734)).

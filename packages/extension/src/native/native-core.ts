@@ -49,19 +49,16 @@ import {
   isNativeIframeRole,
   NATIVE_MAX_FRAME_DEPTH,
   nativeFrameSuffix,
-  nativeNodeId,
   splitNativeNodeId,
   withNativeIdSuffix,
   type NativeFrameRef,
   indexNativeAX,
-  nativeAXFacets,
   normalizeNativeAX,
   REDACTED_VALUE,
   serializeNativeAX,
   valueRegions,
   withholdBrowserText,
   withholdSensitiveFieldNames,
-  type A11yInfo,
   type FieldHostOf,
   type FieldStandIn,
   type NativeAXNode,
@@ -70,6 +67,20 @@ import {
 
 import { isConnectionLost } from "./connection-lost.js";
 import { fieldsWithin, fieldWalks, type FieldInternals } from "./dom-fields.js";
+import {
+  axFacets,
+  controlledRegion,
+  nativeControls,
+  nativeIdForBackendNode,
+  rootIdOf,
+} from "./native-ax-enrichment.js";
+import type {
+  CdpTransport,
+  EnrichedNativeNode,
+  FrameSession,
+  NativeTreeResult,
+  ReadNativeTreeOptions,
+} from "./native-core-types.js";
 import {
   fieldFacets,
   fieldValueWithheld,
@@ -103,6 +114,24 @@ import {
   type PageKeysRead,
   withoutFragment,
 } from "./page-keys.js";
+
+// The transport-free enrichment passes live in native-ax-enrichment.ts and
+// the read's types in native-core-types.ts; they stay importable from here,
+// where every caller already finds them.
+export {
+  controlledRegion,
+  nativeControls,
+  nativeIdForBackendNode,
+  rootIdOf,
+  SYNTHETIC_ROOT_ID,
+} from "./native-ax-enrichment.js";
+export type {
+  CdpTransport,
+  EnrichedNativeNode,
+  FrameSession,
+  NativeTreeResult,
+  ReadNativeTreeOptions,
+} from "./native-core-types.js";
 
 // Field values and their withholding live in native-field-values.ts; they
 // stay importable from here, where every caller already finds them.
@@ -139,104 +168,6 @@ export {
  */
 export const NATIVE_REDACTED_VALUE = REDACTED_VALUE;
 
-/** The native node id for a DOM-backed node of this document:
- *  `ax-dom-<backendNodeId>`. The inverse of {@link backendNodeIdFrom}, and
- *  core's {@link nativeNodeId} with no frame: build ids through these, never
- *  by hand, so the format lives in one place. */
-export function nativeIdForBackendNode(backendNodeId: number): string {
-  return nativeNodeId(backendNodeId);
-}
-
-/** An AX node's states and properties (core's `nativeAXFacets`, one copy for
- *  every native transport), plus the accessible description: Chromium's own
- *  `aria-describedby`/`aria-description` resolution, a top-level AX field
- *  alongside `name`/`value`, not one of `properties`. Field VALUES are never
- *  read here (R1). A description is page-authored help/error text, not user
- *  input, the same distinction `browser`'s own producer draws. */
-function axFacets(
-  raw: RawAXNode,
-): Pick<A11yInfo, "states" | "properties" | "description"> {
-  const description = raw.description?.value
-    ? cleanAXText(String(raw.description.value))
-    : "";
-  return { ...nativeAXFacets(raw), description };
-}
-
-/**
- * The native ids of the nodes this one controls — Chromium's own resolution
- * of `aria-controls`, which arrives as an `idrefList` property carrying its
- * targets' `backendDOMNodeId`s rather than a scalar (so `axFacets` skips it).
- * Mapped through `nativeIdForBackendNode`, the one encoder of the id format,
- * and kept only when the target survived normalization: an unnamed wrapper
- * the normalizer dropped has no row to jump to. Empty for none.
- *
- * Why here and not in core's shared vocabulary (`core/src/native/`): this is
- * an enrichment pass over raw `properties`, like `axFacets` beside it, which
- * `normalizeNativeAX` never reads; the structural walk stays shared, and the
- * only consumer of the relation is this panel's jump chips — the CLI and MCP
- * render no chips. If one starts to, this moves to core with `axFacets`.
- *
- * Why only `controls`: `owns` is mostly structure — Chromium reparents an
- * owned node under its owner in the tree it sends, though not under an
- * `<input>`, which keeps its owned listbox a sibling. The sensitivity rule
- * follows `owns` too for that reason (core's `fieldRelationRoots`); a chip
- * for it is not parity with the shared panel. `describedby` is already
- * the node's `description`, resolved to text. `flowto` and `details` have no
- * chip in the shared panel to match, so they'd be a new feature rather than parity;
- * they're left for a ticket of their own.
- */
-export function nativeControls(
-  raw: RawAXNode,
-  keptIds: ReadonlySet<string>,
-): string[] {
-  const prop = raw.properties?.find((p) => p.name === "controls");
-  const ids: string[] = [];
-  for (const related of prop?.value?.relatedNodes ?? []) {
-    if (typeof related.backendDOMNodeId !== "number") continue;
-    const id = nativeIdForBackendNode(related.backendDOMNodeId);
-    if (keptIds.has(id) && !ids.includes(id)) ids.push(id);
-  }
-  return ids;
-}
-
-/**
- * The kept nodes that stand for `roots`, for withholding: each root the tree
- * kept, and for one the normalizer dropped (an unnamed wrapper around a
- * listbox), its nearest kept descendants. The jump chips' `nativeControls`
- * keeps only targets that have a row; this follows a dropped one down,
- * because what sits inside it is reached all the same. Which roots count is
- * core's `sensitiveChoiceRoots`, the rule the browser package withholds by
- * too: what a sensitive field, or a combobox around one, controls, owns or
- * holds.
- *
- * Exported for its tests.
- */
-export function controlledRegion(
-  roots: readonly RawAXNode[],
-  index: NativeAXIndex<RawAXNode>,
-  keptIds: ReadonlySet<string>,
-): string[] {
-  const stack = [...roots];
-  const byNodeId = index.byId;
-  const out: string[] = [];
-  const seen = new Set<RawAXNode>();
-  while (stack.length > 0) {
-    const node = stack.pop()!;
-    if (seen.has(node)) continue;
-    seen.add(node);
-    const id = nativeIdOf(node);
-    if (keptIds.has(id)) {
-      out.push(id);
-      continue;
-    }
-    for (const childId of node.childIds ?? []) {
-      const child = byNodeId.get(childId);
-      if (child) stack.push(child);
-    }
-  }
-  return out;
-}
-
 /**
  * Roles whose backing DOM element could be an `<input>`/`<textarea>`/
  * `<select>` — the read-side counterpart of DOM producer's own tag check in
@@ -269,211 +200,6 @@ const STATE_ONLY_ROLES = new Set([
   "menuitemcheckbox",
   "menuitemradio",
 ]);
-
-/** A normalized native node with the states/properties/description
- *  enrichment attached, plus the field facets `fieldFacets` resolves. */
-export type EnrichedNativeNode = NativeAXNode &
-  Pick<A11yInfo, "states" | "properties" | "description"> & {
-    /**
-     * What a screen reader announces for this node (ADR-0001) — Chromium's
-     * own AX value (a `<select>`'s selected option LABEL, an editor's text),
-     * or a range widget's `aria-valuetext` — whitespace-collapsed and capped
-     * at 240 characters. A sensitive field that holds anything reads
-     * {@link NATIVE_REDACTED_VALUE}. Absent when there is none, and whenever
-     * `pageReadValue` could not classify the element.
-     */
-    value?: string;
-    /**
-     * Set when `value` is the redaction marker — a sensitive field that
-     * holds something — so a consumer never has to compare `value` against
-     * the marker text, which an editor could hold as ordinary content.
-     */
-    redacted?: boolean;
-    /**
-     * The raw live DOM value of a non-sensitive `<input>`/`<textarea>`/
-     * `<select>` (`"es"` where `value` is `"Spain"`), uncollapsed and
-     * uncapped — what a retype starts from, so an unedited submit writes
-     * back exactly what was there. Never shown in the tree, and never set
-     * for a sensitive field.
-     */
-    rawValue?: string;
-    /** The field's static placeholder hint (`<input>`/`<textarea>` only) —
-     *  page-authored text, not user input, so unlike `value` it is never
-     *  redacted. Present only for a value-bearing role that actually has
-     *  one set. */
-    placeholder?: string;
-    /** Native ids of the nodes this one controls (`aria-controls`, as
-     *  Chromium resolves it) that are themselves in the tree — see
-     *  {@link nativeControls}. Absent when there are none. */
-    controls?: string[];
-    /**
-     * Whether this field's value (and which of its options is chosen) must
-     * be withheld from anything shown: true for a sensitive field, for one
-     * inside a sensitive field or around a withheld one, and for one the
-     * in-page read could not classify. False only for a field classified as
-     * not sensitive, with no withheld field in it. Absent on a node that was
-     * never read as a field, which a consumer treats as withheld too — see
-     * {@link fieldValueWithheld}.
-     */
-    valueWithheld?: boolean;
-    /** Its element's number in its document's walk (`page-keys.ts`), which
-     *  the content script in that document's frame reports focus by. Only
-     *  when the read numbered that document. */
-    pageKey?: number;
-    /** The frame whose document numbered `pageKey`, as the extension knows
-     *  it, when that isn't the top frame (0). */
-    pageFrame?: number;
-    /** On an `Iframe` row: the frame it shows, when the read numbered that
-     *  frame's document. Focus inside the frame on an element with no row
-     *  above it in the frame selects this row. */
-    embedsPageFrame?: number;
-  };
-
-/** The single capability the native path needs from any CDP transport. */
-export interface CdpTransport {
-  send<T = unknown>(method: string, params?: object): Promise<T>;
-  /**
-   * The sessions of this document's out-of-process frames — a cross-origin
-   * `<iframe>` runs in another renderer, which this transport's own session
-   * can't read or act in. Frames are announced asynchronously, so `until`
-   * says when the caller has the ones it expects: the call waits, briefly,
-   * for that before answering. `undefined` — at once, with no wait — when
-   * this document's frames can't be announced at all (Chromium refused the
-   * auto-attach, or the frame went away): no call will ever announce one,
-   * so a caller waiting for more must stop. Optional: a transport that
-   * can't reach them (a test fake) leaves those frames unread, and their
-   * rows show as embedded. `waitMs` shortens the wait for a caller that
-   * expects little.
-   */
-  frameSessions?(
-    until?: (frameIds: readonly string[]) => boolean,
-    waitMs?: number,
-  ): Promise<FrameSession[] | undefined>;
-}
-
-/**
- * An out-of-process frame, and a transport into its own session. Its
- * `frameId` is also its target id, stable while its document lives, unlike
- * the session, which lasts only as long as one attach. Its `documentId` is
- * the document the frame shows now (its loader id): unlike `frameId`, it
- * changes when the frame navigates — to another site, into another process,
- * where the backend ids read before name other elements.
- */
-export interface FrameSession extends NativeFrameRef {
-  /** The child session's own id, which its events arrive under, where the
-   *  transport has one. */
-  sessionId?: string;
-  transport: CdpTransport;
-}
-
-export interface NativeTreeResult {
-  /** Normalized nodes (shared core vocabulary) plus states/properties, document order. */
-  nodes: EnrichedNativeNode[];
-  /** Indented `role "name"` serialization, the same grammar as `serializeTree`'s. */
-  serialized: string;
-  /** Raw AX node count before normalization — a dogfood size signal. */
-  rawCount: number;
-  /** Node count Chromium actually produced, after normalization but before
-   *  `rootIdOf`'s synthetic root (if any) is pushed onto `nodes` — the other
-   *  half of the `rawCount`/`keptCount` dogfood size signal. `nodes.length`
-   *  itself is NOT this number on a multi-root page: it includes the
-   *  synthesized wrapper, which Chromium never produced. */
-  keptCount: number;
-  /** The id of the tree's single root — see {@link rootIdOf}. Empty string
-   *  for an empty tree. */
-  rootId: string;
-  /** The top frame's document (its loader id) as the read began: a new one
-   *  on every navigation, a reload included, unlike the URL. Absent when
-   *  Chromium didn't say. */
-  documentId?: string;
-  /** Rows carry `pageKey`s: the read numbered a document, the top one or a
-   *  frame's, and the content script's numbering of it agreed. See
-   *  {@link ReadNativeTreeOptions.pageKeys}. */
-  pageKeyed?: boolean;
-}
-
-export interface ReadNativeTreeOptions {
-  /**
-   * Have the content script in every frame number its own document for this
-   * read (`NATIVE_PAGE_KEYS`), and answer with what the frames answered.
-   * The read says when its own walks are in, so that a frame still walking
-   * by then, one busy in a long task, holds it up only a moment longer, and
-   * which frames it put in the tree, to be asked first. Left out, the read
-   * numbers nothing.
-   */
-  pageKeys?: (read: PageKeysRead) => Promise<FrameAnswers>;
-}
-
-/**
- * Find or synthesize the tree's single root, and reconcile `depth` to match.
- *
- * Mirrors `@real-a11y-dev/browser`'s `native-tree.ts` exactly (same
- * deliberate-mirror reason every other piece of this file has: that package
- * carries Playwright). `normalizeNativeAX` drops the `RootWebArea` and
- * generic/ignored html/body wrappers, so any ordinary page whose body has
- * more than one kept child — a plain `<header>`/`<main>`/`<footer>` layout,
- * not just a cross-frame payload — yields multiple parent-less nodes. The
- * DOM producer always has exactly one root; a consumer that wants to render
- * this as one tree (rather than the dogfood panel's flat depth-indented
- * list, which never needed a root at all) needs the same guarantee, so a
- * synthetic `document` root adopts every parent-less node instead of
- * silently truncating every root but the first.
- *
- * Mutates `nodes` in place: unshifts the synthetic root to the front (if one
- * was needed) and rewrites every node's `depth` to be its real distance from
- * the returned root id, since wrapping shifts the former roots down a level.
- * Front, not back: every existing consumer of this array — the dogfood
- * panel's flat depth-indented list (`DogfoodPanel.tsx`) today, any preorder-
- * walking consumer tomorrow — renders/walks it in array order with no
- * separate root lookup, so a root appended after its own descendants would
- * render as an indented forest followed by its own root.
- */
-/**
- * The synthetic root's id — exported so a consumer that must NOT treat it as
- * a real AX node (the dogfood panel's flat list, which has no rootId concept
- * to render relative to and would otherwise show a page-produced-nothing-
- * like-this "document" row on every multi-root page) can filter it out by
- * identity rather than duplicating this string as a second magic literal.
- */
-export const SYNTHETIC_ROOT_ID = "ax-root";
-
-export function rootIdOf(nodes: EnrichedNativeNode[]): string {
-  const byId = new Map(nodes.map((n) => [n.id, n]));
-  const hasParent = new Set<string>();
-  for (const n of nodes) for (const c of n.childIds) hasParent.add(c);
-  const roots = nodes.filter((n) => !hasParent.has(n.id));
-
-  let rootId: string;
-  if (roots.length === 1) {
-    rootId = roots[0]!.id;
-  } else if (roots.length > 1) {
-    rootId = SYNTHETIC_ROOT_ID;
-    const synthetic: EnrichedNativeNode = {
-      id: rootId,
-      role: "document",
-      name: "",
-      depth: 0,
-      backendDOMNodeId: null,
-      childIds: roots.map((r) => r.id),
-      states: {},
-      properties: {},
-      description: "",
-    };
-    nodes.unshift(synthetic);
-    byId.set(rootId, synthetic);
-  } else {
-    return "";
-  }
-
-  const setDepth = (id: string, depth: number): void => {
-    const node = byId.get(id);
-    if (!node) return;
-    node.depth = depth;
-    for (const childId of node.childIds) setDepth(childId, depth + 1);
-  };
-  setDepth(rootId, 0);
-  return rootId;
-}
 
 /** Chromium's AX value for a node, when it reports a usable one. A `0` is a
  *  value; an empty or whitespace-only string is none. */
