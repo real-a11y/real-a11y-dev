@@ -10,22 +10,17 @@
  * status line says when recording starts and stops.
  */
 
-import { useEffect, useRef } from "preact/hooks";
+import { useLayoutEffect, useRef } from "preact/hooks";
 
 import { NativeViewToggle, type NativeView } from "./NativeTabView.js";
 import { isRecording, timelineStatus } from "./timeline-state.js";
 import { useTimeline, type Timeline } from "./use-timeline.js";
 
-/** Where focus was when the view came up, if the switch to it left focus
- *  nowhere: on the panel's body, or on the tree's toggle, which hides with
- *  the tree. */
-function focusLost(): boolean {
-  const active = document.activeElement;
-  return (
-    !active ||
-    active === document.body ||
-    active.closest(".sn-view--hidden") !== null
-  );
+/** Is focus on the tree's toolbar, which has just hidden with the tree:
+ *  the TIMELINE toggle the user pressed there. Not on the panel's body, as
+ *  after the view comes back when a page connects: focus isn't moved then. */
+function focusHidden(): boolean {
+  return document.activeElement?.closest(".sn-view--hidden") != null;
 }
 
 type TimelineViewProps = Timeline & {
@@ -47,8 +42,9 @@ function TimelineControls({
   const toolbar = useRef<HTMLDivElement>(null);
   // Chosen from the tree's toolbar, whose toggle hides with the tree: focus
   // goes on to this view's own.
-  useEffect(() => {
-    if (!focusLost()) return;
+  // A layout effect: before Chrome takes focus off the hidden toggle.
+  useLayoutEffect(() => {
+    if (!focusHidden()) return;
     toolbar.current
       ?.querySelector<HTMLElement>('.sn-toggle-btn[aria-pressed="true"]')
       ?.focus();

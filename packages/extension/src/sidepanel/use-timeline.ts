@@ -181,7 +181,8 @@ function useRecordingPort(stateRef: { current: TimelineState }) {
 /** How many times in a row a recording's port is opened again after it
  *  drops within `PORT_HELD_MS` of opening. */
 const MAX_PORT_HOLDS = 5;
-const PORT_HELD_MS = 1000;
+// A worker idles out after about 30 seconds: a drop sooner counts as quick.
+const PORT_HELD_MS = 10_000;
 
 /** Record and Stop, and the stops the panel makes itself. */
 function useRecordStop(

@@ -233,11 +233,18 @@ export function recordLiveRegions(
   // settles what the page did since, and the new one starts from what the
   // regions say then, as their baseline, so nothing is said twice.
   const renew = () => {
-    renewing = false;
     if (!current) return;
-    stopQuietly(current);
+    // Counted afresh first: the old recorder's stop settles a last run,
+    // which must not ask for another renewal.
     heard = 0;
-    current = start();
+    const next = start();
+    if (next) {
+      stopQuietly(current);
+      current = next;
+    }
+    // A recorder that can't start keeps the old one: a rebind of the
+    // document starts the line again (`observeLiveRegions`).
+    renewing = false;
   };
   const start = (): TimelineRecording | null => {
     try {

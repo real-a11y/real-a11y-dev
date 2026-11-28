@@ -404,4 +404,19 @@ describe("the TIMELINE view", () => {
     await press("Copy");
     expect(clipboard).toEqual([serializeTimeline([deleteDraft, nowhere])]);
   });
+
+  it("moves no focus when it comes back as a page connects", async () => {
+    await mountTimeline();
+    await recordTwoLines();
+    (document.activeElement as HTMLElement | null)?.blur();
+    act(() => {
+      chromeMock.emit({ type: "PAGE_NAVIGATED", tabId: TAB_ID });
+    });
+    await flush();
+    act(() => {
+      chromeMock.emit(treeData());
+    });
+    await flush();
+    expect(document.activeElement).toBe(document.body);
+  });
 });
