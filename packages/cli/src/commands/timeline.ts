@@ -262,7 +262,12 @@ async function stopOnSession(
   // Stopped, a timeline returns the same result again, so the recording is
   // let go only once its report is written: a write that fails (an
   // unwritable --output) leaves it for a retried `stop`.
-  const result = await held.timeline.stop();
+  const result = await held.timeline.stop().catch((err: unknown) => {
+    // A stop that failed keeps failing (the timeline holds its result), so
+    // the recording is let go: holding it would block every later `start`.
+    recordings.delete(session);
+    throw err;
+  });
   const redact = configRedact(flags);
   const lines = sanitizeText(serializeTimeline(result.events, { redact }));
   const navigated = result.end === "navigated";

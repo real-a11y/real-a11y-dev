@@ -352,6 +352,25 @@ describe("runTimelineOnSession", () => {
     expect(pretty.text()).toContain("https://example.test/[REDACTED]/next");
   });
 
+  it("lets a recording go when its stop fails, so the session can record again", async () => {
+    const { session } = fakeSession();
+    await runTimelineOnSession(session, ["start", URL], flags);
+    // The session's timeline rejects its stop, as a page torn down by a
+    // crash would make it.
+    const [timeline] = await Promise.all(
+      vi.mocked(session.startTimeline).mock.results.map((r) => r.value),
+    );
+    vi.spyOn(timeline as PageTimeline, "stop").mockRejectedValue(
+      new Error("Target crashed"),
+    );
+    await expect(
+      runTimelineOnSession(session, ["stop"], flags),
+    ).rejects.toThrow(/Target crashed/);
+    await expect(
+      runTimelineOnSession(session, ["start", URL], flags),
+    ).resolves.toBe(0);
+  });
+
   it("turns the page's refusal of --root into a CLI error naming the flag", async () => {
     const { session } = fakeSession();
     vi.mocked(session.startTimeline).mockRejectedValueOnce(
