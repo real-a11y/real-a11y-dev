@@ -310,6 +310,48 @@ describe("runTimelineOnSession", () => {
     expect(states).toEqual({ "x\\u{9B}key": "y\\u{202E}z" });
   });
 
+  it("keeps the recording when its report can't be written, for a retry", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "real-a11y-timeline-unit-"));
+    // A file where a directory should be: the target passes the up-front
+    // check, then the write itself fails.
+    writeFileSync(join(dir, "afile"), "");
+    const { session } = fakeSession();
+    await runTimelineOnSession(session, ["start", URL], flags);
+    await expect(
+      runTimelineOnSession(session, ["stop"], {
+        ...flags,
+        output: join(dir, "afile", "out.txt"),
+      }),
+    ).rejects.toThrow();
+    const out = captureStdout();
+    try {
+      await runTimelineOnSession(session, ["stop"], flags);
+    } finally {
+      out.restore();
+    }
+    expect(out.text()).toContain('focus     button "Draft 12"');
+  });
+
+  it("applies the config's redact patterns to the landed URL too", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "real-a11y-timeline-unit-"));
+    const config = join(dir, "a11y.config.json");
+    writeFileSync(config, JSON.stringify({ redact: ["acct-\\d+"] }));
+    const { session } = fakeSession({
+      end: "navigated",
+      url: "https://example.test/acct-4242/next",
+    });
+    const withConfig = { session: "s", quiet: true, config };
+    await runTimelineOnSession(session, ["start", URL], withConfig);
+    const pretty = captureStdout();
+    try {
+      await runTimelineOnSession(session, ["stop"], withConfig);
+    } finally {
+      pretty.restore();
+    }
+    expect(pretty.text()).not.toContain("4242");
+    expect(pretty.text()).toContain("https://example.test/[REDACTED]/next");
+  });
+
   it("turns the page's refusal of --root into a CLI error naming the flag", async () => {
     const { session } = fakeSession();
     vi.mocked(session.startTimeline).mockRejectedValueOnce(

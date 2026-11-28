@@ -748,7 +748,9 @@ has no announcement event, and can't see where a focus move fell among the
 page's own changes. So names come from this project's accessible-name
 computation, and can differ from [`tree`](#tree-url)'s for the same element.
 The recorder is injected into the page only while a timeline records. The
-output carries no producer header.
+output carries no producer header. It records the page's own document: focus
+moves and announcements inside an `<iframe>` aren't in it, nor are changes
+inside a shadow root as they happen.
 
 The CLI's own [`click`](#click-url-role-role) dispatches its events without
 moving focus to the element, so a timeline around it starts with what the
@@ -778,7 +780,9 @@ and exits `2`, since strict mode can only be applied as the page records; the
 recording is kept, for a `stop` without the flag. The config's
 [`redact`](/packages/cli/configuration#redact) patterns apply to the lines and
 to the JSON events alike: to names, descriptions, state values and announced
-text, never to a role.
+text, never to a role, and to the landed URL in the navigation note and the
+JSON `url`. A `stop` whose report can't be written (an unwritable `--output`)
+keeps the recording for a retry.
 
 One recording per session: a second `start` before `stop` exits `2`, and so do
 `stop` with nothing recording, a `--root` that matches nothing, and either

@@ -259,13 +259,19 @@ async function stopOnSession(
       "pass --redact-input to timeline start as well, or stop it without --redact-input",
     );
   }
-  recordings.delete(session);
+  // Stopped, a timeline returns the same result again, so the recording is
+  // let go only once its report is written: a write that fails (an
+  // unwritable --output) leaves it for a retried `stop`.
   const result = await held.timeline.stop();
   const redact = configRedact(flags);
   const lines = sanitizeText(serializeTimeline(result.events, { redact }));
   const navigated = result.end === "navigated";
-  const url = redactUrl(
-    (navigated ? result.url : undefined) ?? session.currentUrl() ?? "",
+  // The config's `redact` patterns cover URLs as well as text.
+  const url = redactString(
+    redactUrl(
+      (navigated ? result.url : undefined) ?? session.currentUrl() ?? "",
+    ),
+    redact,
   );
   const notes = [
     ...(navigated ? [navigationNote(url)] : []),
@@ -292,5 +298,6 @@ async function stopOnSession(
   } else {
     writeReport(outputOf(flags), [lines, ...notes].join("\n") + "\n");
   }
+  recordings.delete(session);
   return EXIT.OK;
 }

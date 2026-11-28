@@ -9,3 +9,4 @@ New `real-a11y timeline start <url> --session <name>` / `timeline stop --session
 - `--redact-input` on `start` withholds a focused name or an announcement that would carry text typed into a rich-text editor. A `stop --redact-input` of a recording started without it prints nothing and exits 2, keeping the recording for a `stop` without the flag. `a11y.config.json` `redact` patterns apply to the lines and to the JSON events alike.
 - `stop` on a session that isn't running exits 2 without launching a browser, and a config's `defaults.session` works for both subcommands.
 - `tabs --help` and the `defaults.root` warning now name `timeline` beside `tabs` as the commands `--root` scopes.
+- Fixed for every `--session` command: the daemon decoded each socket read on its own, so a multibyte character split across two reads printed as U+FFFD. It now decodes the stream as a whole.

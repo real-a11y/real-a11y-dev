@@ -121,10 +121,24 @@ describe("real-a11y timeline", () => {
       (await runCli(["timeline", "start", url, ...base, "--root", "main"]))
         .code,
     ).toBe(0);
+    // A real focus move first, so there is a known line from before the
+    // navigation to look for afterwards.
+    const focus = await runCli([
+      "focus",
+      url,
+      ...base,
+      "--role",
+      "link",
+      "--name",
+      "Next page",
+    ]);
+    expect(focus.code).toBe(0);
     expect((await click("link", "Next page")).code).toBe(0);
     const stop = await runCli(["timeline", "stop", ...base]);
     expect(stop.code).toBe(0);
     const lines = stop.stdout.trimEnd().split("\n");
+    // Streamed out before the document went away, and kept.
+    expect(lines).toContain('focus     link "Next page"');
     expect(lines.at(-1)).toMatch(
       /^\(a navigation ended the recording: the page moved to file:\/\/.*next\.html, and the lines above came before it\)$/,
     );
