@@ -1768,6 +1768,33 @@ describe("recordTimeline interactions", () => {
     `);
   });
 
+  it("prints no Space or Enter typed where it can't see the field: a closed shadow root, or a scripted textbox", async () => {
+    const main = await page(
+      `<x-login id="host"></x-login><div role="textbox" tabindex="0" aria-label="Draft" id="draft"></div>`,
+    );
+    const shadow = byId("host").attachShadow({ mode: "closed" });
+    shadow.innerHTML = `<label>Passphrase <input type="password" id="pw"></label><textarea></textarea>`;
+    await tick();
+    const timeline = recordTimeline(main, {
+      interactions: true,
+      focus: false,
+    });
+    const inside = (key: string) =>
+      shadow
+        .getElementById("pw")!
+        .dispatchEvent(
+          new KeyboardEvent("keydown", { key, bubbles: true, composed: true }),
+        );
+    inside(" ");
+    inside("Enter");
+    byId("draft").focus();
+    press(" ");
+    press("Enter");
+    press("Escape");
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`press     Escape`);
+  });
+
   it("names a field afresh once something else came between two inputs in one block", async () => {
     const main = await page(
       `<label>Code <input id="c"></label><button id="b">Check</button>`,

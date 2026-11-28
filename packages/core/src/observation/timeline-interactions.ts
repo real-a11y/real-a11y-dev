@@ -7,9 +7,11 @@
 import { buildA11yTree } from "../extraction/a11y-extractor.js";
 import {
   safeDocumentElement,
+  safeGetAttribute,
   safeNodeType,
   safeOwnerDocument,
   safeParentElement,
+  safeShadowRoot,
   safeTagName,
 } from "../extraction/clobber-safe.js";
 import { extractDomTree, getElementRefs } from "../extraction/dom-extractor.js";
@@ -218,7 +220,32 @@ export function typesText(element: Element): boolean {
 /** Does `Enter` in `element` type a line break: a `<textarea>` or an
  *  editor, but not a one-line field, where it submits? */
 function breaksLines(element: Element): boolean {
-  return safeTagName(element) === "textarea" || holdsTypedText(element);
+  return (
+    safeTagName(element) === "textarea" ||
+    holdsTypedText(element) ||
+    unseenField(element)
+  );
+}
+
+/** Roles of an element a script may type text into without
+ *  `contenteditable`, as a custom editor does. */
+const TEXT_ROLES: ReadonlySet<string> = new Set([
+  "textbox",
+  "searchbox",
+  "combobox",
+]);
+
+/**
+ * Could `element` be taking typed text the recorder can't see? A custom
+ * editor with a text role, or a custom element with no open shadow root:
+ * a keydown inside a closed one reaches the document aimed at its host, so
+ * the field it was typed into, password or not, is out of sight. Counted
+ * as a field, so its `Space` and `Enter` print nothing (ADR-0001).
+ */
+function unseenField(element: Element): boolean {
+  const role = safeGetAttribute(element, "role")?.trim().toLowerCase();
+  if (role && TEXT_ROLES.has(role)) return true;
+  return safeTagName(element).includes("-") && !safeShadowRoot(element);
 }
 
 /**
@@ -243,11 +270,32 @@ function shortcut(event: KeyboardEvent): boolean {
   return !event.altKey && !event.getModifierState?.("AltGraph");
 }
 
+/** The name a press line gives `key`, or null for one that types, or
+ *  could type, a character ({@link pressOf}). */
+function keyName(
+  key: string,
+  event: KeyboardEvent,
+  target: Element | null,
+): string | null {
+  // Held as a shortcut, a key types nothing wherever it is pressed.
+  if (shortcut(event)) {
+    if (NAMED_KEY.test(key)) return key;
+    if (key === " ") return "Space";
+    return [...key].length === 1 ? key.toUpperCase() : null;
+  }
+  if (key === "Enter") return target && breaksLines(target) ? null : key;
+  if (NAMED_KEY.test(key)) return key;
+  if (key !== " ") return null;
+  return target && (typesText(target) || unseenField(target)) ? null : "Space";
+}
+
 /**
  * A press event for a `keydown`, or null for a key that types, or could
  * type, a character: one with no `Ctrl` or `Meta`, a `Space` in a field,
- * an `Enter` in a `<textarea>` or an editor, a key composing text through an IME, a modifier on its own, or a key the
- * recorder doesn't name ({@link NAMED_KEY}).
+ * an `Enter` in a `<textarea>` or an editor (either of them in a field the
+ * recorder can't see, {@link unseenField}), a key composing text through an
+ * IME, a modifier on its own, or a key the recorder doesn't name
+ * ({@link NAMED_KEY}).
  */
 export function pressOf(
   event: KeyboardEvent,
@@ -255,15 +303,7 @@ export function pressOf(
 ): TimelinePressEvent | null {
   const key = event.key;
   if (event.isComposing || typeof key !== "string") return null;
-  let name: string | null = null;
-  if (NAMED_KEY.test(key)) {
-    if (key !== "Enter" || shortcut(event) || !target || !breaksLines(target))
-      name = key;
-  } else if (key === " ") {
-    if (shortcut(event) || !target || !typesText(target)) name = "Space";
-  } else if ([...key].length === 1 && shortcut(event)) {
-    name = key.toUpperCase();
-  }
+  const name = keyName(key, event, target);
   if (name === null) return null;
   const modifiers = MODIFIERS.filter(([, flag]) => event[flag] === true).map(
     ([modifier]) => modifier,
