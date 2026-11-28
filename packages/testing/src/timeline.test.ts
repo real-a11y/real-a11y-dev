@@ -1816,6 +1816,55 @@ describe("recordTimeline interactions", () => {
     `);
   });
 
+  it("names a field afresh when the page changed it between two inputs in one block", async () => {
+    const main = await page(
+      `<label>Code <input id="c"></label><p role="status" id="s"></p>`,
+    );
+    const c = byId<HTMLInputElement>("c");
+    c.addEventListener(
+      "input",
+      () => {
+        c.setAttribute("aria-invalid", "true");
+        byId("s").textContent = "Invalid code";
+      },
+      { once: true },
+    );
+    const timeline = recordTimeline(main, {
+      interactions: true,
+      focus: false,
+    });
+    c.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    c.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`
+      type      textbox "Code"
+      announce  status "Invalid code"
+      type      textbox "Code" {invalid}
+    `);
+  });
+
+  it("records an input a script sends in an open shadow root without composed, once focus is there", async () => {
+    const main = await page(`<x-field id="host"></x-field>`);
+    const shadow = byId("host").attachShadow({ mode: "open" });
+    shadow.innerHTML = `<label>Email <input id="e"></label><button id="b">Go</button>`;
+    await tick();
+    const timeline = recordTimeline(main, { interactions: true });
+    const e = shadow.getElementById("e") as HTMLInputElement;
+    e.focus();
+    await tick();
+    e.value = "x";
+    // As the Flow API's dispatcher sends it: it never leaves the shadow root.
+    e.dispatchEvent(new Event("input", { bubbles: true }));
+    // A composed one reaches both listeners, and is recorded once.
+    shadow.getElementById("b")!.click();
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`
+      focus     textbox "Email"
+      type      textbox "Email"
+      click     button "Go"
+    `);
+  });
+
   it("records interactions alone with focus and announcements off", async () => {
     const main = await page(`<button id="b">Save</button>`);
     const timeline = recordTimeline(main, {

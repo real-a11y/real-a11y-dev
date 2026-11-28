@@ -365,7 +365,19 @@ export class TypingRun {
   private field: Element | null = null;
   /** The last type interaction recorded, reused while its field takes more
    *  text, so a keystroke reads no tree ({@link interactionOf}). */
-  last: Act | null = null;
+  last: NotedAct | null = null;
+
+  /**
+   * The last type interaction, if its name still holds before record `k`:
+   * nothing changed the page since it in its block, or it came from an
+   * earlier block whose events left its field the last typed into. A change
+   * between two inputs in one block, such as a validation's `aria-invalid`,
+   * names the field afresh.
+   */
+  reusable(k: number): Act | null {
+    const last = this.last;
+    return last && (last.k < 0 || last.k === k) ? last : null;
+  }
 
   /** Is `event`, naming `el`, handed over? Called for each, in order. */
   keeps(event: TimelineEvent, el: Element | null | undefined): boolean {
@@ -382,5 +394,6 @@ export class TypingRun {
    *  something else, is named afresh. */
   settled(): void {
     if (this.last?.el !== this.field) this.last = null;
+    else if (this.last) this.last = { ...this.last, k: -1 };
   }
 }

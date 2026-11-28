@@ -102,6 +102,8 @@ class TimelineRecorder {
   /** The interactions among them. */
   private acts: NotedAct[] = [];
   private readonly typing = new TypingRun();
+  /** Interaction events already noted. */
+  private readonly heard = new WeakSet<Event>();
   /** A settle is queued for the end of this synchronous block. */
   private scheduled = false;
   /** Focus has left one element for another and not arrived yet. */
@@ -140,7 +142,7 @@ class TimelineRecorder {
         ? { characterData: true, attributes: true }
         : {}),
     });
-    if (options.interactions) this.listenForActs(this.addListener);
+    if (options.interactions) this.listenForActs(this.doc, this.addListener);
     if (options.focus) {
       this.listen(this.doc, this.addListener);
       // Where focus starts. Nothing read yet counts as `(none)`, so a start
@@ -168,9 +170,10 @@ class TimelineRecorder {
       this.settle();
     } finally {
       this.observer.disconnect();
-      for (const target of [this.doc, ...this.shadowRoots])
+      for (const target of [this.doc, ...this.shadowRoots]) {
         this.listen(target, this.removeListener);
-      if (this.options.interactions) this.listenForActs(this.removeListener);
+        this.listenForActs(target, this.removeListener);
+      }
       // Kept when a call `onEvents` was handed stopped it first.
       this.done ??= Object.freeze([...this.events]);
     }
@@ -222,10 +225,11 @@ class TimelineRecorder {
   /** Add or remove the interaction listeners: the document's alone, since
    *  an event's composed path reaches into the open shadow roots it crossed. */
   private listenForActs(
+    target: EventTarget,
     method: typeof EventTarget.prototype.addEventListener,
   ): void {
     for (const type of INTERACTION_TYPES) {
-      method.call(this.doc, type, this.onInteraction, true);
+      method.call(target, type, this.onInteraction, true);
     }
   }
 
@@ -233,17 +237,18 @@ class TimelineRecorder {
    *  it happened: what a click removes is gone by the time the block
    *  settles. */
   private readonly onInteraction = (event: Event): void => {
-    if (this.done) return;
-    const act = interactionOf(
-      event,
-      this.root,
-      (el) => this.inRoot(el),
-      this.typing.last,
-    );
-    if (!act) return;
-    this.typing.last = act.event.kind === "type" ? act : null;
+    // Once: a composed event reaches a shadow root's listener and then the
+    // document's.
+    if (this.done || this.heard.has(event)) return;
+    this.heard.add(event);
     for (const record of this.observer.takeRecords()) this.records.push(record);
-    this.acts.push({ ...act, k: this.records.length, n: this.moves.length });
+    const k = this.records.length;
+    const last = this.typing.reusable(k);
+    const act = interactionOf(event, this.root, (el) => this.inRoot(el), last);
+    if (!act) return;
+    const noted = { ...act, k, n: this.moves.length };
+    this.typing.last = act.event.kind === "type" ? noted : null;
+    this.acts.push(noted);
     this.schedule();
   };
 
@@ -282,6 +287,8 @@ class TimelineRecorder {
     if (this.shadowRoots.has(root)) return;
     this.shadowRoots.add(root);
     this.listen(root, this.addListener);
+    // An `input` a script sends in it without `composed` stops there.
+    if (this.options.interactions) this.listenForActs(root, this.addListener);
   }
 
   /** Is `element` in the root, and the root on the page? A region in a root
