@@ -117,6 +117,31 @@ describe("BrowserSession.startTimeline", () => {
     expect(streamed.reduce((a, b) => a + b, 0)).toBe(result.events.length);
   });
 
+  it("sees a cross-site navigation end it before stop()", async () => {
+    // 127.0.0.1 and localhost are different sites, so the new document can
+    // come from another renderer process: `ended()` must say so all the same.
+    await session.open(`${origin}/link`);
+    const timeline = await session.startTimeline();
+    const page = (session as unknown as { page: import("playwright").Page })
+      .page;
+    await page.focus("#go");
+    const other = origin.replace("127.0.0.1", "localhost");
+    await page.goto(`${other}/next`);
+    await expect.poll(() => timeline.ended()).toBe("navigated");
+    const result = await timeline.stop();
+    expect(result.end).toBe("navigated");
+    expect(result.url).toBe(`${other}/next`);
+    expect(serializeTimeline(result.events)).toMatch(/^focus {5}link "Go"/);
+    // Nothing of the recording is left on the new page.
+    expect(
+      await page.evaluate(() =>
+        Object.keys(globalThis).some((k) =>
+          k.startsWith("__realA11yTimeline_"),
+        ),
+      ),
+    ).toBe(false);
+  });
+
   it("injects under a strict CSP with Trusted Types", async () => {
     await session.open(
       dataUrl(`<!doctype html><html><head>

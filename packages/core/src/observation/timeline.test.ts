@@ -313,3 +313,41 @@ describe("startTimeline({ redactInput })", () => {
     });
   });
 });
+
+describe("startTimeline({ redactInput }) and live regions", () => {
+  // A live region whose text a user types: a chat composer marked live, or
+  // an editor inside a `log`. Strict mode keeps what was typed in the page.
+  const html = `<main><div role="log" id="log"><div contenteditable="true" id="ed"></div></div></main>`;
+
+  it("withholds announced text that comes from inside an editor", async () => {
+    document.body.innerHTML = html;
+    const recording = startTimeline(document.querySelector("main")!, {
+      redactInput: true,
+    });
+    byId("ed").textContent = "my password is hunter2";
+    await tick();
+    expect(recording.stop()).toEqual([
+      { kind: "announce", role: "log", text: "[redacted]", live: "polite" },
+    ]);
+  });
+
+  it("announces it without strict mode", async () => {
+    document.body.innerHTML = html;
+    const recording = startTimeline(document.querySelector("main")!);
+    byId("ed").textContent = "my password is hunter2";
+    await tick();
+    expect(recording.stop()).toMatchObject([
+      { kind: "announce", text: "my password is hunter2" },
+    ]);
+  });
+
+  it("still announces a region's own text in strict mode", async () => {
+    document.body.innerHTML = `<main><p role="status" id="s"></p></main>`;
+    const recording = startTimeline(document.querySelector("main")!, {
+      redactInput: true,
+    });
+    byId("s").textContent = "Saved.";
+    await tick();
+    expect(recording.stop()).toMatchObject([{ text: "Saved." }]);
+  });
+});

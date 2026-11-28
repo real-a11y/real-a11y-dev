@@ -10,6 +10,7 @@ import {
   safeParentElement,
   safeParentNode,
 } from "../extraction/clobber-safe.js";
+import { isEditable } from "../extraction/editing.js";
 import {
   isRenderedInFlatTree,
   renderingParent,
@@ -244,4 +245,19 @@ export function renderedIn(node: Node): Element | null {
 
 function dataOf(texts: Text[]): Map<Text, string> {
   return new Map(texts.map((node) => [node, node.data]));
+}
+
+/**
+ * The text a region's announcement carries. In strict mode (ADR-0001),
+ * `[redacted]` whole when any of it comes from inside a rich-text editor (a
+ * `contenteditable` region), as a name that would carry what a user typed
+ * there reads.
+ */
+export function announcedText(read: RegionRead, strict: boolean): string {
+  if (!strict) return read.text;
+  for (const node of read.from.keys()) {
+    const parent = safeParentElement(node);
+    if (parent && isEditable(parent)) return "[redacted]";
+  }
+  return read.text;
 }

@@ -91,8 +91,10 @@ export interface PageTimelineOptions {
    */
   onEvents?: (events: readonly TimelineEvent[]) => void;
   /**
-   * Keep at most this many events; past it, {@link PageTimelineResult.truncated}.
-   * A busy `log` region can announce without end. Default 10 000.
+   * Keep at most this many events in Node; past it,
+   * {@link PageTimelineResult.truncated}. A busy `log` region can announce
+   * without end. The page's recorder still holds every event until `stop()`.
+   * A whole number, 0 or more. Default 10 000.
    */
   maxEvents?: number;
 }
@@ -169,10 +171,39 @@ function asStop(stop: unknown): FocusStop | null {
   ) {
     return null;
   }
-  // Never a value, whatever the page sent: the recorder strips it, and a
-  // focus line has no place for one.
-  const { value: _value, ...rest } = stop;
-  return rest as unknown as FocusStop;
+  // Only the fields a stop has, with values of the types they take: what
+  // the page sent is the page's to write. Never a `value`, whatever it sent:
+  // the recorder strips it, and a focus line has no place for one.
+  return {
+    role: stop.role,
+    name: stop.name,
+    description: stop.description,
+    ...(stop.choiceWithheld === true ? { choiceWithheld: true as const } : {}),
+    states: entriesOf(
+      stop.states,
+      (v): v is string | boolean =>
+        typeof v === "string" || typeof v === "boolean",
+    ),
+    properties: entriesOf(
+      stop.properties,
+      (v): v is string => typeof v === "string",
+    ),
+    isExposedToAT: stop.isExposedToAT,
+  };
+}
+
+/** The own entries of `record` whose values pass `keep`, in a fresh
+ *  object. Not `__proto__`, which `JSON.parse` makes an own key and an
+ *  assignment would turn into the object's prototype. */
+function entriesOf<V>(
+  record: Record<string, unknown>,
+  keep: (value: unknown) => value is V,
+): Record<string, V> {
+  const out: Record<string, V> = {};
+  for (const [key, value] of Object.entries(record)) {
+    if (key !== "__proto__" && keep(value)) out[key] = value;
+  }
+  return out;
 }
 
 function asFocus(value: Record<string, unknown>): TimelineEvent | null {
@@ -231,10 +262,15 @@ async function startInPage(
   page: Page,
   start: InPageTimelineOptions,
 ): Promise<void> {
+  // A function, not just an object: a page's `<form name="__realA11yTimeline__">`
+  // is an object on `window` too. Re-evaluating an injected bundle would
+  // orphan a recording it holds, so it is injected only when it isn't there.
   const present = await page.evaluate(
     () =>
-      typeof (globalThis as Record<string, unknown>).__realA11yTimeline__ ===
-      "object",
+      typeof (
+        (globalThis as Record<string, unknown>).__realA11yTimeline__ as
+          { start?: unknown } | undefined
+      )?.start === "function",
   );
   if (!present) await page.evaluate(bundleExpression());
   await page.evaluate((opts) => {
@@ -345,7 +381,12 @@ class Recording {
     await this.client.detach().catch(() => {});
   }
 
-  /** The page's own list on the document it started in, or how it ended. */
+  /**
+   * The page's own list, if its document is the one the recording started
+   * in, or how it ended. Asked even when a navigation was seen: the token
+   * says which document holds the recorder, and asking stops it wherever it
+   * is, so none is left listening, and deletes the binding's global.
+   */
   private async fromPage(): Promise<
     { events: TimelineEvent[] } | { end: Exclude<TimelineEnd, "stopped"> }
   > {
@@ -356,21 +397,36 @@ class Recording {
       // said so before the stop.
       return Array.isArray(own)
         ? { events: this.capped(eventsIn(own), 0) }
-        : { end: "navigated" };
+        : { end: this.ended ?? "navigated" };
     } catch (err) {
       if (!isContextGone(err)) throw err;
       return { end: this.page.isClosed() ? "closed" : "navigated" };
     }
   }
 
+  /** Hand `onEvents` what it hasn't had: the block `stop()` settled, which
+   *  the page sent as the stream was closing. */
+  private deliverTail(events: readonly TimelineEvent[]): void {
+    const tail = events.slice(this.streamed.length);
+    if (!tail.length || !this.options.onEvents) return;
+    try {
+      this.options.onEvents(tail);
+    } catch {
+      // As in `onBinding`: the caller's to handle.
+    }
+  }
+
   async finish(): Promise<PageTimelineResult> {
     let events: readonly TimelineEvent[] = this.streamed;
-    let end: TimelineEnd = this.ended ?? "stopped";
+    let end: TimelineEnd;
     try {
-      if (!this.ended) {
-        const read = await this.fromPage();
-        if ("events" in read) events = read.events;
-        else end = read.end;
+      const read = await this.fromPage();
+      if ("events" in read) {
+        events = read.events;
+        end = "stopped";
+        this.deliverTail(events);
+      } else {
+        end = read.end;
       }
     } finally {
       await this.release();
@@ -381,6 +437,15 @@ class Recording {
       ...(end === "navigated" ? { url: this.page.url() } : {}),
       truncated: this.truncated,
     };
+  }
+
+  /** After a failed start: stop whatever did start, and take the binding's
+   *  global back off the page, as far as the page still answers. */
+  async abandon(): Promise<void> {
+    if (!this.page.isClosed()) {
+      await stopInPage(this.page, this.token, this.binding).catch(() => {});
+    }
+    await this.release();
   }
 }
 
@@ -397,12 +462,21 @@ export async function startPageTimeline(
   page: Page,
   options: PageTimelineOptions = {},
 ): Promise<PageTimeline> {
+  const { maxEvents } = options;
+  if (
+    maxEvents !== undefined &&
+    !(Number.isSafeInteger(maxEvents) && maxEvents >= 0)
+  ) {
+    throw new TypeError(
+      `startPageTimeline: maxEvents must be a whole number of events, 0 or more (received ${String(maxEvents)}).`,
+    );
+  }
   const client = await page.context().newCDPSession(page);
   const recording = new Recording(page, client, options);
   try {
     await recording.start();
   } catch (err) {
-    await recording.release();
+    await recording.abandon();
     throw err;
   }
   return {

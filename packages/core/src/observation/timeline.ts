@@ -31,6 +31,7 @@ import {
 import {
   alreadySaid,
   announcedRead,
+  announcedText,
   audibleRead,
   gains,
   heldFrom,
@@ -130,9 +131,9 @@ class TimelineRecorder {
   constructor(
     private readonly root: Element,
     private readonly options: Required<
-      Pick<TimelineOptions, "focus" | "announcements">
+      Pick<TimelineOptions, "focus" | "announcements" | "redactInput">
     > &
-      Pick<TimelineOptions, "onEvents" | "redactInput">,
+      Pick<TimelineOptions, "onEvents">,
   ) {
     this.doc = safeOwnerDocument(root);
     if (options.announcements) this.readBaseline();
@@ -702,7 +703,7 @@ class TimelineRecorder {
     return {
       kind: "announce",
       role: getImplicitRole(region),
-      text: now.text,
+      text: announcedText(now, this.options.redactInput),
       live: level,
     };
   }

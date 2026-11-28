@@ -40,7 +40,11 @@ interface Started {
  *  `__realA11yTimeline__`, and a CDP session whose events a test emits. */
 function fakePage(stopResult: (token: string) => unknown = () => []) {
   const client = Object.assign(new EventEmitter(), {
-    send: vi.fn(async () => ({})),
+    // As Chromium does, `addBinding` puts a global function on the page.
+    send: vi.fn(async (method: string, params?: { name?: string }) => {
+      if (method === "Runtime.addBinding") g[params!.name!] = () => {};
+      return {};
+    }),
     detach: vi.fn(async () => {}),
   });
   const pageEvents = new EventEmitter();
@@ -165,9 +169,8 @@ describe("startPageTimeline", () => {
   });
 
   it("keeps what streamed before a navigation, and says where it went", async () => {
-    const fake = fakePage(() => {
-      throw new Error("the old document's recorder is gone");
-    });
+    // The new document holds no recording with this token.
+    const fake = fakePage(() => null);
     const timeline = await startPageTimeline(fake.page);
     fake.send([FOCUS]);
     fake.navigate("https://example.test/next");
@@ -180,6 +183,51 @@ describe("startPageTimeline", () => {
       url: "https://example.test/next",
       truncated: false,
     });
+  });
+
+  it("trusts the token over a navigation seen while it started", async () => {
+    // The page navigated as the recorder was being started, and the start
+    // landed in the new document: that document holds the recording.
+    const fake = fakePage(() => [FOCUS, ANNOUNCE]);
+    const timeline = await startPageTimeline(fake.page);
+    fake.navigate("https://example.test/landed");
+    const result = await timeline.stop();
+    expect(result.end).toBe("stopped");
+    expect(result.events).toEqual([FOCUS, ANNOUNCE]);
+  });
+
+  it("hands onEvents the block that settled at stop()", async () => {
+    const fake = fakePage(() => [FOCUS, ANNOUNCE]);
+    const runs: unknown[] = [];
+    const timeline = await startPageTimeline(fake.page, {
+      onEvents: (events) => runs.push(events),
+    });
+    fake.send([FOCUS]);
+    await timeline.stop();
+    expect(runs).toEqual([[FOCUS], [ANNOUNCE]]);
+  });
+
+  it("refuses a maxEvents that isn't a whole number", async () => {
+    const fake = fakePage();
+    for (const maxEvents of [Number.NaN, -1, 1.5]) {
+      await expect(startPageTimeline(fake.page, { maxEvents })).rejects.toThrow(
+        /maxEvents must be a whole number/,
+      );
+    }
+  });
+
+  it("injects the bundle when the global is only a clobbering element", async () => {
+    const fake = fakePage();
+    const evaluate = vi.spyOn(fake.page, "evaluate");
+    // A `<form name="__realA11yTimeline__">` is an object on `window`, with
+    // no `start`. The fake's injection installs nothing, so the start fails.
+    g.__realA11yTimeline__ = {};
+    await expect(startPageTimeline(fake.page)).rejects.toThrow(
+      /did not initialize/,
+    );
+    expect(evaluate.mock.calls.some(([fn]) => typeof fn === "string")).toBe(
+      true,
+    );
   });
 
   it("reads a document with no such recording as replaced", async () => {
@@ -230,10 +278,16 @@ describe("startPageTimeline", () => {
         throw new Error('rootSelector "#x" matched no element on the page.');
       },
     };
+    const binding = () =>
+      fake.client.send.mock.calls.find(
+        ([method]) => method === "Runtime.addBinding",
+      )![1] as { name: string };
     await expect(startPageTimeline(fake.page, { root: "#x" })).rejects.toThrow(
       /matched no element/,
     );
     expect(fake.client.detach).toHaveBeenCalled();
+    // The binding's global is taken back off the page.
+    expect(binding().name in g).toBe(false);
   });
 });
 
@@ -244,6 +298,31 @@ describe("asTimelineEvent", () => {
       stop: { ...FOCUS.stop, value: "hunter2" },
     });
     expect(JSON.stringify(event)).not.toContain("hunter2");
+  });
+
+  it("keeps only the fields a stop has, with values of their types", () => {
+    const event = asTimelineEvent(
+      JSON.parse(
+        JSON.stringify({
+          ...FOCUS,
+          stop: {
+            ...FOCUS.stop,
+            extra: "x",
+            states: { expanded: true, bad: { nested: 1 } },
+            properties: { roledescription: "slide", bad: 2 },
+          },
+        }).replace('"extra"', '"__proto__":{"polluted":1},"extra"'),
+      ),
+    );
+    expect(event).toEqual({
+      ...FOCUS,
+      stop: {
+        ...FOCUS.stop,
+        states: { expanded: true },
+        properties: { roledescription: "slide" },
+      },
+    });
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
   });
 
   it("takes only the fields an event has", () => {

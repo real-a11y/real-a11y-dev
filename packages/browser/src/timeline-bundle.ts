@@ -57,14 +57,16 @@ function resolveRoot(selector: string): Element {
   try {
     root = docProto.querySelector.call(document, selector);
   } catch {
-    throw new Error(`Invalid rootSelector: "${selector}".`);
+    throw new Error(`Invalid root selector: "${selector}".`);
   }
   if (root) return root;
   const body = Object.getOwnPropertyDescriptor(docProto, "body")?.get?.call(
     document,
   ) as HTMLElement | null | undefined;
   if (selector === "body" && body) return body;
-  throw new Error(`rootSelector "${selector}" matched no element on the page.`);
+  throw new Error(
+    `root selector "${selector}" matched no element on the page.`,
+  );
 }
 
 /**
