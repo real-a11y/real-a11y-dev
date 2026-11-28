@@ -626,6 +626,24 @@ export function fieldValueOwner(el: Element): Element | null {
   return owner;
 }
 
+/** A range widget's value: `aria-valuetext`, else `aria-valuenow`, else the
+ *  native control's own. */
+function readRangeValue(element: Element, tag: string): string | undefined {
+  const valuetext = safeGetAttribute(element, "aria-valuetext");
+  if (valuetext?.trim()) return valuetext;
+  const valuenow = safeGetAttribute(element, "aria-valuenow");
+  if (valuenow?.trim()) return valuenow;
+  if (tag === "input") return (element as HTMLInputElement).value;
+  // An indeterminate <progress> (no value attribute) announces no value.
+  if (
+    (tag === "progress" || tag === "meter") &&
+    element.hasAttribute("value")
+  ) {
+    return String((element as HTMLProgressElement).value);
+  }
+  return undefined;
+}
+
 /** The raw text a field holds, before sensitivity, collapse and cap. */
 export function readFieldValue(
   element: Element,
@@ -635,21 +653,7 @@ export function readFieldValue(
   const tag = safeTagName(element);
   if (STATE_ONLY_ROLES.has(role)) return undefined;
 
-  if (RANGE_VALUE_ROLES.has(role)) {
-    const valuetext = safeGetAttribute(element, "aria-valuetext");
-    if (valuetext?.trim()) return valuetext;
-    const valuenow = safeGetAttribute(element, "aria-valuenow");
-    if (valuenow?.trim()) return valuenow;
-    if (tag === "input") return (element as HTMLInputElement).value;
-    // An indeterminate <progress> (no value attribute) announces no value.
-    if (
-      (tag === "progress" || tag === "meter") &&
-      element.hasAttribute("value")
-    ) {
-      return String((element as HTMLProgressElement).value);
-    }
-    return undefined;
-  }
+  if (RANGE_VALUE_ROLES.has(role)) return readRangeValue(element, tag);
 
   if (tag === "input") {
     const input = element as HTMLInputElement;
