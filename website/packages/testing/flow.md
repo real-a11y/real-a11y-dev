@@ -231,7 +231,7 @@ In a suite that doesn't register the matchers, `configureA11y({ diff: { … } })
 
 ## Recording what happened in between
 
-A diff sees the page at two moments. A keyboard or screen-reader user meets a sequence: where focus goes, and what live regions announce, in that order. Whatever comes and goes between the two captures (focus dropping to the page for a moment, a "Deleting…" status shown and then cleared) never reaches the diff. `recordTimeline` records it.
+A diff sees the page at two moments. A keyboard or screen-reader user meets a sequence: where focus goes, and what live regions announce, in that order. Whatever comes and goes between the two captures (focus dropping to the page for a moment, a "Deleting…" status shown and then cleared) never reaches the diff. `recordTimeline` records it, and, if you ask, the keys, clicks and typing that caused it.
 
 ### `recordTimeline(root, options?)`
 
@@ -272,9 +272,42 @@ The order is the point. In the example, React renders `setStatus("Draft deleted.
 |---|---|---|
 | `focus` | `true` | Record focus moves. |
 | `announcements` | `true` | Record live-region announcements. |
-| `redact` | none | Patterns masked as `[REDACTED]` in focused names and in announced text, as in the [other snapshots](/packages/testing/snapshots#using-redact). |
+| `interactions` | `false` | Also record what the user did: `press`, `click` and `type` lines. See [Lines for what the user did](#lines-for-what-the-user-did). |
+| `redact` | none | Patterns masked as `[REDACTED]` in the names lines print and in announced text, as in the [other snapshots](/packages/testing/snapshots#using-redact). |
 
-Pass `{ announcements: false }` for a focus-only timeline, so a copy change in a status message doesn't churn a focus test, or `{ focus: false }` for announcements alone. Turning both off throws: a recorder that listens for nothing could never fail. So does a root that isn't in the document, whose changes the recorder would never see. Jest's fake timers are fine, `queueMicrotask` faked included.
+Pass `{ announcements: false }` for a focus-only timeline, so a copy change in a status message doesn't churn a focus test, or `{ focus: false }` for announcements alone. Turning both off throws, unless `interactions` is on: a recorder that listens for nothing could never fail. So does a root that isn't in the document, whose changes the recorder would never see. Jest's fake timers are fine, `queueMicrotask` faked included.
+
+### Lines for what the user did
+
+A timeline shows what the page did. With `{ interactions: true }` it also shows what the user did to cause it, so a stray focus move stands next to the key that should have caused it:
+
+```ts
+const timeline = recordTimeline(document.body, { interactions: true });
+```
+
+```
+press     Tab
+focus     button "Delete draft"
+click     button "Delete draft"
+announce  status "Deleting…"
+focus     (none)
+press     Escape
+type      textbox "Email"
+```
+
+- **A `press` line** is a key that types no text, by its name, with the modifiers held (`Ctrl`, `Alt`, `Shift`, `Meta`, in that order): `Tab`, `Shift+Tab`, `Escape`, `Backspace`, `Delete`, `Insert`, `Home`, `End`, `PageUp`, `PageDown`, an arrow, `ContextMenu`, `F1` to `F24`, `Space` outside a text field, and `Enter` outside a `<textarea>` or an editor, where it would type a line break. Where the recorder can't see what took the key, it counts it as a field: a custom element whose shadow root is closed, and an element with a `textbox`, `searchbox` or `combobox` role, print no `Space` or `Enter`. A character key prints only as a shortcut, held with `Ctrl` or `Meta` (`Ctrl+A`); `AltGr`, which reports `Ctrl` and `Alt` together, types one, so it prints nothing. A modifier on its own, a key composing text through an input method, and any other key print nothing. Ten `ArrowDown` presses print ten lines.
+- **A `click` line** is a `click` event the page received, from a pointer, from a key that activates (`Enter` on a button sends a click too, so it prints `press     Enter` and then a click line) or from script. It names what the click activates, the way a focus line names its node: the nearest element from the target up that can take focus or has a role a click activates, so a click on a button's icon prints the button. Where there is none, it names the target itself, and one the tree folds away prints as `generic`. A click on a `<label>` prints two lines, because the page receives two clicks: the label's, then its control's.
+- **A `type` line** is typing into a text field, a `<textarea>` or an editor. **It names the field, never the characters.** Typing into one field prints one line however many keystrokes it took, until something else prints a line, so `Backspace` in the middle splits it in two. A sensitive field (a password, a card number, a one-time code) prints its role and name alone. A click or type line builds its name as [strict mode](/packages/testing/snapshots#strict-mode) does, so a field whose `aria-labelledby` points at itself, or at another field, isn't named by what was typed there.
+- **Lines say what the page received**, whatever sent it, so `fireEvent`, `user-event`, Playwright and a person mean the same thing by them. `fireEvent.click` sends a click and no pointer press, so it prints a click line and no focus line. A pointer click moves focus when the button goes down and clicks when it comes up, so its focus line comes first:
+
+  ```
+  focus     button "Save"
+  click     button "Save"
+  ```
+
+  Each line is placed among the page's changes as a focus line is, so a Tab prints before the focus move it makes, and a click before what its handler announced. A click is named as it happened, so a button that removes itself still prints its name.
+
+**What the lines never hold.** No typed character reaches a line or a recorded event, in a password field or any other: no character key, nothing from an `input` or `beforeinput` event's data, no clipboard content. Only what is inside the root is recorded, but a key pressed with focus resting on the page prints, as `focus     (none)` does.
 
 **What it doesn't model yet:**
 
@@ -285,7 +318,9 @@ Pass `{ announcements: false }` for a focus-only timeline, so a copy change in a
 - **`aria-atomic`, `aria-relevant` and `aria-busy`** aren't read: an announce line is always the region's whole text.
 - **Order around a focus move within one step is best-effort.** An announce line goes before a focus move made in the same synchronous run when the region already said its final text at the move, or that text with some of its elements removed since. A run that rewrites the region into new elements after the move and drops part of it places the line after the move, though the words that stay were there before.
 - **A region inserted already holding its text** prints like any other. Most screen readers don't announce one, `role="alert"` being the usual exception, so a line for a `status` that arrived with its message may be a message nobody hears.
-- **No strict mode.** There is no `redactInput` here yet, so a timeline can't promise what [strict mode](/packages/testing/snapshots#strict-mode) does for the other snapshots: a focused name built from typed text, or an editor inside a live region, prints as it is.
+- **No strict mode.** There is no `redactInput` here yet, so a timeline can't promise what [strict mode](/packages/testing/snapshots#strict-mode) does for the other snapshots: a focused name built from typed text, or an editor inside a live region, prints as it is. `type` and `click` lines are the exception: they name their node as strict mode would, and print nothing typed.
+- **An interaction a script sends inside a shadow root without `composed: true`** never reaches the document, so it is recorded only in an open shadow root focus has been in. `flow().type()` sends its `input` that way and moves no focus first, so typing it does inside a shadow root prints a `type` line only if focus has already been in that root.
+- **Other gestures** aren't recorded: a `pointerdown` with no click, a double click, a context menu, a drag, a form's `submit`, and keys released (`keyup`).
 - **In the page only.** The recorder runs where the test's DOM is: jsdom, or a runner that runs the test inside a browser. The [Playwright adapter](/packages/testing/playwright), which drives a page from outside, has no timeline yet, and the [snapshot report](/packages/testing/snapshots#the-snapshot-report) doesn't draw one.
 
 Call `stop()` even when the test fails before it, in a `finally` or an `afterEach`: until then, the recorder keeps listening to the document, and reads the root's tree on every later focus move.

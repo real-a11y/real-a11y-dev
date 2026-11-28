@@ -14,7 +14,10 @@ const dist = path.resolve(
 );
 
 interface TimelinePage {
-  recordTimeline(root: Element): { stop(): { text: string } };
+  recordTimeline(
+    root: Element,
+    options?: { interactions?: boolean },
+  ): { stop(): { text: string } };
   timeline: { stop(): { text: string } };
 }
 
@@ -98,5 +101,52 @@ test.describe("recordTimeline in a browser", () => {
         `announce  status "On B."`,
       ].join("\n"),
     );
+  });
+
+  test("places native keys, clicks and typing among focus and announcements, and never prints what was typed", async ({
+    page,
+  }) => {
+    await open(
+      page,
+      `<main>
+        <button id="a">A</button>
+        <button id="b"><span>Save</span></button>
+        <label>Password <input type="password" id="pw"></label>
+        <p role="status" id="s"></p>
+      </main>`,
+    );
+    await page.evaluate(() => {
+      const w = window as unknown as TimelinePage;
+      document.getElementById("b")!.addEventListener("click", () => {
+        document.getElementById("s")!.textContent = "Saved.";
+      });
+      document.getElementById("a")!.focus();
+      w.timeline = w.recordTimeline(document.querySelector("main")!, {
+        interactions: true,
+      });
+    });
+    await page.keyboard.press("Tab");
+    await page.click("#b span");
+    await page.click("#pw");
+    await page.keyboard.type("hunter2");
+    await page.keyboard.press("Shift+Tab");
+    const text = await page.evaluate(
+      () => (window as unknown as TimelinePage).timeline.stop().text,
+    );
+    expect(text).toBe(
+      [
+        `focus     button "A"`,
+        `press     Tab`,
+        `focus     button "Save"`,
+        `click     button "Save"`,
+        `announce  status "Saved."`,
+        `focus     textbox "Password"`,
+        `click     textbox "Password"`,
+        `type      textbox "Password"`,
+        `press     Shift+Tab`,
+        `focus     button "Save"`,
+      ].join("\n"),
+    );
+    expect(text).not.toContain("hunter2");
   });
 });

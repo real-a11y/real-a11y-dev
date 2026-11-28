@@ -19,6 +19,12 @@ export interface RecordTimelineOptions {
   focus?: boolean;
   /** Record live-region announcements. Default `true`. */
   announcements?: boolean;
+  /**
+   * Record what the user did, too: `press` for a key that types no text,
+   * `click` for a click the page received, and `type` for typing into a
+   * field, which names the field and never what was typed. Default `false`.
+   */
+  interactions?: boolean;
 }
 
 /** A running recorder, from {@link recordTimeline}. */
@@ -64,6 +70,11 @@ export interface A11yTimeline {
  *   emptied, removed or hidden first, by itself or a container, it prints
  *   again. One hidden by `aria-hidden` or `inert` above it keeps its text,
  *   and one switched to `aria-live="off"` takes in what it shows silently.
+ * - With `{ interactions: true }`, a **press** line is a key that types no
+ *   text (`press     Shift+Tab`), a **click** line a `click` event the page
+ *   received, named as a focus line names its node, and a **type** line
+ *   typing into a field (`type      textbox "Email"`): one line however many
+ *   keystrokes, naming the field and never the characters.
  * - Lines follow the order the page made its changes. What one synchronous
  *   run of the page's code does is read once: text set and cleared in it, or
  *   focus passing through an element, prints nothing. Anything an `await`
@@ -79,10 +90,10 @@ export function recordTimeline(
   root: Element,
   options: RecordTimelineOptions = {},
 ): A11yTimeline {
-  const { focus, announcements, redact } = options;
-  const problem = timelineProblem(root, { focus, announcements });
+  const { focus, announcements, interactions, redact } = options;
+  const problem = timelineProblem(root, { focus, announcements, interactions });
   if (problem) throw new TypeError(`recordTimeline: ${problem}`);
-  const recording = startTimeline(root, { focus, announcements });
+  const recording = startTimeline(root, { focus, announcements, interactions });
   let box: A11ySnapshotBox | undefined;
   return {
     stop: () =>

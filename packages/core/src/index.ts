@@ -90,8 +90,13 @@ export { startTimeline } from "./observation/timeline.js";
 export {
   timelineProblem,
   type TimelineAnnounceEvent,
+  type TimelineClickEvent,
   type TimelineEvent,
   type TimelineFocusEvent,
+  type TimelineInteractionEvent,
+  type TimelineModifier,
+  type TimelinePressEvent,
+  type TimelineTypeEvent,
   type TimelineOptions,
   type TimelineRecording,
 } from "./observation/timeline-events.js";
