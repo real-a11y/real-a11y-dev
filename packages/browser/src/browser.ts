@@ -36,6 +36,11 @@ import {
   type NativeTreeOptions,
 } from "./native-tree.js";
 import { withLoopbackBypass } from "./proxy-bypass.js";
+import {
+  startPageTimeline,
+  type PageTimeline,
+  type PageTimelineOptions,
+} from "./timeline.js";
 
 /**
  * The injected IIFE page-bundle, as SOURCE TEXT — lazily, and cached.
@@ -568,6 +573,27 @@ export class BrowserSession implements A11ySession {
     return this.run(() =>
       actOnNativeNode(this.requirePage(), request, this.withPin({})),
     );
+  }
+
+  /**
+   * Start recording the timeline view (ADR-0002) on the open page: focus
+   * moves and live-region announcements, in order, from an in-page recorder
+   * injected for it alone (see {@link startPageTimeline}). The recording
+   * lives in the page's current document; a navigation ends it, keeping
+   * what came before. The handle's `stop()` joins this session's queue, so
+   * it waits for an action already running.
+   */
+  async startTimeline(
+    options: PageTimelineOptions = {},
+  ): Promise<PageTimeline> {
+    const timeline = await this.run(() =>
+      startPageTimeline(this.requirePage(), options),
+    );
+    return {
+      events: () => timeline.events(),
+      ended: () => timeline.ended(),
+      stop: () => this.run(() => timeline.stop()),
+    };
   }
 
   /**

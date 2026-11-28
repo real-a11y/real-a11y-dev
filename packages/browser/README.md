@@ -155,6 +155,61 @@ THEIR dist, where the file is not — so the path became a runtime failure with
 nothing to catch it. `pageBundleSource()` replaces it, and the failure mode is
 gone rather than guarded.
 
+## The timeline bundle
+
+The timeline view (ADR-0002) lists focus moves and live-region announcements in
+the order the page made them. That order exists only in the page, so it is
+recorded there: by `core`'s `startTimeline`, the same recorder
+`@real-a11y-dev/testing`'s `recordTimeline` runs in jsdom. It is **not** in the
+page-bundle — there it would add about 3.9 kB gzipped to every audited page for
+a view most calls never use. It is a second IIFE,
+`dist/timeline-bundle.iife.global.js` (`window.__realA11yTimeline__`, exports
+`start` and `stop`, pinned by `src/timeline-bundle.test.ts`), injected only
+while a timeline records. It carries its own copy of `core`, which
+`realmSingleton` allows. Its budget is the `timeline-bundle IIFE` entry in
+`.size-limit.json`.
+
+From Node, one call drives it, for every CDP surface:
+
+```ts
+import { startPageTimeline } from "@real-a11y-dev/browser";
+import { serializeTimeline } from "@real-a11y-dev/serialize";
+
+const timeline = await startPageTimeline(page, {
+  root: "main", // CSS selector, default "body"
+  redactInput: false, // strict mode (ADR-0001) for focus names
+  onEvents: (run) => {}, // optional: each run of events as it leaves the page
+});
+await page.getByRole("button", { name: "Delete draft" }).click();
+const { events, end, url, truncated } = await timeline.stop();
+console.log(serializeTimeline(events, { redact: [/\d+/g] }));
+```
+
+- **Streaming.** Each run of events leaves the page as its block settles,
+  through a CDP binding (`Runtime.addBinding`, with a random name per
+  recording). `timeline.events()` is what has arrived so far.
+- **Navigation.** A navigation replaces the document and the recorder with it.
+  The recording ends there, `end: "navigated"` with the new `url`, and keeps
+  every event that streamed out before. `timeline.ended()` says so before
+  `stop()`. On the same document `stop()` returns the page's own list, which
+  also holds a block that hadn't settled yet; `end: "closed"` if the page
+  closed.
+- **Redaction.** The field-value gates run in the page. A user's `redact`
+  patterns do not: `serializeTimeline` applies them to lines, and a caller that
+  hands out events (a `--json` flag, an MCP tool result) applies them itself.
+- **Trust.** What leaves the page is the page's to write. Each payload is
+  checked against the recording's token and each event's shape
+  (`asTimelineEvent`), and no focus stop carries a `value`. At most
+  `maxEvents` (default 10 000) are kept; past it, `truncated`.
+- One recording per document; a second `start` throws until the first stops.
+
+`BrowserSession.startTimeline(options)` is the same call on the session's open
+page, with `stop()` joining the session's queue. It is built for the CLI's
+`timeline` command and the MCP's timeline tools, which go through the session,
+and for `@real-a11y-dev/testing`'s Playwright adapter, which takes its `Page`
+straight to `startPageTimeline`. None of them calls it yet; each lands in its own
+change.
+
 ## Design
 
 This package is **the only place that touches Playwright**. Everything above it in the stack is a pure, browserless engine (`core` extraction, plus the internal `serialize` text, `audit` findings, and `snapshot` diffs); everything that needs a live page — the CLI, the MCP server, the testing Playwright adapter — composes `browser`. Isolating the real-browser concern here means nothing in the engine layer pulls Playwright into its dependency graph.

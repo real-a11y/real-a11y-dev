@@ -37,3 +37,14 @@ export type {
   ResolveTargetResult,
   TargetCandidate,
 } from "./resolve-target.js";
+export {
+  asTimelineEvent,
+  startPageTimeline,
+  timelineBundleSource,
+} from "./timeline.js";
+export type {
+  PageTimeline,
+  PageTimelineOptions,
+  PageTimelineResult,
+  TimelineEnd,
+} from "./timeline.js";

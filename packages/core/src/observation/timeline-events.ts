@@ -70,6 +70,15 @@ export interface TimelineOptions {
    * it (ADR-0002).
    */
   onEvents?: (events: readonly TimelineEvent[]) => void;
+  /**
+   * Strict mode (ADR-0001's `redactInput`): no rich-text editor content in
+   * any event. The focused node is named as a strict tree names it, so a
+   * name that would carry what a user typed reads `[redacted]` whole, and so
+   * does a live region's text when any of it comes from inside an editor (a
+   * `contenteditable` region). Announced text never carries a field's value
+   * either way: only text nodes are read. Default false.
+   */
+  redactInput?: boolean;
 }
 
 /**

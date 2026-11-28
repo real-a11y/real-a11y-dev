@@ -284,3 +284,92 @@ describe("startTimeline", () => {
     expect(timelineProblem(document.body)).toBeNull();
   });
 });
+
+describe("startTimeline({ redactInput })", () => {
+  // Strict mode (ADR-0001) names the focused node as a strict tree does, so
+  // a name built from what a user typed never leaves the page.
+  const html = `<main><div contenteditable="true"><a href="#" id="a">my secret draft</a></div></main>`;
+
+  it("withholds a focused name that carries typed text", async () => {
+    document.body.innerHTML = html;
+    const recording = startTimeline(document.querySelector("main")!, {
+      redactInput: true,
+    });
+    byId("a").focus();
+    await tick();
+    const [event] = recording.stop();
+    expect(event).toMatchObject({ kind: "focus" });
+    expect(JSON.stringify(event)).not.toMatch(/secret|draft/);
+  });
+
+  it("names it from its text without strict mode", async () => {
+    document.body.innerHTML = html;
+    const recording = startTimeline(document.querySelector("main")!);
+    byId("a").focus();
+    await tick();
+    expect(recording.stop()[0]).toMatchObject({
+      kind: "focus",
+      stop: { name: "my secret draft" },
+    });
+  });
+});
+
+describe("startTimeline({ redactInput }) and live regions", () => {
+  // A live region whose text a user types: a chat composer marked live, or
+  // an editor inside a `log`. Strict mode keeps what was typed in the page.
+  const html = `<main><div role="log" id="log"><div contenteditable="true" id="ed"></div></div></main>`;
+
+  it("withholds announced text that comes from inside an editor", async () => {
+    document.body.innerHTML = html;
+    const recording = startTimeline(document.querySelector("main")!, {
+      redactInput: true,
+    });
+    byId("ed").textContent = "my password is hunter2";
+    await tick();
+    expect(recording.stop()).toEqual([
+      { kind: "announce", role: "log", text: "[redacted]", live: "polite" },
+    ]);
+  });
+
+  it("announces it without strict mode", async () => {
+    document.body.innerHTML = html;
+    const recording = startTimeline(document.querySelector("main")!);
+    byId("ed").textContent = "my password is hunter2";
+    await tick();
+    expect(recording.stop()).toMatchObject([
+      { kind: "announce", text: "my password is hunter2" },
+    ]);
+  });
+
+  it("withholds it in a designMode document, which is one editor whole", async () => {
+    document.body.innerHTML = `<main><p role="status" id="s"></p></main>`;
+    document.designMode = "on";
+    try {
+      const recording = startTimeline(document.querySelector("main")!, {
+        redactInput: true,
+      });
+      byId("s").textContent = "my password is hunter2";
+      await tick();
+      expect(recording.stop()).toEqual([
+        {
+          kind: "announce",
+          role: "status",
+          text: "[redacted]",
+          live: "polite",
+        },
+      ]);
+    } finally {
+      document.designMode = "off";
+    }
+  });
+
+  it("still announces a region's own text in strict mode", async () => {
+    document.body.innerHTML = `<main><p role="status" id="s"></p></main>`;
+    const recording = startTimeline(document.querySelector("main")!, {
+      redactInput: true,
+    });
+    byId("s").textContent = "Saved.";
+    await tick();
+    expect(recording.stop()).toMatchObject([{ text: "Saved." }]);
+  });
+});

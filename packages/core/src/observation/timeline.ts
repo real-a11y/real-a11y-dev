@@ -31,6 +31,7 @@ import {
 import {
   alreadySaid,
   announcedRead,
+  announcedText,
   audibleRead,
   gains,
   heldFrom,
@@ -130,7 +131,7 @@ class TimelineRecorder {
   constructor(
     private readonly root: Element,
     private readonly options: Required<
-      Pick<TimelineOptions, "focus" | "announcements">
+      Pick<TimelineOptions, "focus" | "announcements" | "redactInput">
     > &
       Pick<TimelineOptions, "onEvents">,
   ) {
@@ -436,6 +437,7 @@ class TimelineRecorder {
     const dom = extractDomTree(this.root, {
       nodes: new Map(),
       includeFocused: true,
+      redactInput: this.options.redactInput,
     });
     const id = dom.focusedId;
     const node = id ? dom.nodes.get(id) : undefined;
@@ -701,7 +703,7 @@ class TimelineRecorder {
     return {
       kind: "announce",
       role: getImplicitRole(region),
-      text: now.text,
+      text: announcedText(now, this.options.redactInput),
       live: level,
     };
   }
@@ -752,6 +754,8 @@ export function startTimeline(
     focus,
     announcements,
     onEvents,
+    // Any truthy value: a privacy switch never fails open.
+    redactInput: Boolean(options.redactInput),
   });
   return { stop: () => recorder.stop() };
 }

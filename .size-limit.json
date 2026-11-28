@@ -2,7 +2,7 @@
   {
     "name": "@real-a11y-dev/core (esm)",
     "path": "packages/core/dist/index.js",
-    "limit": "40.4 KB",
+    "limit": "40.5 KB",
     "gzip": true
   },
   {
@@ -29,7 +29,7 @@
   {
     "name": "@real-a11y-dev/testing (esm)",
     "path": "packages/testing/dist/index.js",
-    "limit": "36.6 KB",
+    "limit": "36.7 KB",
     "gzip": true
   },
   {
@@ -56,6 +56,12 @@
     "name": "@real-a11y-dev/browser (page-bundle IIFE)",
     "path": "packages/browser/dist/page-bundle.iife.global.js",
     "limit": "27 KB",
+    "gzip": true
+  },
+  {
+    "name": "@real-a11y-dev/browser (timeline-bundle IIFE)",
+    "path": "packages/browser/dist/timeline-bundle.iife.global.js",
+    "limit": "23.6 KB",
     "gzip": true
   }
 ]
