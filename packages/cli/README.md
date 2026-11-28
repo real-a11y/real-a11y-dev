@@ -80,7 +80,8 @@ opt out.
 | `inspect <url>` | Findings **plus** tree + outline, one extraction |
 | `tree <url>` | The semantic tree (role + accessible name) |
 | `outline <url>` | Heading outline |
-| `tabs <url>` | Focusable elements in Tab order (the one in-page read) |
+| `tabs <url>` | Focusable elements in Tab order (an in-page read) |
+| `timeline <start\|stop> --session …` | Focus moves + live-region announcements between commands (the other in-page read) |
 | `list <cat> <url>` | One category: heading, link, button, form, landmark, image |
 | `interact <url> --step …` | Run steps on a page, then show what they changed |
 | `click <url> --role …` | Click one element by role + accessible name |
@@ -112,6 +113,21 @@ The first `--session` run starts a background daemon; later runs connect to it
 and act on the same live page. The session name defaults to a stable hash of
 the current working directory and can be set in `a11y.config.json` with
 `defaults.session`.
+
+A session is also what lets you see what happened **between** two commands.
+`timeline` records where focus went and what live regions announced, in order:
+
+```sh
+real-a11y timeline start https://example.com --session checkout --root main
+real-a11y click https://example.com --session checkout --role button --name "Add to cart"
+real-a11y timeline stop --session checkout
+# announce  status "Adding…"
+# announce  status "Added to cart."
+```
+
+The recording lives in the page's document, so a navigation ends it: `stop`
+prints the lines from before it and says where the page went. `--format json`
+gives the events as data, with `a11y.config.json`'s `redact` patterns applied.
 
 Local builds audit directly: `real-a11y audit ./dist/index.html` (paths you
 type need no ceremony).
@@ -165,8 +181,10 @@ take **no `--root`** either.
 **`tabs` is the exception, and not a fallback.** Chromium's tree knows whether a
 node is *focusable*, but not the *sequence*: `tabindex` never reaches a native
 node, and ordering by it is DOM/layout work the AX tree doesn't expose. So
-`real-a11y tabs` still runs the in-page walk — the only source there is — and is
-the one command `--root` still scopes.
+`real-a11y tabs` still runs the in-page walk — the only source there is — and
+takes `--root`. **`timeline` is the second, for the same reason**: the order of
+focus moves and live-region announcements exists only in the page (ADR-0002),
+so `timeline start --root <selector>` scopes what it records.
 
 Two consequences worth knowing before you upgrade:
 

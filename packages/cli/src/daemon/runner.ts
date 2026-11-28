@@ -31,6 +31,11 @@ import {
   validateSnapshot,
 } from "../commands/snapshot.js";
 import {
+  runTimelineOnSession,
+  timelineTargets,
+  validateTimeline,
+} from "../commands/timeline.js";
+import {
   runListOnSession,
   runOutlineOnSession,
   runTabsOnSession,
@@ -77,6 +82,9 @@ export function validateCommand(
     case "focus":
       validateInteract(command, positionals, flags);
       return;
+    case "timeline":
+      validateTimeline(positionals, flags);
+      return;
     default:
       return;
   }
@@ -104,6 +112,8 @@ export function resolveCommandTargets(
       return resolveAuditTargets(positionals, flags);
     case "snapshot":
       return resolveSnapshotTargets(positionals, flags).targets;
+    case "timeline":
+      return timelineTargets(positionals, flags);
     default:
       return [];
   }
@@ -138,6 +148,8 @@ export async function runCommandOnSession(
       return runAuditOnSession(session, positionals, flags);
     case "snapshot":
       return runSnapshotOnSession(session, positionals, flags);
+    case "timeline":
+      return runTimelineOnSession(session, positionals, flags);
     default:
       throw new Error(
         `command "${command}" is not supported by the daemon in this release`,

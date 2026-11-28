@@ -44,6 +44,15 @@ export interface PageReport {
    * changes) and means `url` is where the page LANDED, not where it opened.
    */
   navigated?: boolean;
+  /** `timeline stop` — the recorded lines. */
+  timeline?: string;
+  /**
+   * `timeline stop` — the recorded events, with the config's `redact`
+   * patterns applied to their text, as `timeline` applies them.
+   */
+  events?: readonly unknown[];
+  /** `timeline stop` — events past the recording's cap were dropped. */
+  truncated?: boolean;
   /** Page-level failure; other pages still report. */
   error?: string;
 }
@@ -77,7 +86,10 @@ export function renderJson(
       ...(page.items !== undefined ? { items: page.items } : {}),
       ...(page.steps !== undefined ? { steps: page.steps } : {}),
       ...(page.diff !== undefined ? { diff: page.diff } : {}),
+      ...(page.timeline !== undefined ? { timeline: page.timeline } : {}),
+      ...(page.events !== undefined ? { events: page.events } : {}),
       ...(page.navigated !== undefined ? { navigated: page.navigated } : {}),
+      ...(page.truncated !== undefined ? { truncated: page.truncated } : {}),
       ...(page.error !== undefined ? { error: page.error } : {}),
     })),
   };

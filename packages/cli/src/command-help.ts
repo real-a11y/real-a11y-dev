@@ -118,9 +118,9 @@ export const HELP_TABS = `Usage: real-a11y tabs <url> [flags]
 
 Print every focusable element in Tab order.
 
-The only command still built from the in-page DOM walk, and the only one that
-takes --root. Chromium's accessibility tree knows whether a node is focusable,
-but not the SEQUENCE — tabindex never reaches it — so tab order is DOM work by
+Built from the in-page DOM walk, as timeline is, which is why it takes
+--root. Chromium's accessibility tree knows whether a node is focusable, but
+not the SEQUENCE — tabindex never reaches it — so tab order is DOM work by
 nature, not a fallback.
 
 Each stop shows its field value; a password, one-time code or payment field
@@ -137,6 +137,52 @@ Each stop's states and description follow it in a {…} block, as in tree;
 Flags:
   --no-states            Leave out each stop's {…} states block
 ${SHARED_FLAG_HELP_ROOT}
+`;
+
+export const HELP_TIMELINE = `Usage: real-a11y timeline <start|stop> [flags]
+
+  real-a11y timeline start <url> --session <name> [--root <selector>]
+  real-a11y timeline stop --session <name> [-f json] [-o <file>]
+
+Record what a keyboard and screen-reader user meets between commands on a
+session: where focus goes, and what live regions announce, in the order the
+page made them. 'start' begins recording on the session's page; act on it
+with click, type, focus or interact on the same --session; 'stop' prints one
+line per event.
+
+  focus     button "Delete draft"
+  announce  status "Deleting…"
+  focus     (none)
+  focus     button "New draft"
+  announce  status "Draft deleted."
+
+The second command built from an in-page walk, after tabs, and for the same
+reason: that order exists only in the page. So 'start' takes --root, which
+scopes what is recorded, and the recorder is injected into the page only
+while it records.
+
+The recording lives in the page's document, so a navigation ends it. 'stop'
+then prints the lines from before it and says where the page went. A
+recording also ends when its session stops or idles out.
+
+--redact-input on 'start' withholds a focused name, or an announcement, that
+would carry text typed into a rich-text editor: it reads "[redacted]". A
+'stop' with --redact-input refuses to print a recording started without it.
+a11y.config.json "redact" patterns apply to the lines and to --format json's
+events.
+
+Examples:
+  real-a11y timeline start http://localhost:3000 --session s --root main
+  real-a11y click http://localhost:3000 --session s --role button --name "Delete draft"
+  real-a11y timeline stop --session s
+  real-a11y timeline stop --session s --format json
+
+Flags:
+  --session <name>       The session to record on              (required)
+  --root <selector>      start: scope what is recorded    (default: body)
+  -f, --format <fmt>     stop: pretty | json              (default: pretty)
+  -o, --output <file>    stop: write the lines to a file
+${SHARED_FLAG_HELP_NO_ROOT}
 `;
 
 export const HELP_LIST = `Usage: real-a11y list <category> <url> [flags]

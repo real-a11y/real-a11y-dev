@@ -256,7 +256,7 @@ export async function run(argv: string[]): Promise<number> {
           cdpDroppedDefaultsWarning(dropped, basename(resolved.path)),
         );
       }
-      // `defaults.root` now reaches only `tabs`. Warn rather than hard-error:
+      // `defaults.root` now reaches only `tabs` and `timeline`. Warn rather than hard-error:
       // the config loader is strict and fail-closed, so erroring here would red
       // every CI that set this key — mid-beta, over config that was correct
       // when it was written, for a change the user didn't make.
@@ -272,7 +272,7 @@ export async function run(argv: string[]): Promise<number> {
       ) {
         process.stderr.write(
           `real-a11y: warning: \`defaults.root\` in a11y.config.json doesn't apply to \`${name}\` — ` +
-            `it reads Chromium's whole-document accessibility tree. Only \`tabs\` still scopes.\n`,
+            `it reads Chromium's whole-document accessibility tree. Only \`tabs\` and \`timeline\` still scope.\n`,
         );
       }
     }

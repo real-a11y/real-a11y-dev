@@ -29,6 +29,7 @@ import {
   HELP_SNAPSHOT,
   HELP_DIFF,
   HELP_SHOW_REPORT,
+  HELP_TIMELINE,
 } from "./command-help.js";
 import { CliError, type FailOn } from "./exit.js";
 import {
@@ -45,6 +46,7 @@ import {
   SNAPSHOT_FLAGS,
   DIFF_FLAGS,
   SHOW_REPORT_FLAGS,
+  TIMELINE_FLAGS,
   LIST_CATEGORIES,
   type ListCategory,
 } from "./flag-tables.js";
@@ -96,9 +98,10 @@ export interface CommandSpec {
    * Which producer builds this command's tree — exactly one, or none.
    *
    * `[]` for the commands that build no tree at all (`install`, `login`,
-   * `diff`). Everything else is `["native"]` except `tabs`, which is `["dom"]`
-   * because a native tree carries no tab SEQUENCE and an in-page walk is the
-   * only source of one.
+   * `diff`). Everything else is `["native"]` except the two DOM holdouts:
+   * `tabs`, because a native tree carries no tab SEQUENCE and an in-page walk
+   * is the only source of one, and `timeline`, because the order of focus
+   * moves and announcements exists only in the page (ADR-0002).
    *
    * It was a set because `--producer` let a user pick; now each surface has
    * exactly one correct producer and the flag is gone. The field stays — and
@@ -163,9 +166,10 @@ export const COMMANDS: Record<string, CommandSpec> = {
   tabs: {
     summary: "Focusable elements in Tab order",
     group: "view",
-    // The one DOM holdout, and not a fallback: a native tree knows per-node
+    // The first DOM holdout, and not a fallback: a native tree knows per-node
     // focusability but not the SEQUENCE, so this is the only source there is.
-    // Being an in-page walk is also why it alone still takes `--root`.
+    // Being an in-page walk is also why it takes `--root`, as `timeline`,
+    // the second holdout, does.
     producers: ["dom"],
     options: TABS_FLAGS,
     help: HELP_TABS,
@@ -212,6 +216,20 @@ export const COMMANDS: Record<string, CommandSpec> = {
     options: ACT_FLAGS,
     help: HELP_FOCUS,
     load: async () => (await import("./commands/interact.js")).focusCommand,
+  },
+  timeline: {
+    summary: "Record focus moves + announcements between commands",
+    group: "view",
+    // The second DOM holdout (ADR-0002), for the same reason as `tabs`: the
+    // ORDER of focus moves and announcements exists only in the page — CDP
+    // has no announcement event, and can't see where a focus event fell
+    // among the page's own mutations. So the recorder runs in the page,
+    // injected only while a timeline records, and takes `--root`. Do not
+    // "unify" it onto the native tree.
+    producers: ["dom"],
+    options: TIMELINE_FLAGS,
+    help: HELP_TIMELINE,
+    load: async () => (await import("./commands/timeline.js")).timelineCommand,
   },
   login: {
     summary: "Save a login session for --storage-state audits",
@@ -274,6 +292,7 @@ const USAGE: Record<string, string> = {
   focus: "focus <url> --role",
   login: "login <url> --save",
   session: "session <subcommand>",
+  timeline: "timeline <subcommand>",
   snapshot: "snapshot [url...]",
   diff: "diff <base> <pr>",
   "show-report": "show-report [dir]",

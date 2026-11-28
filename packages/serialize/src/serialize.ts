@@ -99,7 +99,8 @@ function redactText(input: string, patterns: RegExp[] | undefined): string {
  * match of every pattern becomes `[REDACTED]`. For text a reader prints next
  * to serialized lines, such as the timeline's announcements.
  *
- * @internal For `serializeTimeline` (`timeline.ts`); not in the package's index.
+ * @internal For `serializeTimeline` (`timeline.ts`), and the CLI's timeline
+ * events, which must read as its lines do. Not a stability promise.
  */
 export function redactString(input: string, redact?: RegExp[]): string {
   return redactText(input, ensureGlobalFlags(redact));
