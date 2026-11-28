@@ -29,6 +29,7 @@ type Send = (
   responseCallback?: (response: unknown) => void,
 ) => void;
 
+/** @internal Extension-only. Not a stability promise. */
 export interface Timeline {
   state: TimelineState;
   record: () => void;
@@ -48,7 +49,10 @@ function newSession(): string {
 
 /** What a message means for the recording, or null when it is none of its
  *  business. Only the top frame records: a run from anywhere else is
- *  no one's. */
+ *  no one's.
+ *
+ * @internal Extension-only. Not a stability promise.
+ */
 export function timelineActionFor(
   message: ContentToPanel,
   frameId: number | undefined,
@@ -150,19 +154,22 @@ function useRecordingPort(stateRef: { current: TimelineState }) {
       }
       port.current = opened;
       heldFor.current = session;
+      const openedAt = Date.now();
       opened.onDisconnect.addListener(() => {
         if (port.current !== opened) return;
         port.current = null;
         heldFor.current = null;
         const now = stateRef.current;
-        // A few times at most: a worker that turns the port away at once
-        // would otherwise be asked again without end.
+        // A worker that idles out drops the port after a while, as often as
+        // a recording runs that long: held again each time. One that turns
+        // it away at once is asked a few times at most, not without end.
+        const quick = Date.now() - openedAt < PORT_HELD_MS ? held + 1 : 0;
         if (
-          held < MAX_PORT_HOLDS &&
+          quick < MAX_PORT_HOLDS &&
           isRecording(now) &&
           now.session === session
         ) {
-          holdPort(tabId, session, held + 1);
+          holdPort(tabId, session, quick);
         }
       });
     },
@@ -171,8 +178,10 @@ function useRecordingPort(stateRef: { current: TimelineState }) {
   return { hold, release, releaseFor };
 }
 
-/** How many times a recording's port is opened again after it drops. */
+/** How many times in a row a recording's port is opened again after it
+ *  drops within `PORT_HELD_MS` of opening. */
 const MAX_PORT_HOLDS = 5;
+const PORT_HELD_MS = 1000;
 
 /** Record and Stop, and the stops the panel makes itself. */
 function useRecordStop(
@@ -253,6 +262,7 @@ function useRecordStop(
   return { record, stop, stopInPage };
 }
 
+/** @internal Extension-only. Not a stability promise. */
 export function useTimeline(
   myTabId: number | null,
   sendToBoundTab: Send,

@@ -2,7 +2,7 @@ import type { TimelineEvent } from "@real-a11y-dev/core";
 import { serializeTimeline } from "@real-a11y-dev/serialize";
 import { render, h } from "preact";
 import { act } from "preact/test-utils";
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 import type { ContentToPanel, PanelToContent } from "../types.js";
 
@@ -367,5 +367,41 @@ describe("the TIMELINE view", () => {
     await flush();
     expect(container.querySelector(".sn-timeline")).toBeNull();
     expect(document.activeElement).not.toBe(document.body);
+  });
+
+  it("holds its port again each time a worker that idled out drops it", async () => {
+    await mountTimeline();
+    await recordTwoLines();
+    const now = Date.now();
+    for (let i = 1; i <= 8; i++) {
+      // Each drop comes long after its port opened, as an idle worker's does.
+      const later = now + i * 60_000;
+      const spy = vi.spyOn(Date, "now").mockReturnValue(later);
+      act(() => chromeMock.otherPorts.at(-1)!.drop());
+      spy.mockRestore();
+    }
+    expect(chromeMock.otherPorts).toHaveLength(9);
+  });
+
+  it("asks a few times at most for a port the worker turns away at once", async () => {
+    await mountTimeline();
+    await recordTwoLines();
+    for (let i = 0; i < 10; i++) {
+      act(() => chromeMock.otherPorts.at(-1)!.drop());
+    }
+    expect(chromeMock.otherPorts.length).toBeLessThanOrEqual(6);
+  });
+
+  it("still shows a finished recording to copy on a page that can't connect", async () => {
+    await mountTimeline();
+    await recordTwoLines();
+    // To a page no content script runs on (a PDF): nothing connects again.
+    act(() => {
+      chromeMock.emit({ type: "PAGE_NAVIGATED", tabId: TAB_ID });
+    });
+    await flush();
+    expect(lines()).toHaveLength(2);
+    await press("Copy");
+    expect(clipboard).toEqual([serializeTimeline([deleteDraft, nowhere])]);
   });
 });

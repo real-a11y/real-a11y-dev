@@ -710,6 +710,19 @@ describe("content: live regions", () => {
     ]);
   });
 
+  it("keeps logging, once each, past the point its recorder renews itself", async () => {
+    const region = document.getElementById("status")!;
+    const said: unknown[] = [];
+    for (let i = 0; i < 250; i++) {
+      region.textContent = `Step ${i}`;
+      said.push(...(await flush()).splice(said.length));
+    }
+    const texts = (await flush()).map((p) => (p as { text: string }).text);
+    expect(texts).toHaveLength(250);
+    expect(new Set(texts).size).toBe(250);
+    expect(texts.at(-1)).toBe("Step 249");
+  });
+
   it("names a region by its author's role, and one with none a status", async () => {
     document.body.insertAdjacentHTML(
       "beforeend",
@@ -2379,6 +2392,26 @@ describe("content: the TIMELINE view's recording", () => {
         payload: { session: "s1", reason: "replaced" },
       },
     ]);
+  });
+
+  it("names the host of a closed shadow root a focus line names, not the control inside", async () => {
+    const host = document.createElement("div");
+    host.setAttribute("role", "group");
+    host.setAttribute("aria-label", "Picker");
+    const root = host.attachShadow({ mode: "closed" });
+    root.innerHTML = `<button>Inner</button>`;
+    document.body.append(host);
+    // Chrome lets the content script into a closed root, as page script
+    // can't: the content script's own reads see the control inside.
+    (h.chromeMock as { dom?: unknown }).dom = {
+      openOrClosedShadowRoot: (el: Element) => (el === host ? root : null),
+    };
+    root.querySelector("button")!.focus();
+    start();
+    const [first] = await items();
+    // The recorder sees no further than the host, and the line names it.
+    expect(first!.event.kind).toBe("focus");
+    expect(getElementRefs().get(first!.nodeId!)).toBe(host);
   });
 
   it("stops whatever its last run throws, and goes on", async () => {

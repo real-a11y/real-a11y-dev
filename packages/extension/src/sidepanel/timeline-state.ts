@@ -14,9 +14,13 @@ import { serializeTimeline } from "@real-a11y-dev/serialize";
 import type { TimelineEndReason, TimelineItem } from "../timeline-recording.js";
 
 /** Why a recording stopped without Stop: the page's own reasons
- *  (`TimelineEndReason`), or the panel moving to another tab. */
+ *  (`TimelineEndReason`), or the panel moving to another tab.
+ *
+ * @internal Extension-only. Not a stability promise.
+ */
 export type TimelineStopCause = TimelineEndReason | "tab";
 
+/** @internal Extension-only. Not a stability promise. */
 export interface TimelineLine {
   /** Unique in the recording, for rendering. */
   id: number;
@@ -28,6 +32,7 @@ export interface TimelineLine {
   nodeId?: string;
 }
 
+/** @internal Extension-only. Not a stability promise. */
 export interface TimelineState {
   /** `starting` while the page has yet to answer Record. */
   status: "idle" | "starting" | "recording" | "stopped";
@@ -42,6 +47,7 @@ export interface TimelineState {
   linked: boolean;
 }
 
+/** @internal Extension-only. Not a stability promise. */
 export const initialTimeline: TimelineState = {
   status: "idle",
   session: null,
@@ -49,6 +55,7 @@ export const initialTimeline: TimelineState = {
   linked: false,
 };
 
+/** @internal Extension-only. Not a stability promise. */
 export type TimelineAction =
   | { type: "start"; session: string }
   | { type: "started"; session: string }
@@ -65,6 +72,8 @@ const KNOWN_KINDS = new Set(["focus", "announce"]);
  * this panel doesn't know (core can add kinds before the panel catches up)
  * still gets a line: `serializeTimeline`'s, when it writes one for that
  * kind, or the kind on its own, rather than a line that misreads it.
+ *
+ * @internal Extension-only. Not a stability promise.
  */
 export function timelineLine(event: TimelineEvent): string {
   const kind = String((event as { kind: unknown }).kind);
@@ -78,7 +87,11 @@ export function timelineLine(event: TimelineEvent): string {
   return `${kind.padEnd(10)}(not shown in this version)`;
 }
 
-/** Copy's text: exactly `serializeTimeline`'s lines for the recording. */
+/**
+ * Copy's text: exactly `serializeTimeline`'s lines for the recording.
+ *
+ * @internal Extension-only. Not a stability promise.
+ */
 export function timelineText(state: TimelineState): string {
   return serializeTimeline(state.lines.map((line) => line.event));
 }
@@ -112,7 +125,11 @@ const CAUSES: Record<TimelineStopCause, string> = {
   tab: "Recording ended: the panel moved to another tab.",
 };
 
-/** Is the recording running, or about to? */
+/**
+ * Is the recording running, or about to?
+ *
+ * @internal Extension-only. Not a stability promise.
+ */
 export function isRecording(state: TimelineState): boolean {
   return state.status === "recording" || state.status === "starting";
 }
@@ -186,6 +203,7 @@ const reducers: {
       : { ...initialTimeline },
 };
 
+/** @internal Extension-only. Not a stability promise. */
 export function timelineReducer(
   state: TimelineState,
   action: TimelineAction,
@@ -197,7 +215,11 @@ export function timelineReducer(
   return reduce(state, action);
 }
 
-/** The status line under the controls. */
+/**
+ * The status line under the controls.
+ *
+ * @internal Extension-only. Not a stability promise.
+ */
 export function timelineStatus(state: TimelineState): string {
   const count = state.lines.length;
   const lines = `${count} ${count === 1 ? "line" : "lines"}`;

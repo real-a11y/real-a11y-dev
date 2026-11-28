@@ -41,6 +41,7 @@ import {
 } from "./routing.js";
 import { elementsFromTabSequence, sendKey } from "./send-key.js";
 import {
+  focusedForTimeline,
   recordLiveRegions,
   stopQuietly,
   TimelineSession,
@@ -736,12 +737,8 @@ const onNativePreview = (e: Event) => highlightFromNativeEvent(e, "preview");
 // timeline-recording.ts.
 
 const timeline = new TimelineSession({
-  // Where focus rests, for a focus line's node: null on `<body>`, `<html>`
-  // or nothing, as the recorder reads it.
-  focused: () => {
-    const el = deepActiveElement();
-    return el === documentBody() || el === boundRoot ? null : el;
-  },
+  // Where focus rests, for a focus line's node, as the recorder reads it.
+  focused: () => focusedForTimeline(document),
   // The id `HIGHLIGHT_NODE` finds the element by, as an overlay's.
   idFor: (el) => {
     const id = elementRefs.findId(el) ?? getNodeId(el);
@@ -794,17 +791,6 @@ function startObserving() {
   // (node ids are a per-frame counter, so the ids collide). The 200ms merge
   // debounce in the background collapses this with any duplicate send.
   sendTree();
-}
-
-// Through the prototype: a named <img> or <form> called `body` shadows the
-// document's own.
-const bodyGetter = Object.getOwnPropertyDescriptor(
-  Document.prototype,
-  "body",
-)?.get;
-function documentBody(): Element | null {
-  const body: unknown = bodyGetter ? bodyGetter.call(document) : document.body;
-  return body instanceof Element ? body : null;
 }
 
 /** Disarm observation when the panel disconnects. Idempotent. */

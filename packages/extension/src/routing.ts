@@ -319,6 +319,8 @@ export function isTrustedSender(
  * worker's main router: native mode's `NATIVE_*` (`native/index.ts`) and the
  * TIMELINE view's `TIMELINE_*` (`timeline-relay.ts`). Pure, so the router's
  * skip is tested without a Chrome mock.
+ *
+ * @internal Extension-only. Not a stability promise.
  */
 export function handledByOwnListener(message: unknown): boolean {
   const type = (message as { type?: unknown } | null)?.type;

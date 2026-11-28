@@ -12,6 +12,7 @@ import type { ContentToPanel } from "../types.js";
 
 type LiveRegionMessage = Extract<ContentToPanel, { type: "LIVE_REGION" }>;
 
+/** @internal Extension-only. Not a stability promise. */
 export interface LiveEntry {
   id: number;
   text: string;
@@ -25,7 +26,10 @@ const SHOWN = 5;
 const SHOWN_MS = 8000;
 
 /** The line's announcements, and `take`, for the panel's listener to hand
- *  each `LIVE_REGION` to. */
+ *  each `LIVE_REGION` to.
+ *
+ * @internal Extension-only. Not a stability promise.
+ */
 export function useLiveLog(): {
   entries: LiveEntry[];
   take: (message: LiveRegionMessage) => void;
@@ -44,7 +48,10 @@ export function useLiveLog(): {
 
 /** Mounted before the first announcement arrives — see the search count in
  *  NativeTreeView. Relaying the page's live regions through one that is not
- *  itself announced defeats the whole feature. */
+ *  itself announced defeats the whole feature.
+ *
+ * @internal Extension-only. Not a stability promise.
+ */
 export function LiveLog({ entries }: { entries: LiveEntry[] }) {
   return (
     <div class="sn-live-log" role="log" aria-label="Live announcements">

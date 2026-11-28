@@ -98,10 +98,9 @@ import { NativeTreeView, type NativeReveal } from "./NativeTreeView.js";
 import { describeNode } from "./scope.js";
 import { KEYS } from "./SendKeyBar.js";
 import { dispatchTabAction, tabRowTarget } from "./tab-action.js";
-import { TimelineView } from "./TimelineView.js";
+import { useTimelineView } from "./TimelineView.js";
 import { readRun, useNativeChanges } from "./use-native-changes.js";
 import { useStoredFlag } from "./use-stored-flag.js";
-import { useTimeline } from "./use-timeline.js";
 import { useNativeOverlay } from "./useNativeOverlay.js";
 
 /** How many settle windows (~5s) `whenNativeIdle` waits for a native read or
@@ -906,7 +905,7 @@ export function App() {
   }, []);
 
   // The TIMELINE view's recording, in the panel's memory only.
-  const timeline = useTimeline(myTabId, sendToBoundTab, announce);
+  const timeline = useTimelineView(myTabId, sendToBoundTab, announce, setView);
 
   // Listen for tree data and focus changes from content script
   useEffect(() => {
@@ -2530,6 +2529,8 @@ export function App() {
             </button>
           </div>
         </div>
+        {/* A recording outlives the page it read: still there to copy. */}
+        {view === "timeline" && timeline}
         {feedbackRegion}
       </div>
     );
@@ -2756,9 +2757,7 @@ export function App() {
       </div>
       {/* The page's own recording, as the TAB view is its own walk: Chrome
           has no order of focus moves or announcements (ADR-0002). */}
-      {view === "timeline" && (
-        <TimelineView {...timeline} onViewChange={setView} />
-      )}
+      {view === "timeline" && timeline}
 
       <LiveLog entries={liveLog.entries} />
     </div>

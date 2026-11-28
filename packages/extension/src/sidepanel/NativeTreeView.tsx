@@ -587,8 +587,8 @@ export function NativeTreeView({
   useEffect(() => {
     if (!pageFocus) return;
     const id = pageFocus.nodeId;
-    // Nor while the tab order shows in the tree's place, as the list does.
-    if (!nodes.has(id) || shownTabOrder) return;
+    // Nor while the tab order or the timeline shows in the tree's place.
+    if (!nodes.has(id) || shownTabOrder || view === "timeline") return;
     if (roleFilter !== null || (hasFilter && !search.visibleIds.has(id))) {
       return;
     }

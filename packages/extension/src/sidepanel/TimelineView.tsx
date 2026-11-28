@@ -14,7 +14,7 @@ import { useEffect, useRef } from "preact/hooks";
 
 import { NativeViewToggle, type NativeView } from "./NativeTabView.js";
 import { isRecording, timelineStatus } from "./timeline-state.js";
-import type { Timeline } from "./use-timeline.js";
+import { useTimeline, type Timeline } from "./use-timeline.js";
 
 /** Where focus was when the view came up, if the switch to it left focus
  *  nowhere: on the panel's body, or on the tree's toggle, which hides with
@@ -102,7 +102,10 @@ function TimelineControls({
 }
 
 /** The recording (`useTimeline`): its state, and what each control does.
- *  `highlight` shows a line's node on the page. */
+ *  `highlight` shows a line's node on the page.
+ *
+ * @internal Extension-only. Not a stability promise.
+ */
 export function TimelineView(props: TimelineViewProps) {
   const { state, highlight: onHighlight } = props;
   return (
@@ -127,4 +130,22 @@ export function TimelineView(props: TimelineViewProps) {
       </ol>
     </div>
   );
+}
+
+/**
+ * The recording (`useTimeline`) and its view, for App to show while TIMELINE
+ * is chosen: in the tree's place, and on the screen the panel shows while no
+ * page is connected, after a navigation to one no content script can run on
+ * (a PDF, say), where the finished recording can still be read and copied.
+ *
+ * @internal Extension-only. Not a stability promise.
+ */
+export function useTimelineView(
+  ...[myTabId, send, announce, onViewChange]: [
+    ...Parameters<typeof useTimeline>,
+    (view: NativeView) => void,
+  ]
+) {
+  const timeline = useTimeline(myTabId, send, announce);
+  return <TimelineView {...timeline} onViewChange={onViewChange} />;
 }
