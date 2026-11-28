@@ -95,6 +95,25 @@ describe("DomObserver", () => {
     ).toBe(true);
   });
 
+  it.each(["min", "max"])(
+    "observes a range input's %s, its reported bound",
+    async (attr) => {
+      document.body.innerHTML = `<input id="r" type="range" aria-label="R">`;
+      observer = new DomObserver(document.body, onTreeChange, 100);
+      observer.start();
+
+      document.getElementById("r")!.setAttribute(attr, "10");
+
+      await settleObserver(100);
+
+      expect(onTreeChange).toHaveBeenCalledTimes(1);
+      const change = onTreeChange.mock.calls[0]![0]!;
+      expect(
+        change.mutations?.some((m: MutationRecord) => m.attributeName === attr),
+      ).toBe(true);
+    },
+  );
+
   it.each(["size", "multiple"])(
     "observes a select's %s, which decides its shape",
     async (attr) => {

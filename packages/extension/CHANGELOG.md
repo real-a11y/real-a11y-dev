@@ -21,6 +21,10 @@
 
 ### Patch Changes
 
+- **No change to the TAB view.** The in-page walk the TAB view and the key bar's
+  Tab use gained a range widget's `valuemin`/`valuemax` in `a11y.properties`;
+  neither view prints them, and the A11Y view reads Chromium's own tree
+  ([#748](https://github.com/real-a11y/real-a11y-dev/pull/748)).
 - **Internal refactor, no behaviour change.** `dispatchNative` in `native-core.ts`
   is split into smaller helpers
   ([#734](https://github.com/real-a11y/real-a11y-dev/pull/734)).

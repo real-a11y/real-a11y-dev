@@ -41,6 +41,33 @@ describe("LiveTreeExtractor", () => {
     expect(live.extract()).toEqual(expected);
   });
 
+  it("publishes a range input's new bound after its max changes", async () => {
+    document.body.innerHTML = `<main><input type="range" max="10" aria-label="r"></main>`;
+
+    const live = new LiveTreeExtractor(document.body, { mode: "a11y" });
+    let lastChange: TreeChange | undefined;
+    const observer = new DomObserver(
+      document.body,
+      (change) => {
+        lastChange = change;
+      },
+      50,
+    );
+    observer.start();
+
+    document.querySelector("input")!.setAttribute("max", "20");
+    await vi.advanceTimersByTimeAsync(100);
+
+    const result = live.refresh(lastChange);
+    const input = [...result.nodes.values()].find(
+      (n) => n.a11y.role === "slider",
+    )!;
+    expect(input.a11y.properties["valuemax"]).toBe("20");
+    expect(result.nodes).toEqual(extractA11yTree(document.body).nodes);
+
+    observer.stop();
+  });
+
   it("updates a button name when its text node changes", async () => {
     document.body.innerHTML = `<main><button>Old</button></main>`;
 

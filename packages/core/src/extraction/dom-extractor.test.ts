@@ -3006,6 +3006,150 @@ describe("extractDomTree", () => {
     expect(h2.a11y.properties["level"]).toBe("2");
   });
 
+  describe("range bounds", () => {
+    const only = (html: string) => {
+      const { nodes, rootId } = extractDomTree(createPage(html));
+      return nodes.get(nodes.get(rootId)!.childIds[0]!)!;
+    };
+
+    it("reports an ARIA slider's authored bounds and keeps its value", () => {
+      const n = only(
+        '<div role="slider" aria-valuenow="5" aria-valuemin="1" aria-valuemax="9" aria-valuetext="five" aria-label="s"></div>',
+      );
+      expect(n.a11y.properties).toEqual({ valuemin: "1", valuemax: "9" });
+      expect(n.a11y.value).toBe("five");
+    });
+
+    it("reports a range input's HTML bounds", () => {
+      const n = only(
+        '<input type="range" min="0" max="10" step="2" value="4" aria-label="r">',
+      );
+      expect(n.a11y.properties).toEqual({ valuemin: "0", valuemax: "10" });
+      expect(n.a11y.value).toBe("4");
+    });
+
+    it("gives a range input HTML's 0 to 100 when it sets none", () => {
+      expect(
+        only('<input type="range" aria-label="r">').a11y.properties,
+      ).toEqual({ valuemin: "0", valuemax: "100" });
+    });
+
+    it("lets the ARIA bound win over the HTML one", () => {
+      const n = only(
+        '<input type="range" min="0" max="10" aria-valuemin="2" aria-valuemax="8" aria-label="r">',
+      );
+      expect(n.a11y.properties).toEqual({ valuemin: "2", valuemax: "8" });
+    });
+
+    it("reports progress and meter bounds", () => {
+      expect(
+        only('<progress max="100" value="30"></progress>').a11y.properties,
+      ).toEqual({ valuemin: "0", valuemax: "100" });
+      expect(only("<progress></progress>").a11y.properties).toEqual({
+        valuemin: "0",
+        valuemax: "1",
+      });
+      expect(
+        only('<meter min="0" max="10" value="6"></meter>').a11y.properties,
+      ).toEqual({ valuemin: "0", valuemax: "10" });
+      expect(only('<meter value="0.5"></meter>').a11y.properties).toEqual({
+        valuemin: "0",
+        valuemax: "1",
+      });
+    });
+
+    it("applies ARIA's 0 to 100 to a bare slider, with no invented value", () => {
+      const n = only('<div role="slider" aria-label="s"></div>');
+      expect(n.a11y.properties).toEqual({ valuemin: "0", valuemax: "100" });
+      expect(n.a11y.value).toBeUndefined();
+    });
+
+    it("gives a spinbutton no default bounds", () => {
+      expect(
+        only('<div role="spinbutton" aria-label="n"></div>').a11y.properties,
+      ).toEqual({});
+      expect(
+        only('<input type="number" min="1" aria-label="n">').a11y.properties,
+      ).toEqual({ valuemin: "1" });
+    });
+
+    it("treats an unparsable or empty bound as absent, and normalizes numbers", () => {
+      const n = only(
+        '<div role="slider" aria-valuemin="abc" aria-valuemax="1e2" aria-label="s"></div>',
+      );
+      expect(n.a11y.properties).toEqual({ valuemin: "0", valuemax: "100" });
+      expect(
+        only('<div role="slider" aria-valuemax="" aria-label="s"></div>').a11y
+          .properties,
+      ).toEqual({ valuemin: "0", valuemax: "100" });
+      expect(
+        only('<div role="slider" aria-valuemax="0.5" aria-label="s"></div>')
+          .a11y.properties["valuemax"],
+      ).toBe("0.5");
+    });
+
+    it("reports a separator's bounds only when it is focusable", () => {
+      expect(only('<div role="separator"></div>').a11y.properties).toEqual({});
+      expect(
+        only('<div role="separator" tabindex="0" aria-valuenow="5"></div>').a11y
+          .properties,
+      ).toEqual({ valuemin: "0", valuemax: "100" });
+    });
+
+    it("raises an effective max to a min above it, as HTML does", () => {
+      expect(only('<meter min="5" value="6"></meter>').a11y.properties).toEqual(
+        {
+          valuemin: "5",
+          valuemax: "5",
+        },
+      );
+    });
+
+    it("resolves the HTML bounds together, so an ARIA min does not move the max", () => {
+      expect(
+        only('<meter min="5" value="5" aria-valuemin="0"></meter>').a11y
+          .properties,
+      ).toEqual({ valuemin: "0", valuemax: "5" });
+    });
+
+    it("rejects an HTML bound with a leading space or plus, as Chromium does", () => {
+      expect(
+        only('<input type="range" max=" 10" aria-label="r">').a11y.properties,
+      ).toEqual({ valuemin: "0", valuemax: "100" });
+      expect(
+        only('<input type="range" max="+10" aria-label="r">').a11y.properties,
+      ).toEqual({ valuemin: "0", valuemax: "100" });
+    });
+
+    it("accepts a leading space or plus on a meter or progress bound, as Chromium does", () => {
+      expect(
+        only('<progress max=" 10" value="5"></progress>').a11y.properties,
+      ).toEqual({ valuemin: "0", valuemax: "10" });
+      expect(
+        only('<meter min="+2" max=" 10" value="5"></meter>').a11y.properties,
+      ).toEqual({ valuemin: "2", valuemax: "10" });
+    });
+
+    it("reads only decimal bounds, and HTML bounds only on the element's own role", () => {
+      expect(
+        only('<div role="slider" aria-valuemax="0x10" aria-label="s"></div>')
+          .a11y.properties["valuemax"],
+      ).toBe("100");
+      expect(
+        only('<input type="range" role="spinbutton" aria-label="x">').a11y
+          .properties,
+      ).toEqual({});
+    });
+
+    it("never puts valuenow or valuetext in properties", () => {
+      const n = only(
+        '<div role="slider" aria-valuenow="5" aria-valuetext="five" aria-label="s"></div>',
+      );
+      expect(n.a11y.properties).not.toHaveProperty("valuenow");
+      expect(n.a11y.properties).not.toHaveProperty("valuetext");
+    });
+  });
+
   it("records aria-level on an hN and never a NaN level", () => {
     const root = createPage(
       '<h2 aria-level="3">a</h2><div role="heading" aria-level="abc">b</div>',
