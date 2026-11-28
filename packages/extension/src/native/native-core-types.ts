@@ -22,7 +22,7 @@ export type EnrichedNativeNode = NativeAXNode &
      * own AX value (a `<select>`'s selected option LABEL, an editor's text),
      * or a range widget's `aria-valuetext` — whitespace-collapsed and capped
      * at 240 characters. A sensitive field that holds anything reads
-     * {@link NATIVE_REDACTED_VALUE}. Absent when there is none, and whenever
+     * `NATIVE_REDACTED_VALUE`. Absent when there is none, and whenever
      * `pageReadValue` could not classify the element.
      */
     value?: string;

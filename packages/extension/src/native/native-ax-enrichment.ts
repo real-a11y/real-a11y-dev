@@ -18,7 +18,7 @@ import type { EnrichedNativeNode } from "./native-core-types.js";
 import { nativeIdOf, type RawAXNode } from "./native-withholding.js";
 
 /** The native node id for a DOM-backed node of this document:
- *  `ax-dom-<backendNodeId>`. The inverse of {@link backendNodeIdFrom}, and
+ *  `ax-dom-<backendNodeId>`. The inverse of `backendNodeIdFrom`, and
  *  core's {@link nativeNodeId} with no frame: build ids through these, never
  *  by hand, so the format lives in one place. */
 export function nativeIdForBackendNode(backendNodeId: number): string {
