@@ -14,6 +14,13 @@ import { defineConfig } from "tsup";
 // beside it, and every `attach()` / page open fails at runtime — silently,
 // because nothing type-checks a path. Inlining removes the path entirely.
 const BUNDLE_FILE = path.resolve(__dirname, "dist/page-bundle.iife.global.js");
+// The timeline view's recorder (ADR-0002), inlined the same way and for the
+// same reason. Built by `tsup.timeline-bundle.config.ts`, which `build` also
+// runs before this config.
+const TIMELINE_BUNDLE_FILE = path.resolve(
+  __dirname,
+  "dist/timeline-bundle.iife.global.js",
+);
 
 /**
  * Read the page-bundle to inline.
@@ -30,15 +37,16 @@ const BUNDLE_FILE = path.resolve(__dirname, "dist/page-bundle.iife.global.js");
  * read and is not: it reads `../ui/src/styles`, committed SOURCE that is always
  * present. Artifact vs source is the difference, and it is why this one is lazy.
  */
-function readPageBundle(): string {
+function readPageBundle(file: string = BUNDLE_FILE): string {
   try {
-    return readFileSync(BUNDLE_FILE, "utf8");
+    return readFileSync(file, "utf8");
   } catch {
     throw new Error(
-      `The page-bundle has not been built yet, so there is nothing to inline.\n` +
-        `  Expected: ${BUNDLE_FILE}\n\n` +
+      `An injected bundle has not been built yet, so there is nothing to inline.\n` +
+        `  Expected: ${file}\n\n` +
         `  Run \`pnpm build\` in this package once — it runs\n` +
-        `  tsup.page-bundle.config.ts first, which emits that file.`,
+        `  tsup.page-bundle.config.ts and tsup.timeline-bundle.config.ts\n` +
+        `  first, which emit the bundles.`,
     );
   }
 }
@@ -75,6 +83,9 @@ export default defineConfig({
     options.define = {
       ...options.define,
       __REAL_A11Y_PAGE_BUNDLE__: JSON.stringify(readPageBundle()),
+      __REAL_A11Y_TIMELINE_BUNDLE__: JSON.stringify(
+        readPageBundle(TIMELINE_BUNDLE_FILE),
+      ),
     };
   },
 });

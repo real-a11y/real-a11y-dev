@@ -132,7 +132,7 @@ class TimelineRecorder {
     private readonly options: Required<
       Pick<TimelineOptions, "focus" | "announcements">
     > &
-      Pick<TimelineOptions, "onEvents">,
+      Pick<TimelineOptions, "onEvents" | "redactInput">,
   ) {
     this.doc = safeOwnerDocument(root);
     if (options.announcements) this.readBaseline();
@@ -436,6 +436,7 @@ class TimelineRecorder {
     const dom = extractDomTree(this.root, {
       nodes: new Map(),
       includeFocused: true,
+      redactInput: this.options.redactInput,
     });
     const id = dom.focusedId;
     const node = id ? dom.nodes.get(id) : undefined;
@@ -752,6 +753,8 @@ export function startTimeline(
     focus,
     announcements,
     onEvents,
+    // Any truthy value: a privacy switch never fails open.
+    redactInput: Boolean(options.redactInput),
   });
   return { stop: () => recorder.stop() };
 }

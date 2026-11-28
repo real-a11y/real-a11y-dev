@@ -70,6 +70,13 @@ export interface TimelineOptions {
    * it (ADR-0002).
    */
   onEvents?: (events: readonly TimelineEvent[]) => void;
+  /**
+   * Strict mode (ADR-0001's `redactInput`) for focus names: the focused node
+   * is named as a strict tree names it, so a name that would carry what a
+   * user typed reads `[redacted]` whole. Announced text is read as before:
+   * only text nodes, never a field's value. Default false.
+   */
+  redactInput?: boolean;
 }
 
 /**

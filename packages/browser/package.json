@@ -44,8 +44,8 @@
     "provenance": true
   },
   "scripts": {
-    "build": "tsup --config tsup.page-bundle.config.ts && tsup",
-    "dev": "tsup --config tsup.page-bundle.config.ts && tsup --watch",
+    "build": "tsup --config tsup.page-bundle.config.ts && tsup --config tsup.timeline-bundle.config.ts && tsup",
+    "dev": "tsup --config tsup.page-bundle.config.ts && tsup --config tsup.timeline-bundle.config.ts && tsup --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",

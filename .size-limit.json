@@ -57,5 +57,11 @@
     "path": "packages/browser/dist/page-bundle.iife.global.js",
     "limit": "27 KB",
     "gzip": true
+  },
+  {
+    "name": "@real-a11y-dev/browser (timeline-bundle IIFE)",
+    "path": "packages/browser/dist/timeline-bundle.iife.global.js",
+    "limit": "23.6 KB",
+    "gzip": true
   }
 ]
