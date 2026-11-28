@@ -340,4 +340,27 @@ describe("search cost", () => {
     expect(tree.nodes.get("lnk")?.ui?.matchesFilter).toBe(false);
     expect(tree.nodes.get("root")?.ui?.matchesFilter).toBe(true);
   });
+
+  it("filters by role alone, keeping each match's ancestors visible", () => {
+    const tree: InstrumentedTree = {
+      nodes: new CountingNodeMap(),
+      nameReads: 0,
+    };
+    addNode(tree, "root", null, "page");
+    addNode(tree, "group", "root", "toolbar");
+    addNode(tree, "btn", "group", "Save", "button");
+    addNode(tree, "lnk", "root", "Home", "link");
+
+    const count = applySearchFilter(tree.nodes, "  ", "a11y", "button");
+
+    // A blank query is no query: only the role filter applies, the count is
+    // the role matches themselves, and the button's path stays visible.
+    expect(count).toBe(1);
+    expect(tree.nodes.get("btn")?.ui?.matchesFilter).toBe(true);
+    expect(tree.nodes.get("group")?.ui?.matchesFilter).toBe(true);
+    expect(tree.nodes.get("root")?.ui?.matchesFilter).toBe(true);
+    expect(tree.nodes.get("lnk")?.ui?.matchesFilter).toBe(false);
+    // Matching on role reads no name.
+    expect(tree.nameReads).toBe(0);
+  });
 });
