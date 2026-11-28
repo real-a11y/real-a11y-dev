@@ -191,6 +191,23 @@ describe("native focus sync", () => {
     expect(sentOfType("NATIVE_READ")).toHaveLength(reads);
   });
 
+  it("leaves the tree as it was while the TIMELINE view shows in its place", async () => {
+    await showNative();
+    focusOnPage({ pageKeys: { "read-1": [5] } });
+    expect(selected()).toBe("ax-dom-3");
+    const toggle = (label: string) =>
+      [...container.querySelectorAll<HTMLButtonElement>("button.sn-toggle-btn")]
+        .filter((b) => !b.closest(".sn-view--hidden"))
+        .find((b) => b.textContent === label)!;
+    act(() => toggle("TIMELINE").click());
+    await flush();
+    // Focus moving on the page while recording, outside the selected row.
+    focusOnPage({ pageKeys: { "read-1": [6] } });
+    act(() => toggle("A11Y").click());
+    await flush();
+    expect(selected()).toBe("ax-dom-3");
+  });
+
   it("ignores numbers from another read, and a report with none", async () => {
     await showNative();
     focusOnPage({ pageKeys: { "read-1": [5] } });

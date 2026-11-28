@@ -67,16 +67,16 @@ function reachability(nav: NativeHarness) {
 async function expectAllReachable(nav: NativeHarness): Promise<void> {
   const { count, problems, searchWidth } = await reachability(nav);
   // The shared toolbar's picker, curtain, Focus sync and Copy ▾, and Chrome's
-  // tree's search box, its two views, refresh, expand, collapse and Follow
+  // tree's search box, its three views, refresh, expand, collapse and Follow
   // page changes.
-  expect(count).toBe(11);
+  expect(count).toBe(12);
   expect(problems).toEqual([]);
   // Room to type in: the narrow panel left it its 18px of padding.
   expect(searchWidth).toBeGreaterThanOrEqual(48);
 }
 
 for (const width of [320, 360, 400]) {
-  test(`at ${width}px Chrome's tree's toolbar keeps every control on screen, and A11Y and TAB take a click`, async ({
+  test(`at ${width}px Chrome's tree's toolbar keeps every control on screen, and A11Y, TAB and TIMELINE take a click`, async ({
     nav,
   }) => {
     await nav.showNative("tabs.html");
@@ -87,8 +87,9 @@ for (const width of [320, 360, 400]) {
     try {
       await expectAllReachable(nav);
 
-      // A11Y shows first, so each click changes the view.
-      for (const view of ["TAB", "A11Y"] as const) {
+      // A11Y shows first, so each click changes the view. TIMELINE shows in
+      // the tree's place, with a toggle of its own.
+      for (const view of ["TAB", "TIMELINE", "A11Y"] as const) {
         const button = nav.viewButton(view);
         await button.click();
         await expect(button).toHaveAttribute("aria-pressed", "true");

@@ -216,7 +216,7 @@ describe("Settings and the note about Chrome's debugging bar", () => {
     expect(sentOfType("NATIVE_READ")).toHaveLength(1);
   });
 
-  it("says why Chrome refused, and still offers the TAB view", async () => {
+  it("says why Chrome refused, and still offers the TAB and TIMELINE views", async () => {
     mount({ storage: { [NOTICE_SEEN]: true }, read: NATIVE_REFUSED });
     await flush();
     await showTab(7);
@@ -233,7 +233,7 @@ describe("Settings and the note about Chrome's debugging bar", () => {
       [...container.querySelectorAll("button.sn-toggle-btn")].map((b) =>
         b.textContent?.trim(),
       ),
-    ).toEqual(["A11Y", "TAB"]);
+    ).toEqual(["A11Y", "TAB", "TIMELINE"]);
     // No in-page tree to fall back on, nor a control to choose one.
     expect(
       container.querySelector('[role="group"][aria-label="Tree view mode"]'),

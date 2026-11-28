@@ -8,6 +8,7 @@ import "./empty-state.css";
 import "./input-panel.css";
 import "./lists.css";
 import "./select-picker.css";
+import "./timeline.css";
 import "./toolbar.css";
 import "@ui-styles/tree-changes.css";
 

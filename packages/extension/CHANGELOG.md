@@ -21,6 +21,22 @@
 
 ### Patch Changes
 
+- **A TIMELINE view, next to A11Y and TAB.** Press **● Record**, use the page,
+  and the panel lists where focus went and what live regions announced, one
+  line each, in the order the page made them: focus dropping to nothing when
+  the focused item is deleted, say. **■ Stop**, **Clear** and **Copy**, which
+  puts exactly the lines `@real-a11y-dev/testing`'s `recordTimeline` prints on
+  the clipboard. Clicking a line outlines its element on the page without
+  moving focus. It records the top frame only, ends when the page navigates,
+  and keeps its lines in the side panel's memory alone. No new permission
+  ([#745](https://github.com/real-a11y/real-a11y-dev/pull/745)).
+- **The live log reads announcements by the TIMELINE view's rule.** A region
+  is logged when it shows text it hasn't said, as the TIMELINE view's
+  `announce` lines are, rather than whenever its whole text differs from what
+  it showed last, after a 200 ms wait: an entry the region only re-renders or
+  trims no longer logs again
+  ([#745](https://github.com/real-a11y/real-a11y-dev/pull/745)).
+
 - **Internal refactor, no behaviour change.** `dispatchNative` in `native-core.ts`
   is split into smaller helpers
   ([#734](https://github.com/real-a11y/real-a11y-dev/pull/734)).

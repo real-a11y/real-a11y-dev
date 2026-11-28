@@ -26,6 +26,15 @@ export interface ChromeMock {
   stored: Record<string, unknown>;
   /** Drop the panel's port, as a service worker that stops does. */
   dropPort: () => void;
+  /** The ports opened with another name than the panel's own (the TIMELINE
+   *  view's recording port): what each was sent, whether the panel closed
+   *  it, and a way to drop it as a service worker that stops does. */
+  otherPorts: Array<{
+    name: string;
+    posted: unknown[];
+    closed: boolean;
+    drop: () => void;
+  }>;
 }
 
 export interface ChromeMockOptions {
@@ -63,19 +72,34 @@ export function installChromeMock(options: ChromeMockOptions = {}): ChromeMock {
   const sent: PanelToContent[] = [];
   // Each port's disconnect listeners, the latest port's last.
   const ports: Array<Array<() => void>> = [];
+  const otherPorts: ChromeMock["otherPorts"] = [];
 
   const runtime = {
     id: EXTENSION_ID,
     lastError: undefined,
     getManifest: () => ({ version: "0.0.0-test" }),
-    connect: () => {
+    connect: (info?: { name?: string }) => {
       const onDisconnect: Array<() => void> = [];
-      ports.push(onDisconnect);
+      const name = info?.name ?? "";
+      const other =
+        name === "sidepanel"
+          ? undefined
+          : {
+              name,
+              posted: [] as unknown[],
+              closed: false,
+              drop: () => onDisconnect.forEach((fn) => fn()),
+            };
+      if (other) otherPorts.push(other);
+      else ports.push(onDisconnect);
       return {
         onDisconnect: {
           addListener: (fn: () => void) => onDisconnect.push(fn),
         },
-        disconnect: () => {},
+        postMessage: (message: unknown) => other?.posted.push(message),
+        disconnect: () => {
+          if (other) other.closed = true;
+        },
       };
     },
     sendMessage: (
@@ -159,6 +183,7 @@ export function installChromeMock(options: ChromeMockOptions = {}): ChromeMock {
     writeStorage,
     stored,
     dropPort: () => ports.at(-1)?.forEach((fn) => fn()),
+    otherPorts,
     emit: (message) => {
       // The panel's trust gate reads `sender.id`; the routing gate reads
       // `sender.tab?.id` alongside the message's own `tabId`.

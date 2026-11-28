@@ -315,6 +315,19 @@ export function isTrustedSender(
 }
 
 /**
+ * Whether a message is for a listener of its own rather than the service
+ * worker's main router: native mode's `NATIVE_*` (`native/index.ts`) and the
+ * TIMELINE view's `TIMELINE_*` (`timeline-relay.ts`). Pure, so the router's
+ * skip is tested without a Chrome mock.
+ *
+ * @internal Extension-only. Not a stability promise.
+ */
+export function handledByOwnListener(message: unknown): boolean {
+  const type = (message as { type?: unknown } | null)?.type;
+  return typeof type === "string" && /^(NATIVE|TIMELINE)_/.test(type);
+}
+
+/**
  * True only when a message came from one of THIS extension's own pages — the
  * side panel or the background — and not from a content script.
  *
@@ -427,13 +440,14 @@ export function shouldPanelAcceptMessage(opts: {
  * Pure so the distinction is an asserted contract rather than an inline
  * boolean a later edit could quietly collapse back into one behaviour.
  */
-export function planHighlight(opts: { hover?: boolean }): {
+export function planHighlight(opts: { hover?: boolean; keepFocus?: boolean }): {
   scroll: boolean;
   moveFocus: boolean;
 } {
-  return opts.hover
-    ? { scroll: false, moveFocus: false }
-    : { scroll: true, moveFocus: true };
+  // A TIMELINE line shows where its node is, but focusing it would record a
+  // focus move the panel made, not the page.
+  if (opts.hover) return { scroll: false, moveFocus: false };
+  return { scroll: true, moveFocus: opts.keepFocus !== true };
 }
 
 /**
