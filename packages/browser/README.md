@@ -204,9 +204,11 @@ console.log(serializeTimeline(events, { redact: [/\d+/g] }));
 - One recording per document; a second `start` throws until the first stops.
 
 `BrowserSession.startTimeline(options)` is the same call on the session's open
-page, with `stop()` joining the session's queue. The CLI and MCP go through it;
-`@real-a11y-dev/testing`'s Playwright adapter takes its `Page` straight to
-`startPageTimeline`.
+page, with `stop()` joining the session's queue. It is built for the CLI's
+`timeline` command and the MCP's timeline tools, which go through the session,
+and for `@real-a11y-dev/testing`'s Playwright adapter, which takes its `Page`
+straight to `startPageTimeline`. None of them calls it yet; each lands in its own
+change.
 
 ## Design
 

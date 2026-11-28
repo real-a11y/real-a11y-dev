@@ -205,6 +205,7 @@ describe("startPageTimeline", () => {
     fake.send([FOCUS]);
     await timeline.stop();
     expect(runs).toEqual([[FOCUS], [ANNOUNCE]]);
+    expect(timeline.events()).toEqual([FOCUS, ANNOUNCE]);
   });
 
   it("refuses a maxEvents that isn't a whole number", async () => {

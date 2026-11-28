@@ -425,6 +425,8 @@ class Recording {
         events = read.events;
         end = "stopped";
         this.deliverTail(events);
+        // And `events()` reads what `stop()` returned, the tail included.
+        this.streamed.splice(0, this.streamed.length, ...events);
       } else {
         end = read.end;
       }

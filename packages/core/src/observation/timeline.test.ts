@@ -341,6 +341,28 @@ describe("startTimeline({ redactInput }) and live regions", () => {
     ]);
   });
 
+  it("withholds it in a designMode document, which is one editor whole", async () => {
+    document.body.innerHTML = `<main><p role="status" id="s"></p></main>`;
+    document.designMode = "on";
+    try {
+      const recording = startTimeline(document.querySelector("main")!, {
+        redactInput: true,
+      });
+      byId("s").textContent = "my password is hunter2";
+      await tick();
+      expect(recording.stop()).toEqual([
+        {
+          kind: "announce",
+          role: "status",
+          text: "[redacted]",
+          live: "polite",
+        },
+      ]);
+    } finally {
+      document.designMode = "off";
+    }
+  });
+
   it("still announces a region's own text in strict mode", async () => {
     document.body.innerHTML = `<main><p role="status" id="s"></p></main>`;
     const recording = startTimeline(document.querySelector("main")!, {
