@@ -3,11 +3,7 @@
 // announce, as events in the order the page made them. It runs in the page
 // on every surface; `serialize`'s `serializeTimeline` writes the lines.
 
-import {
-  safeContains,
-  safeNodeType,
-  safeOwnerDocument,
-} from "../extraction/clobber-safe.js";
+import { safeNodeType, safeOwnerDocument } from "../extraction/clobber-safe.js";
 import { resolveFocusedElement } from "../extraction/dom-extractor.js";
 import { renderingParent } from "../extraction/flat-tree.js";
 import { getImplicitRole } from "../extraction/role-map.js";
@@ -21,9 +17,12 @@ import {
   type TimelineRecording,
 } from "./timeline-events.js";
 import {
+  type FocusLine,
   INTERACTION_TYPES,
   interactionOf,
   nodeStop,
+  type NotedAct,
+  placeAct,
   TypingRun,
 } from "./timeline-interactions.js";
 import {
@@ -32,20 +31,12 @@ import {
   audibleRead,
   gains,
   heldFrom,
+  holds,
   isLive,
   regionLevel,
   renderedIn,
   type Said,
 } from "./timeline-regions.js";
-
-/** Is `element` inside `node`, across shadow roots and slots? */
-function holds(node: Node, element: Element): boolean {
-  if (safeContains(node, element)) return true;
-  for (let el: Element | null = element; el; el = renderingParent(el)) {
-    if (el === node) return true;
-  }
-  return false;
-}
 
 /** Note a change to the regions at a point in their block. */
 type Touch = (regions: Element[], at: number) => void;
@@ -54,8 +45,8 @@ type Touch = (regions: Element[], at: number) => void;
  * An event, and where in its block it happened: record `i` is at `2i + 1`,
  * and a focus event before record `k` at `2k`, so the two sort together. An
  * interaction before record `k` is a quarter either side of `2k`, by
- * whether a focus move there came before it ({@link onInteraction}). `el`
- * is the field a type event names.
+ * whether a focus move there came before it ({@link placeAct}). `el` is the
+ * field a type event names.
  */
 interface Pending {
   at: number;
@@ -109,7 +100,7 @@ class TimelineRecorder {
   /** The focus events among those changes. */
   private moves: Move[] = [];
   /** The interactions among them. */
-  private acts: Pending[] = [];
+  private acts: NotedAct[] = [];
   private readonly typing = new TypingRun();
   /** A settle is queued for the end of this synchronous block. */
   private scheduled = false;
@@ -238,13 +229,9 @@ class TimelineRecorder {
     }
   }
 
-  /**
-   * Note an interaction at this point among the page's changes, named as it
-   * happened: what a click removes is gone by the time the block settles.
-   * Just after a focus move already noted here, as a click's follows the
-   * `pointerdown`'s move; otherwise just before any move still to come, as a
-   * Tab's `keydown` comes before the move it makes.
-   */
+  /** Note an interaction at this point among the page's changes, named as
+   *  it happened: what a click removes is gone by the time the block
+   *  settles. */
   private readonly onInteraction = (event: Event): void => {
     if (this.done) return;
     const act = interactionOf(
@@ -254,11 +241,9 @@ class TimelineRecorder {
       this.typing.last,
     );
     if (!act) return;
-    if (act.event.kind === "type") this.typing.last = act;
+    this.typing.last = act.event.kind === "type" ? act : null;
     for (const record of this.observer.takeRecords()) this.records.push(record);
-    const k = this.records.length;
-    const after = this.moves[this.moves.length - 1]?.at === k;
-    this.acts.push({ at: 2 * k + (after ? 0.25 : -0.25), ...act });
+    this.acts.push({ ...act, k: this.records.length, n: this.moves.length });
     this.schedule();
   };
 
@@ -318,6 +303,7 @@ class TimelineRecorder {
     }
     for (const record of this.observer.takeRecords()) this.records.push(record);
     this.moves.push({ at: this.records.length, to, said: this.saidNow() });
+    this.typing.last = null;
     this.schedule();
   }
 
@@ -375,11 +361,16 @@ class TimelineRecorder {
       ? this.announcements(records, moves)
       : [];
     // Between two elements, focus is read once it arrives.
+    let line: FocusLine | null = null;
     if (this.options.focus && !this.leaving) {
-      const change = this.focusChange(this.focusSettled(records, moves));
+      line = this.focusSettled(records, moves);
+      const change = this.focusChange(line.at);
       if (change) pending.push(change);
+      else line = null;
     }
-    pending.push(...acts);
+    const at = moves.map((move) => move.at);
+    for (const act of acts)
+      pending.push({ ...act, at: placeAct(act, at, line) });
     // Stable, so events from one record keep the order they were read in.
     pending.sort((a, b) => a.at - b.at);
     const events = pending.filter((p) => this.typing.keeps(p.event, p.el));
@@ -395,31 +386,32 @@ class TimelineRecorder {
    * fires no event for that), after which it named nothing else. Without
    * one, the end of the block.
    */
-  private focusSettled(records: MutationRecord[], moves: Move[]): number {
-    const changes: [at: number, to: Element | null][] = [];
+  private focusSettled(records: MutationRecord[], moves: Move[]): FocusLine {
+    // Where, the element, and how many moves had been noted by then.
+    const changes: [at: number, to: Element | null, moves: number][] = [];
     let current = this.focused;
     let next = 0;
     const moveTo = (i: number): void => {
       while (next < moves.length && moves[next]!.at <= i) {
         current = moves[next]!.to;
-        changes.push([2 * moves[next++]!.at, current]);
+        changes.push([2 * moves[next]!.at, current, ++next]);
       }
     };
     records.forEach((record, i) => {
       moveTo(i);
       if (current && this.removes(record, current)) {
         current = null;
-        changes.push([2 * i + 1, null]);
+        changes.push([2 * i + 1, null, next]);
       }
     });
     moveTo(Infinity);
     const element = resolveFocusedElement(this.doc);
     const named = element && this.inRoot(element) ? element : null;
-    let at = 2 * records.length;
+    const line = { at: 2 * records.length, moves: moves.length };
     for (let i = changes.length; i-- && changes[i]![1] === named;) {
-      at = changes[i]![0];
+      [line.at, , line.moves] = changes[i]!;
     }
-    return at;
+    return line;
   }
 
   /** Did this record take `element` out of the document with it? */

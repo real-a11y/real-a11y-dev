@@ -5,6 +5,7 @@
 import { isAriaHiddenValue } from "../extraction/aria-tokens.js";
 import {
   safeAssignedSlot,
+  safeContains,
   safeGetAttribute,
   safeNodeType,
   safeParentElement,
@@ -17,6 +18,15 @@ import {
 import { liveRegionLevel } from "../extraction/overlay-scope.js";
 import { pageText } from "../extraction/page-text.js";
 import { getImplicitRole, isSubtreeHidden } from "../extraction/role-map.js";
+
+/** Is `element` inside `node`, across shadow roots and slots? */
+export function holds(node: Node, element: Element): boolean {
+  if (safeContains(node, element)) return true;
+  for (let el: Element | null = element; el; el = renderingParent(el)) {
+    if (el === node) return true;
+  }
+  return false;
+}
 
 /**
  * How a live region announces: politely, or interrupting.

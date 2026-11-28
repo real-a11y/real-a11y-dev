@@ -1699,6 +1699,96 @@ describe("recordTimeline interactions", () => {
     `);
   });
 
+  it("names a click on a button's hidden icon as the button, reachable", async () => {
+    const main = await page(
+      `<button id="b"><svg id="icon" aria-hidden="true"></svg> Delete</button>`,
+    );
+    const timeline = recordTimeline(main, {
+      interactions: true,
+      focus: false,
+    });
+    byId("icon").dispatchEvent(
+      new MouseEvent("click", { bubbles: true, composed: true }),
+    );
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`click     button "Delete"`);
+  });
+
+  it("never names a field by what was typed into it, through aria-labelledby", async () => {
+    const main = await page(
+      `<span id="lb">Qty</span><input id="q" aria-labelledby="lb q">`,
+    );
+    const timeline = recordTimeline(main, {
+      interactions: true,
+      focus: false,
+    });
+    await typeInto(byId<HTMLInputElement>("q"), "typedsecret");
+    byId("q").click();
+    await tick();
+    const { text } = timeline.stop();
+    expect(text).not.toContain("typedsecret");
+    expect(text).toMatch(/^type {6}textbox/);
+    expect(text).toMatch(/\nclick {5}textbox/);
+  });
+
+  it("prints a Tab before its move though focus moved earlier in the same block", async () => {
+    const main = await page(
+      `<button id="a">A</button><button id="b">B</button>`,
+    );
+    const timeline = recordTimeline(main, { interactions: true });
+    byId("a").focus();
+    press("Tab");
+    byId("b").focus();
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`
+      press     Tab
+      focus     button "B"
+    `);
+  });
+
+  it("prints no Enter that types a line break, in a textarea or an editor", async () => {
+    const main = await page(
+      `<label>Notes <textarea id="t"></textarea></label><label>Name <input id="n"></label>`,
+    );
+    const t = byId<HTMLTextAreaElement>("t");
+    t.focus();
+    const timeline = recordTimeline(main, {
+      interactions: true,
+      focus: false,
+    });
+    await typeInto(t as unknown as HTMLInputElement, "line1");
+    press("Enter");
+    await typeInto(t as unknown as HTMLInputElement, "line2");
+    byId("n").focus();
+    press("Enter"); // a one-line field submits
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`
+      type      textbox "Notes"
+      press     Enter
+    `);
+  });
+
+  it("names a field afresh once something else came between two inputs in one block", async () => {
+    const main = await page(
+      `<label>Code <input id="c"></label><button id="b">Check</button>`,
+    );
+    const c = byId<HTMLInputElement>("c");
+    c.addEventListener("input", () => c.setAttribute("aria-invalid", "true"));
+    const timeline = recordTimeline(main, {
+      interactions: true,
+      focus: false,
+    });
+    c.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    byId("b").click();
+    c.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`
+      type      textbox "Code"
+      click     button "Check"
+      type      textbox "Code" {invalid}
+    `);
+  });
+
   it("records interactions alone with focus and announcements off", async () => {
     const main = await page(`<button id="b">Save</button>`);
     const timeline = recordTimeline(main, {

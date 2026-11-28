@@ -49,6 +49,41 @@ export interface Act {
   el: Element | null;
 }
 
+/** An interaction as the recorder notes it: before record `k` of its
+ *  block, with `n` focus moves noted there before it. */
+export interface NotedAct extends Act {
+  k: number;
+  n: number;
+}
+
+/** Where a block's focus line goes, and how many of its moves had been
+ *  noted when focus came to rest on what it names. */
+export interface FocusLine {
+  at: number;
+  moves: number;
+}
+
+/**
+ * Where in its block `act` goes, given where each of the block's focus moves
+ * was noted (`moves`) and its focus line, if any: a quarter after `2k` when
+ * a move noted there came before it, as a click's follows the
+ * `pointerdown`'s move, and a quarter before otherwise, as a Tab's `keydown`
+ * comes before the move it makes. Before the line, when the move focus came
+ * to rest with was noted after it, though another move there came first.
+ */
+export function placeAct(
+  act: NotedAct,
+  moves: readonly number[],
+  line: FocusLine | null,
+): number {
+  const at = 2 * act.k;
+  const after =
+    act.n > 0 &&
+    moves[act.n - 1] === act.k &&
+    (line?.at !== at || act.n >= line.moves);
+  return at + (after ? 0.25 : -0.25);
+}
+
 /** Is the node `id`, and everything above it, exposed to assistive tech? */
 function exposed(tree: ExtractionResult, id: string): boolean {
   for (let n = tree.nodes.get(id); n;) {
@@ -72,12 +107,16 @@ function exposed(tree: ExtractionResult, id: string): boolean {
 export function nodeStop(
   root: Element,
   element: Element,
-  climb = false,
+  { climb = false, strict = false } = {},
 ): Named {
   // Partial, so the root is read as it is: never widened to a portaled
   // overlay or narrowed to a modal, which would make what counts as inside
   // it hang on the rest of the page.
-  const dom = extractDomTree(root, { nodes: new Map(), includeFocused: false });
+  const dom = extractDomTree(root, {
+    nodes: new Map(),
+    includeFocused: false,
+    redactInput: strict,
+  });
   const refs = getElementRefs();
   const id = refs.findId(element);
   const node = id ? dom.nodes.get(id) : undefined;
@@ -91,13 +130,17 @@ export function nodeStop(
     dom.source,
   ).nodes;
   const target = climb ? activated(root, element, kept) : element;
-  const targetId = (target && refs.findId(target)) || id;
+  const climbed = target && refs.findId(target);
+  const targetId = climbed && dom.nodes.has(climbed) ? climbed : id;
   const named = kept.get(targetId) ?? dom.nodes.get(targetId) ?? node;
   // Singling a node out says what it is, so a sensitive field's choice is
   // withheld here as the tab order withholds it (ADR-0001). The line never
   // prints a value, and an event carries none either.
   const { value: _value, ...stop } = asStop(named).a11y;
-  const reachable = (kept.has(id) || exposed(dom, id)) && !hiddenAbove(root);
+  // What is named decides: a click on a button's `aria-hidden` icon is a
+  // click on the button.
+  const reachable =
+    (kept.has(targetId) || exposed(dom, targetId)) && !hiddenAbove(root);
   return { stop, hidden: !reachable };
 }
 
@@ -172,6 +215,12 @@ export function typesText(element: Element): boolean {
   return holdsTypedText(element);
 }
 
+/** Does `Enter` in `element` type a line break: a `<textarea>` or an
+ *  editor, but not a one-line field, where it submits? */
+function breaksLines(element: Element): boolean {
+  return safeTagName(element) === "textarea" || holdsTypedText(element);
+}
+
 /**
  * Keys that type nothing and name themselves. A list, not a pattern such as
  * "longer than one character": a synthetic `keydown` can carry any string as
@@ -197,7 +246,7 @@ function shortcut(event: KeyboardEvent): boolean {
 /**
  * A press event for a `keydown`, or null for a key that types, or could
  * type, a character: one with no `Ctrl` or `Meta`, a `Space` in a field,
- * a key composing text through an IME, a modifier on its own, or a key the
+ * an `Enter` in a `<textarea>` or an editor, a key composing text through an IME, a modifier on its own, or a key the
  * recorder doesn't name ({@link NAMED_KEY}).
  */
 export function pressOf(
@@ -207,8 +256,10 @@ export function pressOf(
   const key = event.key;
   if (event.isComposing || typeof key !== "string") return null;
   let name: string | null = null;
-  if (NAMED_KEY.test(key)) name = key;
-  else if (key === " ") {
+  if (NAMED_KEY.test(key)) {
+    if (key !== "Enter" || shortcut(event) || !target || !breaksLines(target))
+      name = key;
+  } else if (key === " ") {
     if (shortcut(event) || !target || !typesText(target)) name = "Space";
   } else if ([...key].length === 1 && shortcut(event)) {
     name = key.toUpperCase();
@@ -219,6 +270,10 @@ export function pressOf(
   );
   return { kind: "press", key: name, modifiers };
 }
+
+/** How a click names what it activates: the user's own typing never names
+ *  it, since a click line is one step from a type line. */
+const STRICT_CLIMB = { climb: true, strict: true } as const;
 
 /** A sensitive field's stop with no more than its role and name. */
 function roleAndName(stop: Omit<A11yInfo, "value">): Omit<A11yInfo, "value"> {
@@ -250,12 +305,12 @@ export function interactionOf(
   }
   if (!target || !inRoot(target)) return null;
   if (event.type === "click") {
-    const { stop, hidden } = nodeStop(root, target, true);
+    const { stop, hidden } = nodeStop(root, target, STRICT_CLIMB);
     return { event: { kind: "click", target: stop, hidden }, el: target };
   }
   if (event.type !== "input" || !typesText(target)) return null;
   if (typing?.el === target) return typing;
-  const { stop, hidden } = nodeStop(root, target);
+  const { stop, hidden } = nodeStop(root, target, { strict: true });
   const named = isSensitiveField(target) ? roleAndName(stop) : stop;
   return { event: { kind: "type", target: named, hidden }, el: target };
 }

@@ -52,8 +52,9 @@ export type TimelineModifier = "Ctrl" | "Alt" | "Shift" | "Meta";
 
 /**
  * A key that types no text reached the page: a `keydown` whose key is one
- * the recorder names (`Tab`, `Enter`, `Escape`, an arrow, …), `Space` where
- * it types nothing, or a character held with `Ctrl` or `Meta` as a shortcut.
+ * the recorder names (`Tab`, `Escape`, an arrow, …), `Space` or `Enter`
+ * where it types nothing, or a character held with `Ctrl` or `Meta` as a
+ * shortcut.
  * Never a key that types a character (ADR-0001).
  *
  * @internal Read by the timeline view's surfaces (ADR-0002). Not a
@@ -222,7 +223,7 @@ export function timelineProblem(
     options.announcements === false &&
     !options.interactions
   ) {
-    return "{ focus: false, announcements: false } records nothing. Leave one of them on.";
+    return "{ focus: false, announcements: false } records nothing. Leave one of them on, or pass { interactions: true }.";
   }
   // Its changes would never reach the document's observer. Through the
   // prototype: a `<form>`'s control named `isConnected` shadows its own.
