@@ -263,6 +263,35 @@ describe("summarizeViews", () => {
         "landmark-removed",
       ]);
     });
+
+    it("refuses a landmark rename when one side's line repeats", () => {
+      const changes = summarize(
+        { tree: 'navigation "A"\nnavigation "A"' },
+        { tree: 'navigation "B"' },
+      );
+      expect(changes).toEqual([
+        expect.objectContaining({
+          kind: "landmark-removed",
+          message: 'Landmark removed: navigation "A" (×2)',
+          count: 2,
+        }),
+        expect.objectContaining({
+          kind: "landmark-added",
+          message: 'New landmark: navigation "B"',
+        }),
+      ]);
+    });
+
+    it("pairs only landmark roles in the tree stage", () => {
+      const changes = summarize(
+        { tree: 'main\n  menuitem "Old"' },
+        { tree: 'main\n  menuitem "New"' },
+      );
+      expect(kinds(changes).sort()).toEqual([
+        "interactive-added",
+        "interactive-removed",
+      ]);
+    });
   });
 
   describe("tab stops", () => {
@@ -339,6 +368,28 @@ describe("summarizeViews", () => {
           from: "Send",
           to: "Submit",
         },
+      ]);
+    });
+
+    it("refuses a tab-stop rename when one side's line repeats", () => {
+      const changes = summarize(
+        { tabs: '01. button "Send"\n02. button "Send"' },
+        { tabs: '01. button "Submit"' },
+      );
+      expect(kinds(changes).sort()).toEqual([
+        "focus-stop-added",
+        "focus-stop-removed",
+      ]);
+    });
+
+    it("refuses a tab-stop rename when either side is unnamed", () => {
+      const changes = summarize(
+        { tabs: "01. button" },
+        { tabs: '01. button "Submit"' },
+      );
+      expect(kinds(changes).sort()).toEqual([
+        "focus-stop-added",
+        "focus-stop-removed",
       ]);
     });
 
