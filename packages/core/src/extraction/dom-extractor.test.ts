@@ -3096,6 +3096,26 @@ describe("extractDomTree", () => {
       ).toEqual({ valuemin: "0", valuemax: "100" });
     });
 
+    it("raises an effective max to a min above it, as HTML does", () => {
+      expect(only('<meter min="5" value="6"></meter>').a11y.properties).toEqual(
+        {
+          valuemin: "5",
+          valuemax: "5",
+        },
+      );
+    });
+
+    it("reads only decimal bounds, and HTML bounds only on the element's own role", () => {
+      expect(
+        only('<div role="slider" aria-valuemax="0x10" aria-label="s"></div>')
+          .a11y.properties["valuemax"],
+      ).toBe("100");
+      expect(
+        only('<input type="range" role="spinbutton" aria-label="x">').a11y
+          .properties,
+      ).toEqual({});
+    });
+
     it("never puts valuenow or valuetext in properties", () => {
       const n = only(
         '<div role="slider" aria-valuenow="5" aria-valuetext="five" aria-label="s"></div>',

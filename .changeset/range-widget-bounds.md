@@ -3,6 +3,8 @@
 "@real-a11y-dev/inspector": minor
 "@real-a11y-dev/react": minor
 "@real-a11y-dev/storybook-addon": minor
+"@real-a11y-dev/cli": patch
+"@real-a11y-dev/mcp": patch
 ---
 
 Report a range widget's bounds as `a11y.properties.valuemin` and `valuemax` in DOM-produced trees. The DOM producer left the size of a slider, scrollbar, focusable separator, meter or progress bar out of its tree, so `a11yDiff` reported no change when `max` moved, and a DOM tree could not say what a native one (from `real-a11y tree`, MCP or the Playwright adapter's `tree: "native"`) already did.

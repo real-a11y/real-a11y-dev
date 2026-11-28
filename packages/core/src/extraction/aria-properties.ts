@@ -42,7 +42,10 @@ const DEFAULT_RANGE_ROLES: ReadonlySet<string> = new Set([
 
 /** A bound as a string key value, or `null` when unparsable or empty. */
 function parseBound(raw: string | null): string | null {
-  if (raw === null || raw.trim() === "") return null;
+  if (raw === null) return null;
+  // Decimal floating point only: `Number` would also take "0x10" and "0b1".
+  if (!/^[+-]?(\d+(?:\.\d*)?|\.\d+)([eE][+-]?\d+)?$/.test(raw.trim()))
+    return null;
   const n = Number(raw);
   // String(Number(raw)): "1e2" is "100" and "0.5" is "0.5", as native gives them.
   return Number.isFinite(n) ? String(n) : null;
@@ -52,6 +55,7 @@ function parseBound(raw: string | null): string | null {
 function htmlBounds(
   element: Element,
   tag: string,
+  role: string,
 ): {
   min: string | null;
   max: string | null;
@@ -62,11 +66,12 @@ function htmlBounds(
   const max = parseBound(safeGetAttribute(element, "max"));
   if (tag === "input") {
     const type = (safeGetAttribute(element, "type") ?? "").toLowerCase();
-    if (type === "range") return { min, max, defMin: "0", defMax: "100" };
-    if (type === "number") return { min, max };
-  } else if (tag === "meter") {
+    if (type === "range" && role === "slider")
+      return { min, max, defMin: "0", defMax: "100" };
+    if (type === "number" && role === "spinbutton") return { min, max };
+  } else if (tag === "meter" && role === "meter") {
     return { min, max, defMin: "0", defMax: "1" };
-  } else if (tag === "progress") {
+  } else if (tag === "progress" && role === "progressbar") {
     // A progress bar always starts at 0, and its max defaults to 1, also
     // when it is indeterminate (HTML-AAM, and what Chromium reports).
     const positive = max !== null && Number(max) > 0 ? max : null;
@@ -94,19 +99,21 @@ function rangeBounds(
   if (!BOUNDED_ROLES.has(role)) return {};
   // ARIA 1.2 supports the bounds on a separator only when it is focusable.
   if (role === "separator" && !focusable) return {};
-  const html = htmlBounds(element, safeTagName(element));
-  const fallback = DEFAULT_RANGE_ROLES.has(role);
+  const html = htmlBounds(element, safeTagName(element), role);
+  const implicit = DEFAULT_RANGE_ROLES.has(role);
+  const bound = (aria: string, own: string | null, def?: string, ar?: string) =>
+    parseBound(safeGetAttribute(element, aria)) ??
+    own ??
+    def ??
+    (implicit ? ar : undefined) ??
+    null;
+  const min = bound("aria-valuemin", html.min, html.defMin, "0");
+  let max = bound("aria-valuemax", html.max, html.defMax, "100");
+  // HTML raises an effective max to a min above it, as Chromium reports.
+  if (html.defMax !== undefined && min !== null && max !== null) {
+    if (Number(max) < Number(min)) max = min;
+  }
   const out: Record<string, string> = {};
-  const min =
-    parseBound(safeGetAttribute(element, "aria-valuemin")) ??
-    html.min ??
-    html.defMin ??
-    (fallback ? "0" : null);
-  const max =
-    parseBound(safeGetAttribute(element, "aria-valuemax")) ??
-    html.max ??
-    html.defMax ??
-    (fallback ? "100" : null);
   if (min !== null) out["valuemin"] = min;
   if (max !== null) out["valuemax"] = max;
   return out;
