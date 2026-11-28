@@ -8,6 +8,15 @@
   display: none;
 }
 
+/* ---- A finished recording while no page is connected ----
+   The panel's notice (`.sn-empty`, full height by itself) takes only the room
+   it needs, so the recording kept from the page before, rendered after it,
+   gets the rest of the panel. */
+.sn-empty:has(~ .sn-timeline) {
+  flex: none;
+  height: auto;
+}
+
 /* ---- The TIMELINE view (TimelineView.tsx) ----
    One line per event, in the monospace the lines are pasted as, so what is on
    screen lines up as the copied text does. */

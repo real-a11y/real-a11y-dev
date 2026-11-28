@@ -31,6 +31,13 @@ test("records a focus drop as the page makes it, and stops", async ({
     .click();
   const status = nav.panel.locator(".sn-timeline-status");
   await expect(status).toHaveText("Press Record, then use the page.");
+  // The tree's toggle hid with the tree: focus went on to the timeline's own.
+  expect(
+    await nav.panel.evaluate(() => {
+      const active = document.activeElement;
+      return active?.closest(".sn-timeline") ? active.textContent : null;
+    }),
+  ).toBe("TIMELINE");
 
   await nav.panel.getByRole("button", { name: "● Record" }).click();
   await expect(status).toHaveText("Recording…");
@@ -103,4 +110,43 @@ test("ends at a navigation, keeping what came before it", async ({ nav }) => {
   await expect(lines(nav.panel)).toHaveText(['focus     button "New draft"']);
   // Its node was on the page that is gone: nothing to show.
   await expect(nav.panel.locator("button.sn-timeline-line")).toHaveCount(0);
+});
+
+test("keeps a finished recording readable and copyable on a page no content script runs on", async ({
+  nav,
+}) => {
+  const page = await nav.showNative("timeline.html");
+  await nav.panel
+    .getByRole("group", { name: "Native tree view" })
+    .getByRole("button", { name: "TIMELINE", exact: true })
+    .click();
+  await nav.panel.getByRole("button", { name: "● Record" }).click();
+  await expect(nav.panel.locator(".sn-timeline-status")).toHaveText(
+    "Recording…",
+  );
+  await page.bringToFront();
+  await page.getByRole("button", { name: "New draft" }).focus();
+  await expect(lines(nav.panel)).toHaveText(['focus     button "New draft"']);
+
+  // `<all_urls>` matches no `data:` page: nothing connects again.
+  await page.goto("data:text/html,<title>No script</title><p>Plain</p>");
+  await expect(nav.panel.locator(".sn-timeline-status")).toHaveText(
+    "Recording ended: the page navigated. 1 line.",
+    { timeout: 20_000 },
+  );
+  // On screen with room to read, not squeezed out by the panel's notice.
+  await expect(lines(nav.panel).first()).toBeVisible();
+  // The list itself has the height, not lines overflowing a collapsed box.
+  const listHeight = await nav.panel
+    .locator(".sn-timeline-lines")
+    .evaluate((el) => el.clientHeight);
+  expect(listHeight).toBeGreaterThan(20);
+  await expect(nav.panel.getByRole("button", { name: "Copy" })).toBeVisible();
+
+  // Record can't start here, and the recording from before stays.
+  await nav.panel.getByRole("button", { name: "● Record" }).click();
+  await expect(nav.panel.locator(".sn-timeline-status")).toHaveText(
+    /^Couldn't record this page/,
+  );
+  await expect(lines(nav.panel)).toHaveText(['focus     button "New draft"']);
 });

@@ -125,6 +125,21 @@ describe("the TIMELINE view's state", () => {
     expect(state.session).toBe("s2");
   });
 
+  it("keeps the recording before when the next can't start", () => {
+    const state = run(
+      ...recording("s1"),
+      { type: "events", session: "s1", items: [{ event: said }] },
+      { type: "ended", session: "s1", cause: "navigated" },
+      { type: "start", session: "s2" },
+      { type: "failed", session: "s2", error: "Content script not available" },
+    );
+    expect(state.lines.map((l) => l.text)).toEqual([
+      'announce  status "Draft deleted." {live=assertive}',
+    ]);
+    expect(state.session).toBe("s1");
+    expect(state.linked).toBe(false);
+  });
+
   it("says why it couldn't start", () => {
     const state = run(
       { type: "start", session: "s1" },

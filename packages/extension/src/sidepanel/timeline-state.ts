@@ -45,6 +45,9 @@ export interface TimelineState {
   /** The lines' nodes are still on the page the recording read, so a click
    *  can highlight them. False once that page is gone. */
   linked: boolean;
+  /** The recording before the one starting, until the page answers: a start
+   *  that fails (on a page no content script runs on) puts it back. */
+  earlier?: Pick<TimelineState, "session" | "lines" | "linked">;
 }
 
 /** @internal Extension-only. Not a stability promise. */
@@ -175,20 +178,29 @@ const reducers: {
   ) => TimelineState;
 } = {
   // Each recording is one timeline, as one `recordTimeline` call is.
-  start: (_, { session }) => ({
+  start: (state, { session }) => ({
     status: "starting",
     session,
     lines: [],
     linked: true,
+    earlier: {
+      session: state.session,
+      lines: state.lines,
+      linked: state.linked,
+    },
   }),
   started: (state, { session }) =>
-    awaiting(state, session) ? { ...state, status: "recording" } : state,
+    awaiting(state, session)
+      ? { ...state, status: "recording", earlier: undefined }
+      : state,
+  // The recording from before stays: the new one never started.
   failed: (state, { session, error }) =>
     awaiting(state, session)
       ? {
-          ...state,
           status: "idle",
-          linked: false,
+          session: state.earlier?.session ?? null,
+          lines: state.earlier?.lines ?? [],
+          linked: state.earlier?.linked ?? false,
           note: `Couldn't record this page${error ? `: ${error}` : "."}`,
         }
       : state,
@@ -199,7 +211,7 @@ const reducers: {
   // A recording still running keeps its session, and its next lines.
   clear: (state) =>
     isRecording(state)
-      ? { ...state, lines: [], note: undefined }
+      ? { ...state, lines: [], note: undefined, earlier: undefined }
       : { ...initialTimeline },
 };
 

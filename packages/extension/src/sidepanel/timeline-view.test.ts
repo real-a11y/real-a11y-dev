@@ -389,6 +389,8 @@ describe("the TIMELINE view", () => {
     for (let i = 0; i < 10; i++) {
       act(() => chromeMock.otherPorts.at(-1)!.drop());
     }
+    // Asked again after a quick drop, but not without end.
+    expect(chromeMock.otherPorts.length).toBeGreaterThan(2);
     expect(chromeMock.otherPorts.length).toBeLessThanOrEqual(6);
   });
 
@@ -418,5 +420,31 @@ describe("the TIMELINE view", () => {
     });
     await flush();
     expect(document.activeElement).toBe(document.body);
+  });
+
+  it("keeps the finished recording when Record fails on a page that can't connect", async () => {
+    let refuse = false;
+    await mountTimeline({
+      respond: (m) =>
+        refuse && (m as { type: string }).type === "TIMELINE_START"
+          ? { success: false, error: "Content script not available" }
+          : undefined,
+    });
+    await recordTwoLines();
+    act(() => {
+      chromeMock.emit({ type: "PAGE_NAVIGATED", tabId: TAB_ID });
+    });
+    await flush();
+    refuse = true;
+    await press("● Record");
+    expect(lines()).toEqual([
+      'focus     button "Delete draft"',
+      "focus     (none)",
+    ]);
+    expect(status()).toBe(
+      "Couldn't record this page: Content script not available",
+    );
+    await press("Copy");
+    expect(clipboard).toEqual([serializeTimeline([deleteDraft, nowhere])]);
   });
 });
