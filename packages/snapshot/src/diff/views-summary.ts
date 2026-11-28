@@ -161,6 +161,43 @@ const LANDMARK_ROLES: ReadonlySet<string> = new Set(
   ROLE_FILTER_GROUPS["landmark"] ?? [],
 );
 
+/**
+ * The 1:1 rename candidates between two multisets: one pair per role that has
+ * exactly one distinct added line and one distinct removed line, each present
+ * once. Roles outside `roles` (when given) are skipped. Any ambiguity yields no
+ * pair, so those lines fall through to add/remove. Reads only; the caller
+ * consumes whichever pairs it accepts.
+ */
+function soleRolePairs(
+  added: Multiset,
+  removed: Multiset,
+  roles?: ReadonlySet<string>,
+): { role: string; before: string; after: string }[] {
+  const byRole = new Map<string, { added: string[]; removed: string[] }>();
+  const bucket = (role: string) => {
+    let b = byRole.get(role);
+    if (!b) byRole.set(role, (b = { added: [], removed: [] }));
+    return b;
+  };
+  for (const key of added.keys()) {
+    const { role } = parseRoleLine(key);
+    if (!roles || roles.has(role)) bucket(role).added.push(key);
+  }
+  for (const key of removed.keys()) {
+    const { role } = parseRoleLine(key);
+    if (!roles || roles.has(role)) bucket(role).removed.push(key);
+  }
+  const pairs: { role: string; before: string; after: string }[] = [];
+  for (const [role, b] of byRole) {
+    if (b.added.length !== 1 || b.removed.length !== 1) continue;
+    const [after] = b.added;
+    const [before] = b.removed;
+    if (added.get(after) !== 1 || removed.get(before) !== 1) continue;
+    pairs.push({ role, before, after });
+  }
+  return pairs;
+}
+
 // ── the pipeline ─────────────────────────────────────────────────────────────
 
 export function summarizeViews(input: SummarizeViewsInput): ViewChange[] {
@@ -228,47 +265,23 @@ export function summarizeViews(input: SummarizeViewsInput): ViewChange[] {
   // 1 — tabs stage (positions make these the richest statements; they consume
   // the matching tree lines so the tree stage never re-reports the element).
   // 1a: renames — same role, exactly one removed + one added, both named.
-  {
-    const byRole = new Map<string, { added: string[]; removed: string[] }>();
-    const bucket = (role: string) => {
-      let b = byRole.get(role);
-      if (!b) byRole.set(role, (b = { added: [], removed: [] }));
-      return b;
-    };
-    for (const key of tabsAdded.keys()) {
-      bucket(parseRoleLine(key).role).added.push(key);
-    }
-    for (const key of tabsRemoved.keys()) {
-      bucket(parseRoleLine(key).role).removed.push(key);
-    }
-    for (const [role, b] of byRole) {
-      if (b.added.length !== 1 || b.removed.length !== 1) continue;
-      if (
-        tabsAdded.get(b.added[0]) !== 1 ||
-        tabsRemoved.get(b.removed[0]) !== 1
-      )
-        continue;
-      const oldName = parseRoleLine(b.removed[0]).name ?? "";
-      const newName = parseRoleLine(b.added[0]).name ?? "";
-      if (oldName === "" || newName === "") continue; // bare lines are indistinguishable
-      take(tabsRemoved, b.removed[0]);
-      take(tabsAdded, b.added[0]);
-      tallyBlockChange(renameStates, {
-        view: "tabs",
-        before: b.removed[0],
-        after: b.added[0],
-      });
-      takeByRoleName(treeRemoved, role, oldName);
-      takeByRoleName(treeAdded, role, newName);
-      changes.push({
-        kind: "focus-stop-renamed",
-        view: "tabs",
-        message: `Tab stop renamed: ${role} "${oldName}" → "${newName}"`,
-        role,
-        from: oldName,
-        to: newName,
-      });
-    }
+  for (const { role, before, after } of soleRolePairs(tabsAdded, tabsRemoved)) {
+    const oldName = parseRoleLine(before).name ?? "";
+    const newName = parseRoleLine(after).name ?? "";
+    if (oldName === "" || newName === "") continue; // bare lines are indistinguishable
+    take(tabsRemoved, before);
+    take(tabsAdded, after);
+    tallyBlockChange(renameStates, { view: "tabs", before, after });
+    takeByRoleName(treeRemoved, role, oldName);
+    takeByRoleName(treeAdded, role, newName);
+    changes.push({
+      kind: "focus-stop-renamed",
+      view: "tabs",
+      message: `Tab stop renamed: ${role} "${oldName}" → "${newName}"`,
+      role,
+      from: oldName,
+      to: newName,
+    });
   }
   // 1b: removed stops — position from the BASE side; the still-on-page
   // cross-check against the PR tree picks the variant (an element that stays
@@ -335,47 +348,25 @@ export function summarizeViews(input: SummarizeViewsInput): ViewChange[] {
   // 2 — tree stage: landmarks, then interactive leftovers. Tree lines with
   // role `heading` are untouched here — the outline stage owns headings.
   // 2a: landmark renames — same role, exactly one removed + one added.
-  {
-    const byRole = new Map<string, { added: string[]; removed: string[] }>();
-    const bucket = (role: string) => {
-      let b = byRole.get(role);
-      if (!b) byRole.set(role, (b = { added: [], removed: [] }));
-      return b;
-    };
-    for (const key of treeAdded.keys()) {
-      const { role } = parseRoleLine(key);
-      if (LANDMARK_ROLES.has(role)) bucket(role).added.push(key);
-    }
-    for (const key of treeRemoved.keys()) {
-      const { role } = parseRoleLine(key);
-      if (LANDMARK_ROLES.has(role)) bucket(role).removed.push(key);
-    }
-    for (const [role, b] of byRole) {
-      if (b.added.length !== 1 || b.removed.length !== 1) continue;
-      if (
-        treeAdded.get(b.added[0]) !== 1 ||
-        treeRemoved.get(b.removed[0]) !== 1
-      )
-        continue;
-      const oldName = parseRoleLine(b.removed[0]).name ?? "";
-      const newName = parseRoleLine(b.added[0]).name ?? "";
-      take(treeRemoved, b.removed[0]);
-      take(treeAdded, b.added[0]);
-      // A renamed landmark whose block changed too reports both.
-      tallyBlockChange(renameStates, {
-        view: "tree",
-        before: b.removed[0],
-        after: b.added[0],
-      });
-      changes.push({
-        kind: "landmark-renamed",
-        view: "tree",
-        message: `Landmark renamed: ${role} ${nameDesc(oldName)} → ${nameDesc(newName)}`,
-        role,
-        from: oldName,
-        to: newName,
-      });
-    }
+  for (const { role, before, after } of soleRolePairs(
+    treeAdded,
+    treeRemoved,
+    LANDMARK_ROLES,
+  )) {
+    const oldName = parseRoleLine(before).name ?? "";
+    const newName = parseRoleLine(after).name ?? "";
+    take(treeRemoved, before);
+    take(treeAdded, after);
+    // A renamed landmark whose block changed too reports both.
+    tallyBlockChange(renameStates, { view: "tree", before, after });
+    changes.push({
+      kind: "landmark-renamed",
+      view: "tree",
+      message: `Landmark renamed: ${role} ${nameDesc(oldName)} → ${nameDesc(newName)}`,
+      role,
+      from: oldName,
+      to: newName,
+    });
   }
   // 2b: landmark add/remove.
   const drainTreeRoles = (
