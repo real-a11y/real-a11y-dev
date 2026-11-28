@@ -19,6 +19,7 @@ import {
   type NameSource,
   type NameWalk,
 } from "./accessible-name.js";
+import { getAriaProperties } from "./aria-properties.js";
 import { getAriaStates } from "./aria-states.js";
 import { isAriaHiddenValue } from "./aria-tokens.js";
 import {
@@ -703,6 +704,7 @@ function buildNode(
         ...(value !== undefined ? { value } : {}),
         ...choiceFacet(element, role, states, { focusable, redactInput }),
         properties: {
+          ...getAriaProperties(element, role, focusable),
           ...(headingLevel !== null ? { level: String(headingLevel) } : {}),
           // The walk doesn't descend into media children, so the one
           // a11y-critical signal that lives there — does this media ship

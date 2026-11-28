@@ -33,10 +33,10 @@ export const KEY_ATTRIBUTES = [
   "aria-controls",
   "aria-haspopup",
   // Range values. Required props on slider/scrollbar/meter/progressbar. The
-  // DOM producer writes only `level` and `captions` into
-  // `A11yInfo.properties`, and a value never goes there, so without these an
-  // authored slider could not be reported as satisfied no matter what the
-  // author wrote.
+  // bounds also reach `A11yInfo.properties` (`getAriaProperties`), but the
+  // raw strings stay here for the testing matcher's required-prop fill, and
+  // a value never goes into `properties`, so without `aria-valuenow` an
+  // authored slider could not be reported as satisfied.
   "aria-valuenow",
   "aria-valuemin",
   "aria-valuemax",

@@ -1,3 +1,4 @@
+import { ARIA_PROPERTY_ATTRIBUTES } from "../extraction/aria-properties.js";
 import {
   safeContains,
   safeGetAttribute,
@@ -116,6 +117,7 @@ const OBSERVED_ATTRIBUTES = [
   ...new Set([
     ...KEY_ATTRIBUTES,
     ...ARIA_STATE_ATTRIBUTES,
+    ...ARIA_PROPERTY_ATTRIBUTES,
     ...EXTRA_OBSERVED_ATTRIBUTES,
   ]),
 ];

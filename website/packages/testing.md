@@ -208,7 +208,7 @@ interface SemanticNode {
     choiceWithheld?: true;       // a focusable item a sensitive field's choice is made among: the
                                  // tab order names it "[redacted]" (DOM producer only)
     states: Record<string, string | boolean>; // checked, expanded, pressed, disabled…
-    properties: Record<string, string>;       // aria-* properties, keyed without "aria-" (haspopup, level…)
+    properties: Record<string, string>;       // aria-* properties, keyed without "aria-" (haspopup, level, valuemin, valuemax…)
     isExposedToAT: boolean;
   };
   dom?: {

@@ -29,8 +29,8 @@ export interface A11yPropertyInfo {
 /** Every key `a11y.properties` carries, with the producers that write it. */
 export const A11Y_PROPERTIES: readonly A11yPropertyInfo[] = [
   { key: "level", aria: "aria-level", producers: "both" },
-  { key: "valuemin", aria: "aria-valuemin", producers: "native" },
-  { key: "valuemax", aria: "aria-valuemax", producers: "native" },
+  { key: "valuemin", aria: "aria-valuemin", producers: "both" },
+  { key: "valuemax", aria: "aria-valuemax", producers: "both" },
   { key: "haspopup", aria: "aria-haspopup", producers: "native" },
   { key: "keyshortcuts", aria: "aria-keyshortcuts", producers: "native" },
   { key: "roledescription", aria: "aria-roledescription", producers: "native" },
