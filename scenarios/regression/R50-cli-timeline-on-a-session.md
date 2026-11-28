@@ -57,7 +57,7 @@ With `U=file://$PWD/drafts.html` and `F="--session r50 --allow-file --no-config"
    `--format json` on `stop`
 5. `real-a11y timeline start "$U" $F`, then `real-a11y timeline stop $F --redact-input`
 6. `real-a11y timeline start "$U" --allow-file --no-config` (no `--session`)
-7. `real-a11y session stop r50`
+7. `real-a11y session stop r50`, then `real-a11y timeline stop $F`
 
 ## Expected
 
@@ -72,12 +72,15 @@ With `U=file://$PWD/drafts.html` and `F="--session r50 --allow-file --no-config"
   CLI's `click` dispatches its events without moving focus to the button.
 - **2** — the last line is
   `(a navigation ended the recording: the page moved to file://…/next.html, and the lines above came before it)`
-- **3** — `pages[0].navigated` is `true`, `pages[0].url` ends in `next.html`,
-  and `pages[0].events` is an array
+- **3** — `pages[0].navigated` is `true`, `pages[0].end` is `"navigated"`,
+  `pages[0].url` ends in `next.html`, and `pages[0].events` is an array
 - **4** — neither the lines (`pages[0].timeline`) nor `pages[0].events` contain
   `Draft deleted.`; the announcement reads `[REDACTED]` in both
-- **5** — exit `2`, empty stdout, stderr names `--redact-input was not set`
+- **5** — exit `2`, empty stdout, stderr names `--redact-input was not set`;
+  a `real-a11y timeline stop $F` after it still prints the recording
 - **6** — exit `2`, stderr `timeline needs --session`
+- **7** — the second command exits `2` with `no session "r50" is running`, and
+  `real-a11y session list` shows no `r50`: nothing was launched to find that out
 
 ## Why this exists
 

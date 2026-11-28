@@ -45,7 +45,10 @@ const ANNOUNCE = {
 
 /** A session whose page is already on `URL`, and whose timeline stops
  *  with `result`. */
-function fakeSession(result: Partial<PageTimelineResult> = {}) {
+function fakeSession(
+  result: Partial<PageTimelineResult> = {},
+  ended: ReturnType<PageTimeline["ended"]> = null,
+) {
   const started: PageTimelineOptions[] = [];
   const session = {
     currentUrl: () => URL,
@@ -56,7 +59,7 @@ function fakeSession(result: Partial<PageTimelineResult> = {}) {
       started.push(options);
       const timeline: PageTimeline = {
         events: () => [],
-        ended: () => null,
+        ended: () => ended,
         stop: async () => ({
           events: [FOCUS, ANNOUNCE],
           end: "stopped",
@@ -239,10 +242,72 @@ describe("runTimelineOnSession", () => {
       /--redact-input was not set/,
     );
     expect(out.text()).toBe("");
-    // The recording is gone either way: nothing to stop twice.
+    // Kept: a `stop` without the flag still reads it.
+    const again = captureStdout();
+    try {
+      await runTimelineOnSession(session, ["stop"], flags);
+    } finally {
+      again.restore();
+    }
+    expect(again.text()).toContain('focus     button "Draft 12"');
+  });
+
+  it("says an unread recording ended, rather than that one is recording", async () => {
+    const { session } = fakeSession({}, "navigated");
+    await runTimelineOnSession(session, ["start", URL], flags);
     await expect(
-      runTimelineOnSession(session, ["stop"], flags),
-    ).rejects.toThrow(/no timeline is recording/);
+      runTimelineOnSession(session, ["start", URL], flags),
+    ).rejects.toThrow(
+      /ended when the page navigated, and hasn't been read yet/,
+    );
+  });
+
+  it("says in JSON how the recording ended, and never redacts a role", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "real-a11y-timeline-unit-"));
+    const config = join(dir, "a11y.config.json");
+    writeFileSync(config, JSON.stringify({ redact: ["status|button"] }));
+    const { session } = fakeSession({ end: "closed" });
+    const withConfig = { session: "s", quiet: true, config };
+    await runTimelineOnSession(session, ["start", URL], withConfig);
+    const out = captureStdout();
+    try {
+      await runTimelineOnSession(session, ["stop"], {
+        ...withConfig,
+        format: "json",
+      });
+    } finally {
+      out.restore();
+    }
+    const page = JSON.parse(out.text()).pages[0];
+    expect(page.end).toBe("closed");
+    expect(page.navigated).toBe(false);
+    expect(page.events[0].stop.role).toBe("button");
+    expect(page.events[1].role).toBe("status");
+    // As the lines print them: roles as they are.
+    expect(page.timeline).toMatch(/^focus {5}button /);
+  });
+
+  it("makes a state's key safe to print in JSON, as its value is", async () => {
+    const { session } = fakeSession({
+      events: [
+        {
+          ...FOCUS,
+          stop: { ...FOCUS.stop, states: { "x\u009bkey": "y\u202Ez" } },
+        },
+      ],
+    });
+    await runTimelineOnSession(session, ["start", URL], flags);
+    const out = captureStdout();
+    try {
+      await runTimelineOnSession(session, ["stop"], {
+        ...flags,
+        format: "json",
+      });
+    } finally {
+      out.restore();
+    }
+    const { states } = JSON.parse(out.text()).pages[0].events[0].stop;
+    expect(states).toEqual({ "x\\u{9B}key": "y\\u{202E}z" });
   });
 
   it("turns the page's refusal of --root into a CLI error naming the flag", async () => {

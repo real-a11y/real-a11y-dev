@@ -142,10 +142,14 @@ async function startOnSession(
   flags: FlagValues,
 ): Promise<number> {
   const quiet = flags.quiet === true;
-  if (recordings.has(session)) {
+  const held = recordings.get(session);
+  if (held) {
+    const ended = held.timeline.ended();
     throw new CliError(
-      "a timeline is already recording on this session",
-      `stop it first: real-a11y timeline stop --session ${sessionName(flags)}`,
+      ended === null
+        ? "a timeline is already recording on this session"
+        : `the last timeline on this session ended when the page ${ended === "navigated" ? "navigated" : "closed"}, and hasn't been read yet`,
+      `read it first: real-a11y timeline stop --session ${sessionName(flags)}`,
     );
   }
   const target = singleTarget(positionals, flags, "timeline start");
@@ -180,14 +184,16 @@ function clean(text: string, redact: RegExp[] | undefined): string {
   return sanitizeText(redactString(text, redact), { singleLine: true });
 }
 
-/** Each string value of `record`, cleaned; other values as they are. */
+/** `record` with each key made safe to print and each string value
+ *  cleaned; other values as they are. */
 function cleanValues<T extends object>(
   record: T,
   redact: RegExp[] | undefined,
 ): T {
   return Object.fromEntries(
     Object.entries(record).map(([key, value]) => [
-      key,
+      // The key too: what crosses from the page is the page's to write.
+      clean(key, undefined),
       typeof value === "string" ? clean(value, redact) : value,
     ]),
   ) as T;
@@ -195,8 +201,10 @@ function cleanValues<T extends object>(
 
 /**
  * `event` as `--format json` hands it out: the user's `redact` patterns
- * applied to its text, as the lines apply them (the events carry text from
- * before redaction), and every string made safe to print.
+ * applied to the text a line would carry (a name, a description, a state's
+ * value, what a region said), since the events carry text from before
+ * redaction, and every string made safe to print. A role is vocabulary, not
+ * page text, and a line never redacts it, so neither does this.
  */
 function cleanEvent(
   event: TimelineEvent,
@@ -205,7 +213,7 @@ function cleanEvent(
   if (event.kind === "announce") {
     return {
       ...event,
-      role: clean(event.role, redact),
+      role: clean(event.role, undefined),
       text: clean(event.text, redact),
     };
   }
@@ -213,7 +221,10 @@ function cleanEvent(
   return {
     ...event,
     stop: {
-      ...cleanValues(event.stop, redact),
+      ...event.stop,
+      role: clean(event.stop.role, undefined),
+      name: clean(event.stop.name, redact),
+      description: clean(event.stop.description, redact),
       states: cleanValues(event.stop.states, redact),
       properties: cleanValues(event.stop.properties, redact),
     },
@@ -241,11 +252,11 @@ async function stopOnSession(
   // page. A stop asked for strict output of a recording that wasn't strict
   // has nothing it can honestly print, so it prints nothing.
   if (inputPolicy(flags).redactInput && !held.strict) {
-    recordings.delete(session);
-    await held.timeline.stop().catch(() => undefined);
+    // Kept: the recording is still there for a `stop` that asks for what it
+    // holds, and nothing of it has left the page's events yet.
     throw new CliError(
-      "--redact-input was not set when this timeline started, so its focus names may carry typed text — nothing was printed",
-      "pass --redact-input to timeline start as well",
+      "--redact-input was not set when this timeline started, so its lines may carry typed text — nothing was printed",
+      "pass --redact-input to timeline start as well, or stop it without --redact-input",
     );
   }
   recordings.delete(session);
@@ -274,6 +285,7 @@ async function stopOnSession(
       timeline: lines,
       events: result.events.map((event) => cleanEvent(event, redact)),
       navigated,
+      end: result.end,
       ...(result.truncated ? { truncated: true } : {}),
     };
     writeReport(outputOf(flags), renderJson("timeline", [page]));

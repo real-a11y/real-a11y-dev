@@ -51,6 +51,11 @@ export interface PageReport {
    * patterns applied to their text, as `timeline` applies them.
    */
   events?: readonly unknown[];
+  /**
+   * `timeline stop` — how the recording ended: `"stopped"`, or `"navigated"`
+   * or `"closed"` when the page did it first.
+   */
+  end?: "stopped" | "navigated" | "closed";
   /** `timeline stop` — events past the recording's cap were dropped. */
   truncated?: boolean;
   /** Page-level failure; other pages still report. */
@@ -89,6 +94,7 @@ export function renderJson(
       ...(page.timeline !== undefined ? { timeline: page.timeline } : {}),
       ...(page.events !== undefined ? { events: page.events } : {}),
       ...(page.navigated !== undefined ? { navigated: page.navigated } : {}),
+      ...(page.end !== undefined ? { end: page.end } : {}),
       ...(page.truncated !== undefined ? { truncated: page.truncated } : {}),
       ...(page.error !== undefined ? { error: page.error } : {}),
     })),

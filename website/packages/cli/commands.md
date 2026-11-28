@@ -729,7 +729,10 @@ announce  status "Draft deleted."
 - **`stop`** — stop recording and print one line per event. Takes no URL: it
   reads the session's page as it is, and never navigates it. With
   [`--format json`](#f-format-fmt), the envelope's page carries `timeline` (the
-  lines), `events` (the same events as data), and `navigated`.
+  lines), `events` (the same events as data), `navigated`, and `end`
+  (`stopped`, `navigated` or `closed`). As on every `--session` command, pass it
+  the browser flags the session was started with (`--headful`,
+  `--storage-state`, `--cdp`, `--chrome-path`).
 
 A **focus** line names the focused element as a Tab stop prints it, with
 `[hidden]` when assistive tech can't reach it; `(none)` means focus fell to the
@@ -762,22 +765,26 @@ focus     link "Next page"
 ```
 
 A recording also ends when its session stops or idles out
-([`--session-idle-timeout`](#session-idle-timeout-ms)), and then there is
-nothing to stop.
+([`--session-idle-timeout`](#session-idle-timeout-ms)). Then there is nothing
+to stop: `stop` on a session that isn't running exits `2` without launching a
+browser. A `start` while an ended recording hasn't been read exits `2` and asks
+for the `stop` first.
 
 **Field values and redaction.** No line carries a field's value. With
 [`--redact-input`](#redact-input) on `start`, a focused name or an announcement
 that would carry text typed into a rich-text editor reads `"[redacted]"`. A
 `stop` with `--redact-input` of a recording started without it prints nothing
-and exits `2`, since strict mode can only be applied as the page records. The
-config's [`redact`](/packages/cli/configuration#redact) patterns apply to the
-lines and to the JSON events alike.
+and exits `2`, since strict mode can only be applied as the page records; the
+recording is kept, for a `stop` without the flag. The config's
+[`redact`](/packages/cli/configuration#redact) patterns apply to the lines and
+to the JSON events alike: to names, descriptions, state values and announced
+text, never to a role.
 
 One recording per session: a second `start` before `stop` exits `2`, and so do
 `stop` with nothing recording, a `--root` that matches nothing, and either
 subcommand without `--session`.
 
-**Flags:** [Browser & page](#browser-page) (on `start`) · [`--session`](#session-name)
+**Flags:** [Browser & page](#browser-page) · [`--session`](#session-name)
 (required) · [`--root`](#root-selector) (`start` only) · [Output](#output)
 (`pretty | json`, on `stop`) · [Config](#config).
 

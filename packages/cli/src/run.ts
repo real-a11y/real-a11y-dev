@@ -10,7 +10,7 @@ import { basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
-import { SnapshotFormatError } from "@real-a11y-dev/snapshot";
+import { SnapshotFormatError, sanitizeText } from "@real-a11y-dev/snapshot";
 
 import {
   COMMANDS,
@@ -68,6 +68,19 @@ function versionLine(): string {
   return `real-a11y ${cli} (playwright ${playwright ?? "not installed"})\n`;
 }
 
+/** Throw unless a daemon for `sessionName` is running or starting. */
+async function assertSessionRunning(sessionName: string): Promise<void> {
+  const { listSessions } = await import("./daemon/spawn.js");
+  const live = (await listSessions()).some(
+    (s) => s.name === sessionName && s.status !== "stale",
+  );
+  if (live) return;
+  throw new CliError(
+    `no session "${sanitizeText(sessionName, { singleLine: true })}" is running, so no timeline is recording on it`,
+    "a recording ends with its session (session stop, or --session-idle-timeout); start one with real-a11y timeline start <url> --session <name>",
+  );
+}
+
 const DAEMON_ENTRY = fileURLToPath(new URL("daemon/entry.js", import.meta.url));
 
 async function runWithDaemon(
@@ -85,6 +98,13 @@ async function runWithDaemon(
     typeof flags.session === "string" && flags.session !== ""
       ? flags.session
       : defaultSessionName();
+
+  // `timeline stop` reads a recording a running session holds. With no such
+  // session there is none to read, so say so rather than launch a browser
+  // (and a daemon that idles for minutes) just to find that out.
+  if (command === "timeline" && positionals[0] === "stop") {
+    await assertSessionRunning(sessionName);
+  }
 
   // The daemon can be mid-startup, can shut down from idleness, or can miss
   // a handshake deadline on a slow machine. Retry once for a safe retryable
@@ -311,8 +331,12 @@ export async function run(argv: string[]): Promise<number> {
             }) ?? 900_000)
           : 900_000;
       const sessionExplicit = !seededFromConfig.has("session");
+      // `timeline` always runs on a session, a config-seeded one included:
+      // `stop` names no page, so it has no target to qualify it, and the
+      // one-shot path could only refuse it.
       const daemonSupported =
-        daemonTargets !== undefined && daemonTargets.length > 0;
+        (daemonTargets !== undefined && daemonTargets.length > 0) ||
+        name === "timeline";
       if (daemonSupported || sessionExplicit) {
         if (daemonErr) throw daemonErr;
         return await runWithDaemon(

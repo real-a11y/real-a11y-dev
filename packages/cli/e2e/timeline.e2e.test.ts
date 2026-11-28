@@ -231,6 +231,45 @@ describe("real-a11y timeline", () => {
     expect(strictStop.code).toBe(2);
     expect(strictStop.stdout).toBe("");
     expect(strictStop.stderr).toMatch(/--redact-input was not set/);
+    // The recording is kept, for a stop without the flag.
+    const laxStop = await runCli(["timeline", "stop", ...base]);
+    expect(laxStop.code).toBe(0);
+  }, 90_000);
+
+  it("runs on a session the config names, stop included", async () => {
+    const config = join(dir, "session.config.json");
+    writeFileSync(config, JSON.stringify({ defaults: { session: name } }));
+    const viaConfig = ["--allow-file", "-q", "--config", config];
+    expect(
+      (await runCli(["timeline", "start", url, ...viaConfig, "--root", "main"]))
+        .code,
+    ).toBe(0);
+    const stop = await runCli(["timeline", "stop", ...viaConfig]);
+    expect(stop.stderr).toBe("");
+    expect(stop.code).toBe(0);
+  }, 90_000);
+
+  it("says so, launching nothing, when the session isn't running", async () => {
+    const missing = `timeline-missing-${process.pid}`;
+    const stop = await runCli([
+      "timeline",
+      "stop",
+      "--session",
+      missing,
+      "--no-config",
+    ]);
+    expect(stop.code).toBe(2);
+    expect(stop.stderr).toMatch(
+      new RegExp(`no session "${missing}" is running`),
+    );
+    const list = await runCli([
+      "session",
+      "list",
+      "--format",
+      "json",
+      "--no-config",
+    ]);
+    expect(list.stdout).not.toContain(missing);
   }, 90_000);
 
   it("explains what is missing", async () => {

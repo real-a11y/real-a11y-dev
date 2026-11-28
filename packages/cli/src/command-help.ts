@@ -177,11 +177,13 @@ Examples:
   real-a11y timeline stop --session s
   real-a11y timeline stop --session s --format json
 
+--format and --output apply to 'stop'. As on every --session command, pass
+'stop' the browser flags the session was started with (--headful,
+--storage-state, --cdp, --chrome-path).
+
 Flags:
   --session <name>       The session to record on              (required)
   --root <selector>      start: scope what is recorded    (default: body)
-  -f, --format <fmt>     stop: pretty | json              (default: pretty)
-  -o, --output <file>    stop: write the lines to a file
 ${SHARED_FLAG_HELP_NO_ROOT}
 `;
 
