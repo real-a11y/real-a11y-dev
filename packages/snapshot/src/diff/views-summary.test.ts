@@ -383,14 +383,15 @@ describe("summarizeViews", () => {
     });
 
     it("refuses a tab-stop rename when either side is unnamed", () => {
-      const changes = summarize(
-        { tabs: "01. button" },
-        { tabs: '01. button "Submit"' },
-      );
-      expect(kinds(changes).sort()).toEqual([
-        "focus-stop-added",
-        "focus-stop-removed",
-      ]);
+      for (const [base, pr] of [
+        ["01. button", '01. button "Submit"'],
+        ['01. button "Send"', "01. button"],
+      ]) {
+        expect(kinds(summarize({ tabs: base }, { tabs: pr })).sort()).toEqual([
+          "focus-stop-added",
+          "focus-stop-removed",
+        ]);
+      }
     });
 
     it("parses 3-digit positions past stop 99", () => {
