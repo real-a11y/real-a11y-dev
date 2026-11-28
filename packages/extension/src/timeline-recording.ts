@@ -26,6 +26,7 @@
 import {
   getExplicitRole,
   getImplicitRole,
+  impliedLiveLevel,
   liveRegionLevel,
   pageText,
   startTimeline,
@@ -157,6 +158,25 @@ export function recordTimeline(
   return recording;
 }
 
+/**
+ * The role the live-region line names a region by: the one its author gave
+ * it, and a status for one with none (an `aria-live` <p> or <div>), as the
+ * line always has. A role that makes a live region (`status`, `alert`,
+ * `log`…) is the author's, or an `<output>`'s, which is a status anyway: no
+ * look-up. Any other role may be the element's own or an author's (a
+ * `<section>` is a region either way), so only then is the region found, by
+ * its text, and a region not found keeps the role the event gives it.
+ */
+function lineRole(
+  root: Element,
+  event: Extract<TimelineEvent, { kind: "announce" }>,
+): string {
+  if (impliedLiveLevel(event.role)) return event.role;
+  const region = regionSaying(root, event.text);
+  if (!region) return event.role === "generic" ? "status" : event.role;
+  return getExplicitRole(region) ?? "status";
+}
+
 /** What the live-region line sends for one announcement. */
 export interface LiveRegionLine {
   text: string;
@@ -179,13 +199,10 @@ export function recordLiveRegions(
       onEvents: (events) => {
         for (const event of events) {
           if (event.kind !== "announce") continue;
-          // The line has always named a region by the role its author gave
-          // it, and one with none (an `aria-live` <p> or <div>) a status.
-          const region = regionSaying(root, event.text);
           send({
             text: event.text,
             level: event.live,
-            role: (region && getExplicitRole(region)) ?? "status",
+            role: lineRole(root, event),
           });
         }
       },
@@ -259,11 +276,14 @@ export class TimelineSession {
     }
     this.current = null;
     stopQuietly(current.recording);
-    if (reason) {
+    if (!reason) return;
+    try {
       this.hooks.post({
         type: "TIMELINE_ENDED",
         payload: { session: current.session, reason },
       });
+    } catch {
+      // Nobody to tell: the extension is gone.
     }
   }
 }

@@ -122,30 +122,57 @@ function useTimelineMessages(
  */
 function useRecordingPort(stateRef: { current: TimelineState }) {
   const port = useRef<chrome.runtime.Port | null>(null);
+  // The session the port is held for.
+  const heldFor = useRef<string | null>(null);
   const release = useCallback(() => {
     const held = port.current;
     port.current = null;
+    heldFor.current = null;
     held?.disconnect();
   }, []);
+  /** Let go of the port if it is still `session`'s. */
+  const releaseFor = useCallback(
+    (session: string) => {
+      if (heldFor.current === session) release();
+    },
+    [release],
+  );
   const hold = useCallback(
-    function holdPort(tabId: number, session: string) {
+    function holdPort(tabId: number, session: string, held = 0) {
       release();
-      const opened = chrome.runtime.connect({ name: TIMELINE_PORT });
+      let opened: chrome.runtime.Port;
+      try {
+        opened = chrome.runtime.connect({ name: TIMELINE_PORT });
+        opened.postMessage({ tabId, session });
+      } catch {
+        // The extension was reloaded under the panel: nothing to hold.
+        return;
+      }
       port.current = opened;
-      opened.postMessage({ tabId, session });
+      heldFor.current = session;
       opened.onDisconnect.addListener(() => {
         if (port.current !== opened) return;
         port.current = null;
+        heldFor.current = null;
         const now = stateRef.current;
-        if (isRecording(now) && now.session === session) {
-          holdPort(tabId, session);
+        // A few times at most: a worker that turns the port away at once
+        // would otherwise be asked again without end.
+        if (
+          held < MAX_PORT_HOLDS &&
+          isRecording(now) &&
+          now.session === session
+        ) {
+          holdPort(tabId, session, held + 1);
         }
       });
     },
     [release, stateRef],
   );
-  return { hold, release };
+  return { hold, release, releaseFor };
 }
+
+/** How many times a recording's port is opened again after it drops. */
+const MAX_PORT_HOLDS = 5;
 
 /** Record and Stop, and the stops the panel makes itself. */
 function useRecordStop(
@@ -157,10 +184,7 @@ function useRecordStop(
   // The tab the recording runs in, where a Stop goes whichever tab the panel
   // shows by then.
   const recordingTab = useRef<number | null>(null);
-  // The latest Record's session, until Stop: what a start's answer is
-  // checked against, whenever it comes.
-  const awaitedSession = useRef<string | null>(null);
-  const { hold, release } = useRecordingPort(stateRef);
+  const { hold, release, releaseFor } = useRecordingPort(stateRef);
 
   /** Tell the recording's tab to stop, if it still runs. */
   const stopInPage = useCallback(() => {
@@ -184,28 +208,26 @@ function useRecordStop(
     if (myTabId === null) return;
     const session = newSession();
     recordingTab.current = myTabId;
-    awaitedSession.current = session;
+    // Before the page is asked: a panel that goes while the start is on its
+    // way still stops it. A start that fails, or a recording that ends, lets
+    // go of it (below).
+    hold(myTabId, session);
     dispatch({ type: "start", session });
     sendToBoundTab(
       { type: "TIMELINE_START", payload: { session } },
       (response) => {
         const reply = response as { success?: boolean; error?: string };
-        const started = reply?.success === true;
-        // Before the state says so: a panel that goes now still stops it.
-        if (started && awaitedSession.current === session) {
-          hold(myTabId, session);
+        if (reply?.success === true) {
+          dispatch({ type: "started", session });
+          return;
         }
-        dispatch(
-          started
-            ? { type: "started", session }
-            : { type: "failed", session, error: reply?.error },
-        );
+        releaseFor(session);
+        dispatch({ type: "failed", session, error: reply?.error });
       },
     );
-  }, [myTabId, sendToBoundTab, dispatch, hold]);
+  }, [myTabId, sendToBoundTab, dispatch, hold, releaseFor]);
 
   const stop = useCallback(() => {
-    awaitedSession.current = null;
     stopInPage();
     dispatch({ type: "stop" });
   }, [stopInPage, dispatch]);

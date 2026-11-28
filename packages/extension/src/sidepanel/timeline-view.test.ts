@@ -338,4 +338,34 @@ describe("the TIMELINE view", () => {
       "Recording ended: another side panel started recording this page. 2 lines.",
     );
   });
+
+  it("holds its port from before the page answers, and lets go when the start fails", async () => {
+    let portsAtStart = -1;
+    await mountTimeline({
+      respond: (m) => {
+        if ((m as { type: string }).type !== "TIMELINE_START") return undefined;
+        portsAtStart = chromeMock.otherPorts.length;
+        return { success: false, error: "Content script not available" };
+      },
+    });
+    await press("● Record");
+    // A panel closing while the start was on its way still stops it.
+    expect(portsAtStart).toBe(1);
+    expect(chromeMock.otherPorts[0]!.closed).toBe(true);
+  });
+
+  it("gives focus back to the tree's view toggle when it leaves through its own", async () => {
+    await mountTimeline();
+    const own = container.querySelector<HTMLButtonElement>(
+      ".sn-timeline .sn-toggle-btn",
+    )!;
+    expect(own.textContent).toBe("A11Y");
+    act(() => {
+      own.focus();
+      own.click();
+    });
+    await flush();
+    expect(container.querySelector(".sn-timeline")).toBeNull();
+    expect(document.activeElement).not.toBe(document.body);
+  });
 });
