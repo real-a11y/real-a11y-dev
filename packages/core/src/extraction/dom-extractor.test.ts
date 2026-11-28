@@ -3105,6 +3105,22 @@ describe("extractDomTree", () => {
       );
     });
 
+    it("resolves the HTML bounds together, so an ARIA min does not move the max", () => {
+      expect(
+        only('<meter min="5" value="5" aria-valuemin="0"></meter>').a11y
+          .properties,
+      ).toEqual({ valuemin: "0", valuemax: "5" });
+    });
+
+    it("rejects an HTML bound with a leading space or plus, as Chromium does", () => {
+      expect(
+        only('<input type="range" max=" 10" aria-label="r">').a11y.properties,
+      ).toEqual({ valuemin: "0", valuemax: "100" });
+      expect(
+        only('<input type="range" max="+10" aria-label="r">').a11y.properties,
+      ).toEqual({ valuemin: "0", valuemax: "100" });
+    });
+
     it("reads only decimal bounds, and HTML bounds only on the element's own role", () => {
       expect(
         only('<div role="slider" aria-valuemax="0x10" aria-label="s"></div>')

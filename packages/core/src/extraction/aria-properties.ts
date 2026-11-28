@@ -40,42 +40,51 @@ const DEFAULT_RANGE_ROLES: ReadonlySet<string> = new Set([
   "progressbar",
 ]);
 
+const DECIMAL = /^[+-]?(\d+(?:\.\d*)?|\.\d+)([eE][+-]?\d+)?$/;
+/** HTML's floating-point number grammar: no whitespace, no leading `+`. */
+const HTML_NUMBER = /^-?(\d+(?:\.\d+)?|\.\d+)([eE][+-]?\d+)?$/;
+
 /** A bound as a string key value, or `null` when unparsable or empty. */
-function parseBound(raw: string | null): string | null {
+function parseBound(raw: string | null, grammar = DECIMAL): string | null {
   if (raw === null) return null;
   // Decimal floating point only: `Number` would also take "0x10" and "0b1".
-  if (!/^[+-]?(\d+(?:\.\d*)?|\.\d+)([eE][+-]?\d+)?$/.test(raw.trim()))
-    return null;
+  // ARIA values are trimmed; an HTML attribute is not.
+  if (!grammar.test(grammar === DECIMAL ? raw.trim() : raw)) return null;
   const n = Number(raw);
   // String(Number(raw)): "1e2" is "100" and "0.5" is "0.5", as native gives them.
   return Number.isFinite(n) ? String(n) : null;
 }
 
-/** The HTML bound and default of the elements that carry one. */
+/**
+ * The effective HTML bounds of the elements that carry them, defaults and the
+ * min-raises-max rule included, so an ARIA override of one bound never moves
+ * the other. `null` where HTML says nothing.
+ */
 function htmlBounds(
   element: Element,
   tag: string,
   role: string,
-): {
-  min: string | null;
-  max: string | null;
-  defMin?: string;
-  defMax?: string;
-} {
-  const min = parseBound(safeGetAttribute(element, "min"));
-  const max = parseBound(safeGetAttribute(element, "max"));
+): { min: string | null; max: string | null } {
+  const attr = (name: string) =>
+    parseBound(safeGetAttribute(element, name), HTML_NUMBER);
+  const min = attr("min");
+  const max = attr("max");
+  // HTML raises an effective max that falls below the min, as Chromium does.
+  const effective = (defMin: number, defMax: number) => {
+    const lo = min === null ? defMin : Number(min);
+    const hi = max === null ? defMax : Number(max);
+    return { min: String(lo), max: String(Math.max(lo, hi)) };
+  };
   if (tag === "input") {
     const type = (safeGetAttribute(element, "type") ?? "").toLowerCase();
-    if (type === "range" && role === "slider")
-      return { min, max, defMin: "0", defMax: "100" };
+    if (type === "range" && role === "slider") return effective(0, 100);
     if (type === "number" && role === "spinbutton") return { min, max };
   } else if (tag === "meter" && role === "meter") {
-    return { min, max, defMin: "0", defMax: "1" };
+    return effective(0, 1);
   } else if (tag === "progress" && role === "progressbar") {
     // A progress bar always starts at 0, and its max defaults to 1, also
     // when it is indeterminate (HTML-AAM, and what Chromium reports).
-    const positive = max !== null && Number(max) > 0 ? max : null;
-    return { min: "0", max: positive, defMax: "1" };
+    return { min: "0", max: max !== null && Number(max) > 0 ? max : "1" };
   }
   return { min: null, max: null };
 }
@@ -101,18 +110,14 @@ function rangeBounds(
   if (role === "separator" && !focusable) return {};
   const html = htmlBounds(element, safeTagName(element), role);
   const implicit = DEFAULT_RANGE_ROLES.has(role);
-  const bound = (aria: string, own: string | null, def?: string, ar?: string) =>
-    parseBound(safeGetAttribute(element, aria)) ??
-    own ??
-    def ??
-    (implicit ? ar : undefined) ??
-    null;
-  const min = bound("aria-valuemin", html.min, html.defMin, "0");
-  let max = bound("aria-valuemax", html.max, html.defMax, "100");
-  // HTML raises an effective max to a min above it, as Chromium reports.
-  if (html.defMax !== undefined && min !== null && max !== null) {
-    if (Number(max) < Number(min)) max = min;
-  }
+  const min =
+    parseBound(safeGetAttribute(element, "aria-valuemin")) ??
+    html.min ??
+    (implicit ? "0" : null);
+  const max =
+    parseBound(safeGetAttribute(element, "aria-valuemax")) ??
+    html.max ??
+    (implicit ? "100" : null);
   const out: Record<string, string> = {};
   if (min !== null) out["valuemin"] = min;
   if (max !== null) out["valuemax"] = max;
