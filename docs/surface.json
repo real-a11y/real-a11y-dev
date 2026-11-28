@@ -1557,6 +1557,110 @@
             "type": "boolean"
           },
           {
+            "name": "no-config",
+            "type": "boolean"
+          },
+          {
+            "name": "output",
+            "short": "o",
+            "type": "string"
+          },
+          {
+            "name": "quiet",
+            "short": "q",
+            "type": "boolean"
+          },
+          {
+            "name": "redact-input",
+            "type": "boolean"
+          },
+          {
+            "name": "root",
+            "type": "string"
+          },
+          {
+            "name": "session",
+            "type": "string"
+          },
+          {
+            "name": "session-idle-timeout",
+            "type": "string"
+          },
+          {
+            "name": "settle",
+            "type": "string"
+          },
+          {
+            "name": "storage-state",
+            "type": "string"
+          },
+          {
+            "name": "timeout",
+            "type": "string"
+          },
+          {
+            "name": "verbose",
+            "type": "boolean"
+          },
+          {
+            "name": "viewport",
+            "type": "string"
+          },
+          {
+            "name": "wait-until",
+            "type": "string"
+          }
+        ],
+        "group": "view",
+        "name": "timeline",
+        "producers": [
+          "dom"
+        ],
+        "summary": "Record focus moves + announcements between commands",
+        "usage": "timeline <start|stop> [flags]"
+      },
+      {
+        "flags": [
+          {
+            "name": "allow-file",
+            "type": "boolean"
+          },
+          {
+            "multiple": true,
+            "name": "audit-origin",
+            "type": "string"
+          },
+          {
+            "name": "cdp",
+            "type": "string"
+          },
+          {
+            "name": "chrome-path",
+            "type": "string"
+          },
+          {
+            "name": "config",
+            "type": "string"
+          },
+          {
+            "name": "device",
+            "type": "string"
+          },
+          {
+            "name": "format",
+            "short": "f",
+            "type": "string"
+          },
+          {
+            "name": "headful",
+            "type": "boolean"
+          },
+          {
+            "name": "help",
+            "short": "h",
+            "type": "boolean"
+          },
+          {
             "name": "include-generic",
             "type": "boolean"
           },

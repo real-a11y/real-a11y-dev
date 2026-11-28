@@ -100,6 +100,17 @@ export const TABS_FLAGS: Options = {
   root: { type: "string" },
 };
 
+// `timeline start <url>` records from a root, as `tabs` reads from one: the
+// recorder is an in-page walk too (ADR-0002). `stop` reads `--format` /
+// `--output`; each subcommand ignores the other's flags, so a config
+// `defaults` key that seeds both can't break either.
+export const TIMELINE_FLAGS: Options = {
+  ...PAGE_FLAGS,
+  ...OUTPUT_FLAGS,
+  ...CONFIG_FLAGS,
+  root: { type: "string" },
+};
+
 // The act commands. `interact` takes an ordered, repeatable --step; the sugar
 // verbs take one target apiece and share the same machinery.
 export const INTERACT_FLAGS: Options = {
@@ -221,7 +232,8 @@ export const LIST_CATEGORIES = [
 ] as const;
 export type ListCategory = (typeof LIST_CATEGORIES)[number];
 
-// Everything except `--root` — which is now every command but `tabs`. They all
+// Everything except `--root` — which is now every command but the two DOM
+// holdouts, `tabs` and `timeline`. They all
 // read Chromium's whole-document native tree, so there is nothing for a
 // selector to scope, and listing a flag they reject would promise scoping that
 // never applies.
@@ -249,6 +261,6 @@ export const SHARED_FLAG_HELP_NO_ROOT = `  --device <name>        Emulate a devi
   -q, --quiet            Suppress progress
   --verbose              Extra diagnostics on stderr`;
 
-/** `tabs` only — the one command still running the in-page DOM walk. */
+/** `tabs` only. `timeline`, the other in-page walk, words its own `--root`. */
 export const SHARED_FLAG_HELP_ROOT = `  --root <selector>      Scope the tab-order walk         (default: body)
 ${SHARED_FLAG_HELP_NO_ROOT}`;

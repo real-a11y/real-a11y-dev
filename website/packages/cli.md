@@ -95,7 +95,10 @@ ceremony).
 `audit` is the flagship, but there are read-only view commands too — `inspect`,
 `tree`, `outline`, `list <category>` — each printing one facet of the same read
 of Chromium's own accessibility tree, plus `tabs`, which runs the in-page walk
-because tab *order* is the one thing that tree can't produce. See the
+because tab *order* is something that tree can't produce. `timeline` is the
+other in-page read: on a [`--session`](/packages/cli/commands#session-name), it
+records where focus went and what live regions announced between two commands,
+in the order the page made them. See the
 [command reference](/packages/cli/commands) for the full set.
 
 An `<iframe>`'s content is part of that tree, the way a screen reader reads it:

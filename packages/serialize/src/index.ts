@@ -9,6 +9,10 @@ export {
 // The timeline view's lines, from core's recorder's events (ADR-0002).
 // Internal: `testing`'s `recordTimeline` writes its snapshot with it.
 export { serializeTimeline } from "./timeline.js";
+// `redact` applied to one string as the serializers apply it to a name.
+// Internal: the CLI's `timeline stop --format json` redacts its events with
+// it, so they match the lines.
+export { redactString } from "./serialize.js";
 export type {
   SerializeInput,
   SerializeOptions,

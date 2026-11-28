@@ -89,13 +89,14 @@ describe("the producer axis is gone", () => {
     }
   });
 
-  it("declares --root on `tabs` alone", () => {
-    // The one DOM holdout: tab ORDER is layout work the native tree doesn't
-    // expose, and a DOM walk is the only thing a selector can scope.
+  it("declares --root on the two DOM holdouts alone", () => {
+    // `tabs`: tab ORDER is layout work the native tree doesn't expose.
+    // `timeline`: the order of focus moves and announcements exists only in
+    // the page (ADR-0002). A DOM walk is the only thing a selector can scope.
     const withRoot = Object.entries(COMMANDS)
       .filter(([, spec]) => "root" in spec.options)
       .map(([name]) => name);
-    expect(withRoot).toEqual(["tabs"]);
+    expect(withRoot.sort()).toEqual(["tabs", "timeline"]);
   });
 
   it("derives the native set from the table, so it can't drift", () => {
@@ -124,11 +125,12 @@ describe("the producer axis is gone", () => {
         `${name} declares ${spec.producers.length} producers`,
       ).toBeLessThanOrEqual(1);
     }
-    // `tabs` is the lone DOM holdout; nothing else reads the in-page walk.
+    // `tabs` and `timeline` are the DOM holdouts (ADR-0002 names the
+    // second); nothing else reads the in-page walk.
     const dom = Object.entries(COMMANDS)
       .filter(([, s]) => s.producers.includes("dom"))
       .map(([n]) => n);
-    expect(dom).toEqual(["tabs"]);
+    expect(dom.sort()).toEqual(["tabs", "timeline"]);
   });
 });
 

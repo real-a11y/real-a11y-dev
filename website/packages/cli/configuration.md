@@ -106,13 +106,14 @@ Two path-valued keys — [`storageState`](#storagestate) and [`baseline`](#basel
 
 ### `root`
 
-**`root: string`** — flag `--root` · default `body` · applies to `tabs` only
+**`root: string`** — flag `--root` · default `body` · applies to `tabs` and `timeline start`
 
-Scope the in-page tab-order walk to a CSS selector.
+Scope the in-page walks to a CSS selector: the tab order, and what a timeline
+records.
 
 Every other command reads Chromium's own accessibility tree, which is
 whole-document — so this key no longer applies to them. When a config sets it
-and the running command isn't `tabs`, the CLI **warns on stderr and keeps
+and the running command isn't `tabs` or `timeline`, the CLI **warns on stderr and keeps
 going**. That is deliberate: this loader is otherwise strict and fail-closed,
 and hard-erroring here would red every CI that set the key, mid-beta, over
 config that was correct when it was written and that the user didn't change.

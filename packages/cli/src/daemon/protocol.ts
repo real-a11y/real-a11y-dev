@@ -6,6 +6,8 @@
  * streams followed by exactly one `done` or `error`.
  */
 
+import { StringDecoder } from "node:string_decoder";
+
 export const DAEMON_PROTOCOL_VERSION = "2";
 
 export interface RpcRequest {
@@ -62,8 +64,12 @@ export function createLineReader(): (
   chunk: Buffer | string,
 ) => Generator<string> {
   let buffer = "";
+  // One decoder for the whole stream: a multibyte character split across two
+  // socket reads is held until its last byte arrives, where decoding each
+  // chunk alone would turn its halves into U+FFFD.
+  const decoder = new StringDecoder("utf8");
   return function* (chunk) {
-    buffer += typeof chunk === "string" ? chunk : chunk.toString("utf8");
+    buffer += typeof chunk === "string" ? chunk : decoder.write(chunk);
     let index: number;
     while ((index = buffer.indexOf("\n")) >= 0) {
       const line = buffer.slice(0, index).trim();

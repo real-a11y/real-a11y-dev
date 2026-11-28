@@ -307,7 +307,7 @@ describe("--root now applies to `tabs` alone (built bin)", () => {
     expect(code).toBe(0);
     expect(stderr).toMatch(/warning/);
     expect(stderr).toMatch(/`defaults\.root`/);
-    expect(stderr).toMatch(/Only `tabs` still scopes/);
+    expect(stderr).toMatch(/Only `tabs` and `timeline` still scope/);
     // …and `tabs` itself, which still honours it, says nothing.
     const tabs = await runCli(["tabs", CLEAN, "-q"], dir);
     expect(tabs.stderr).not.toMatch(/defaults\\.root/);

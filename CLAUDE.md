@@ -73,10 +73,13 @@ Five consequences that are easy to get wrong:
   lists focus moves and live-region announcements in the order the page made
   them, and that order exists only in the page: CDP has no announcement event,
   and can't see where a focus event fell among the page's own mutations. Today
-  only `testing`'s `recordTimeline` records one, in jsdom or a browser-mode
-  runner. Each surface that gains it (CLI, MCP, the Playwright adapter, the
-  extension, Storybook) runs that same in-page recorder, injected only when a
-  timeline is recorded, never into the default page bundle. It prints no
+  `testing`'s `recordTimeline` records one, in jsdom or a browser-mode runner,
+  and so does the CLI's `timeline start|stop` on a `--session`. Each surface
+  that gains it (MCP, the Playwright adapter, the extension, Storybook next)
+  runs that same in-page recorder, injected only when a timeline is recorded,
+  never into the default page bundle: over CDP that is `browser`'s
+  `startPageTimeline` and its own `timeline-bundle`, which streams each run
+  out of the page so a navigation keeps what came before. It prints no
   producer header, since the ADR fixes the producer. Do not "unify" it onto the
   native tree either.
 

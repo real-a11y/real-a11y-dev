@@ -5,10 +5,10 @@ description: Every real-a11y command and flag — audit, inspect, snapshot, diff
 
 # Commands & flags
 
-Every invocation is `real-a11y <command> [url...] [flags]`. Sixteen commands
+Every invocation is `real-a11y <command> [url...] [flags]`. Seventeen commands
 ship — [`install`](#install), [`audit`](#audit-url), [`inspect`](#inspect-url),
 [`tree`](#tree-url), [`outline`](#outline-url), [`tabs`](#tabs-url),
-[`list`](#list-category-url), [`interact`](#interact-url-step-step),
+[`list`](#list-category-url), [`timeline`](#timeline-subcommand), [`interact`](#interact-url-step-step),
 [`click`](#click-url-role-role), [`type`](#type-url-role-role-text-value),
 [`focus`](#focus-url-role-role), [`session`](#session-subcommand),
 [`snapshot`](#snapshot-url), [`diff`](#diff-base-json-pr-json),
@@ -16,6 +16,15 @@ ship — [`install`](#install), [`audit`](#audit-url), [`inspect`](#inspect-url)
 own flags.
 
 <!-- surface:begin cli-unreleased -->
+
+::: info Not in the published release yet
+Some of what this page documents is on `main` but not in `@real-a11y-dev/cli` 0.1.0-beta.14, so
+installing from npm today will not have it:
+
+- `timeline` — the whole command
+
+:::
+
 <!-- surface:end cli-unreleased -->
 
 Findings and reports go to **stdout**; progress, warnings, and errors go to
@@ -64,8 +73,9 @@ additive-only. Never rely on the wording of a `pretty` line; key on the JSON.
 ## All commands at a glance
 
 Every browser-driving command reads **Chromium's own accessibility tree** over
-CDP, except [`tabs`](#tabs-url) — the one view that tree cannot produce (see
-[`--root`](#root-selector)). Click a command for its flags.
+CDP, except [`tabs`](#tabs-url) and [`timeline`](#timeline-subcommand) — the two
+views that tree cannot produce (see [`--root`](#root-selector)). Click a command
+for its flags.
 
 **Setup**
 
@@ -97,8 +107,9 @@ CDP, except [`tabs`](#tabs-url) — the one view that tree cannot produce (see
 | --- | --- |
 | [`tree <url>`](#tree-url) | The semantic tree — role + accessible name, as a screen reader traverses it. |
 | [`outline <url>`](#outline-url) | Heading outline (h1–h6) in document order. |
-| [`tabs <url>`](#tabs-url) | Focusable elements in keyboard Tab order — the one in-page read. |
+| [`tabs <url>`](#tabs-url) | Focusable elements in keyboard Tab order — an in-page read. |
 | [`list <category> <url>`](#list-category-url) | One category — heading, link, button, form, landmark, image. |
+| [`timeline <subcommand>`](#timeline-subcommand) | Focus moves and live-region announcements between commands on a `--session` — the second in-page read. |
 
 <!-- surface:end cli-commands-view -->
 
@@ -318,10 +329,10 @@ real-a11y outline https://example.com
 Print every focusable element in keyboard **Tab** order. Single URL; always
 exits `0`.
 
-The one command still built from the **in-page DOM walk**, and the only one that
-takes [`--root`](#root-selector). Chromium's accessibility tree knows whether a
-node is focusable, but not the *sequence* — `tabindex` never reaches a native
-node — so tab order is DOM work by nature, not a fallback.
+Built from the **in-page DOM walk**, as [`timeline`](#timeline-subcommand) is,
+which is why it takes [`--root`](#root-selector). Chromium's accessibility tree
+knows whether a node is focusable, but not the *sequence* — `tabindex` never
+reaches a native node — so tab order is DOM work by nature, not a fallback.
 
 The stops are the ones Chromium tabs to. A frame (an `<iframe>`, or an `<object>` showing a document) is one stop where Tab enters it, whatever it holds. Keyboard-focusable scrollers are not modelled yet. An `<a>` without an `href` is not one,
 not even with `role="button"`, which is the keyboard bug worth catching. Nor is
@@ -692,6 +703,95 @@ real-a11y audit https://app.example.com/dashboard --storage-state auth.json
 · [`--settle`](#settle-ms) · [`--timeout`](#timeout-ms) · [Config](#config) ·
 [`--verbose`](#verbose) · [`-h, --help`](#h-help).
 
+### `timeline <subcommand>`
+
+Record what a keyboard and screen-reader user meets **between** commands on a
+[`--session`](#session-name): where focus goes, and what live regions announce,
+in the order the page made them. Every other view reads one moment; this one
+reads what happened between two.
+
+```sh
+real-a11y timeline start http://localhost:3000 --session s --root main
+real-a11y click http://localhost:3000 --session s --role button --name "Delete draft"
+real-a11y timeline stop --session s
+```
+
+```
+announce  status "Deleting…"
+focus     button "New draft"
+announce  status "Draft deleted."
+```
+
+- **`start <url>`** — open the page on the session (or reuse it, as every
+  session command does) and start recording. Prints nothing on stdout; the
+  progress line on stderr names the stop command. [`--root`](#root-selector)
+  scopes what is recorded: only focus and regions inside it.
+- **`stop`** — stop recording and print one line per event. Takes no URL: it
+  reads the session's page as it is, and never navigates it. With
+  [`--format json`](#f-format-fmt), the envelope's page carries `timeline` (the
+  lines), `events` (the same events as data), `navigated`, and `end`
+  (`stopped`, `navigated` or `closed`). As on every `--session` command, pass it
+  the browser flags the session was started with (`--headful`,
+  `--storage-state`, `--cdp`, `--chrome-path`).
+
+A **focus** line names the focused element as a Tab stop prints it, with
+`[hidden]` when assistive tech can't reach it; `(none)` means focus fell to the
+page. An **announce** line is the text a live region gained: an element with
+`aria-live`, or a `status`, `alert` or `log`. Its role is named, with
+`{live=…}` when `aria-live` sets a politeness the role doesn't imply. What one
+synchronous run of the page's code does is read once, so text set and cleared
+in it prints nothing.
+
+Like [`tabs`](#tabs-url), this is built from the **in-page DOM walk**, for the
+same reason: that order exists only in the page. Chromium's accessibility tree
+has no announcement event, and can't see where a focus move fell among the
+page's own changes. So names come from this project's accessible-name
+computation, and can differ from [`tree`](#tree-url)'s for the same element.
+The recorder is injected into the page only while a timeline records. The
+output carries no producer header. It records the page's own document: focus
+moves and announcements inside an `<iframe>` aren't in it, nor are changes
+inside a shadow root as they happen.
+
+The CLI's own [`click`](#click-url-role-role) dispatches its events without
+moving focus to the element, so a timeline around it starts with what the
+click did, not with a focus line for the button. A real user's click focuses
+the button first; [`focus`](#focus-url-role-role) before the click shows that.
+
+**A recording lives in the page's document.** A navigation ends it — a link the
+click followed, a reload, a form post. `stop` then prints the lines from before
+it, and a last line saying so:
+
+```
+focus     link "Next page"
+(a navigation ended the recording: the page moved to http://localhost:3000/next, and the lines above came before it)
+```
+
+A recording also ends when its session stops or idles out
+([`--session-idle-timeout`](#session-idle-timeout-ms)). Then there is nothing
+to stop: `stop` on a session that isn't running exits `2` without launching a
+browser. A `start` while an ended recording hasn't been read exits `2` and asks
+for the `stop` first.
+
+**Field values and redaction.** No line carries a field's value. With
+[`--redact-input`](#redact-input) on `start`, a focused name or an announcement
+that would carry text typed into a rich-text editor reads `"[redacted]"`. A
+`stop` with `--redact-input` of a recording started without it prints nothing
+and exits `2`, since strict mode can only be applied as the page records; the
+recording is kept, for a `stop` without the flag. The config's
+[`redact`](/packages/cli/configuration#redact) patterns apply to the lines and
+to the JSON events alike: to names, descriptions, state values and announced
+text, never to a role, and to the landed URL in the navigation note and the
+JSON `url`. A `stop` whose report can't be written (an unwritable `--output`)
+keeps the recording for a retry.
+
+One recording per session: a second `start` before `stop` exits `2`, and so do
+`stop` with nothing recording, a `--root` that matches nothing, and either
+subcommand without `--session`.
+
+**Flags:** [Browser & page](#browser-page) · [`--session`](#session-name)
+(required) · [`--root`](#root-selector) (`start` only) · [Output](#output)
+(`pretty | json`, on `stop`) · [Config](#config).
+
 ### `session <subcommand>`
 
 Manage the long-lived browser daemons that invocations with
@@ -841,22 +941,24 @@ browser-driving command — [`audit`](#audit-url), [`inspect`](#inspect-url),
 ### `--root <selector>`
 
 - **Type:** CSS selector · **Default:** `body` · **Commands:**
-  [`tabs`](#tabs-url) only
+  [`tabs`](#tabs-url), [`timeline start`](#timeline-subcommand)
 
-Scope the tab-order walk to a region or component instead of the whole page.
+Scope the tab-order walk, or what a timeline records, to a region or component
+instead of the whole page.
 
-`tabs` is the last command that runs **in the page**, and a selector only means
-something to an in-page walk. Every other browser command reads Chromium's own
+`tabs` and `timeline` run **in the page**, and a selector only means something
+to an in-page walk. Every other browser command reads Chromium's own
 accessibility tree, which is whole-document: there is no subtree to narrow to,
 so they reject `--root` with that explanation rather than accepting it and
 silently doing nothing.
 
 ```sh
 real-a11y tabs http://localhost:3000 --root "#app main"
+real-a11y timeline start http://localhost:3000 --session s --root main
 ```
 
 A project-wide [`defaults.root`](/packages/cli/configuration#defaults) now
-reaches only `tabs`. On any other command it is **warned about on stderr, not
+reaches only `tabs` and `timeline`. On any other command it is **warned about on stderr, not
 an error** — the config loader is otherwise strict and fail-closed, and
 hard-erroring would red every CI that set the key, over config that was correct
 when it was written.

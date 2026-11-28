@@ -30,6 +30,18 @@ describe("daemon protocol", () => {
 });
 
 describe("createLineReader", () => {
+  it("keeps a multibyte character split across two chunks", () => {
+    const read = createLineReader();
+    const bytes = Buffer.from('{"text":"保存"}\n', "utf8");
+    // Split inside the first byte sequence of 保.
+    const cut = bytes.indexOf(0xe4) + 1;
+    const lines = [
+      ...read(bytes.subarray(0, cut)),
+      ...read(bytes.subarray(cut)),
+    ];
+    expect(lines).toEqual(['{"text":"保存"}']);
+  });
+
   const buf = (s: string) => Buffer.from(s, "utf8");
 
   it("yields complete trimmed lines and skips blank ones", () => {
