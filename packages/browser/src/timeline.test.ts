@@ -219,6 +219,18 @@ describe("startPageTimeline", () => {
     expect(timeline.events()).toHaveLength(200_000);
   });
 
+  it("streams a run larger than the engine's argument limit", async () => {
+    // One synchronous block can announce without end: a single run that big
+    // arrives through the binding, not at stop().
+    const many = Array.from({ length: 200_000 }, () => ANNOUNCE);
+    const fake = fakePage();
+    const timeline = await startPageTimeline(fake.page, {
+      maxEvents: 200_000,
+    });
+    fake.send(many);
+    expect(timeline.events()).toHaveLength(200_000);
+  });
+
   it("refuses a maxEvents that isn't a whole number", async () => {
     const fake = fakePage();
     for (const maxEvents of [Number.NaN, -1, 1.5]) {
