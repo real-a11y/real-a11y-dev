@@ -345,7 +345,7 @@ class Recording {
     const events = eventsOf(event.payload, this.token);
     if (!events?.length) return;
     const kept = this.capped(events, this.streamed.length);
-    this.streamed.push(...kept);
+    for (const event of kept) this.streamed.push(event);
     if (!kept.length || !this.options.onEvents) return;
     try {
       this.options.onEvents(kept);
@@ -426,7 +426,11 @@ class Recording {
         end = "stopped";
         this.deliverTail(events);
         // And `events()` reads what `stop()` returned, the tail included.
-        this.streamed.splice(0, this.streamed.length, ...events);
+        // Not `splice(…, ...events)`: a spread passes each event as an
+        // argument, and a recording with a raised `maxEvents` can pass the
+        // engine's argument limit.
+        this.streamed.length = 0;
+        for (const event of events) this.streamed.push(event);
       } else {
         end = read.end;
       }

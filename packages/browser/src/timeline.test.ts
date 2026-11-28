@@ -208,6 +208,17 @@ describe("startPageTimeline", () => {
     expect(timeline.events()).toEqual([FOCUS, ANNOUNCE]);
   });
 
+  it("stops a recording larger than the engine's argument limit", async () => {
+    const many = Array.from({ length: 200_000 }, () => ANNOUNCE);
+    const fake = fakePage(() => many);
+    const timeline = await startPageTimeline(fake.page, {
+      maxEvents: 200_000,
+    });
+    const result = await timeline.stop();
+    expect(result.events).toHaveLength(200_000);
+    expect(timeline.events()).toHaveLength(200_000);
+  });
+
   it("refuses a maxEvents that isn't a whole number", async () => {
     const fake = fakePage();
     for (const maxEvents of [Number.NaN, -1, 1.5]) {
