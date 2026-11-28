@@ -283,4 +283,161 @@ describe("startTimeline", () => {
     expect(timelineProblem(null)).toBe("expected a DOM Element, received null");
     expect(timelineProblem(document.body)).toBeNull();
   });
+
+  it("records no interaction unless asked", async () => {
+    document.body.innerHTML = `<main><button id="b">Save</button></main>`;
+    await tick();
+    const recording = startTimeline(document.querySelector("main")!);
+    byId("b").click();
+    byId("b").dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+    );
+    await tick();
+    expect(recording.stop()).toEqual([]);
+  });
+
+  it("records a press, a click and typing as events, placed among focus and announcements", async () => {
+    document.body.innerHTML = `<main><button id="b">Save</button><label>Email <input id="e"></label><p role="status" id="s"></p></main>`;
+    await tick();
+    const recording = startTimeline(document.querySelector("main")!, {
+      interactions: true,
+    });
+    byId("b").addEventListener("click", () => {
+      byId("s").textContent = "Saved.";
+    });
+    byId("b").focus();
+    byId("b").click();
+    await tick();
+    byId("b").dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Tab",
+        shiftKey: true,
+        bubbles: true,
+      }),
+    );
+    byId("e").focus();
+    await tick();
+    for (const ch of "ab") {
+      byId("e").dispatchEvent(
+        new InputEvent("input", { bubbles: true, data: ch }),
+      );
+      await tick();
+    }
+    const events = recording.stop();
+    expect(events.map((e) => e.kind)).toEqual([
+      "focus",
+      "click",
+      "announce",
+      "press",
+      "focus",
+      "type",
+    ]);
+    expect(events[1]).toEqual({
+      kind: "click",
+      hidden: false,
+      target: expect.objectContaining({ role: "button", name: "Save" }),
+    });
+    expect(events[3]).toEqual({
+      kind: "press",
+      key: "Tab",
+      modifiers: ["Shift"],
+    });
+    expect(events[5]).toMatchObject({
+      kind: "type",
+      hidden: false,
+      target: { role: "textbox", name: "Email" },
+    });
+    for (const event of events.slice(1)) {
+      expect(Object.isFrozen(event)).toBe(true);
+    }
+    const press = events[3];
+    if (press?.kind !== "press") throw new Error("no press");
+    expect(Object.isFrozen(press.modifiers)).toBe(true);
+    const click = events[1];
+    if (click?.kind !== "click") throw new Error("no click");
+    expect(Object.isFrozen(click.target)).toBe(true);
+    expect(Object.isFrozen(click.target.states)).toBe(true);
+  });
+
+  it("never carries a typed character, a password, or input data in an event", async () => {
+    // ADR-0001: the field, never the characters.
+    document.body.innerHTML = `<main>
+      <label>Note <input id="note"></label>
+      <label>Card <input id="cc" autocomplete="cc-number" aria-describedby="h" required></label>
+      <p id="h">16 digits</p>
+      <label>Password <input type="password" id="pw"></label>
+    </main>`;
+    await tick();
+    const recording = startTimeline(document.querySelector("main")!, {
+      interactions: true,
+    });
+    for (const [id, text] of [
+      ["note", "zqx"],
+      ["cc", "4111"],
+      ["pw", "hunter2"],
+    ] as const) {
+      const field = byId(id) as HTMLInputElement;
+      field.focus();
+      for (const ch of text) {
+        field.dispatchEvent(
+          new KeyboardEvent("keydown", { key: ch, bubbles: true }),
+        );
+        field.dispatchEvent(
+          new InputEvent("beforeinput", { bubbles: true, data: ch }),
+        );
+        field.value += ch;
+        field.dispatchEvent(
+          new InputEvent("input", { bubbles: true, data: ch }),
+        );
+        await tick();
+      }
+    }
+    const events = recording.stop();
+    const json = JSON.stringify(events);
+    for (const secret of ["zqx", "4111", "hunter2"]) {
+      expect(json).not.toContain(secret);
+    }
+    expect(events.filter((e) => e.kind === "press")).toEqual([]);
+    // A sensitive field's type event says its role and name alone.
+    expect(events.filter((e) => e.kind === "type")).toEqual([
+      expect.objectContaining({
+        target: expect.objectContaining({ name: "Note" }),
+      }),
+      {
+        kind: "type",
+        hidden: false,
+        target: {
+          role: "textbox",
+          name: "Card",
+          description: "",
+          states: {},
+          properties: {},
+          isExposedToAT: true,
+        },
+      },
+      expect.objectContaining({
+        target: expect.objectContaining({ name: "Password", states: {} }),
+      }),
+    ]);
+  });
+
+  it("records interactions alone, with focus and announcements off", async () => {
+    document.body.innerHTML = `<main><button id="b">Save</button></main>`;
+    await tick();
+    expect(
+      timelineProblem(document.body, {
+        focus: false,
+        announcements: false,
+        interactions: true,
+      }),
+    ).toBeNull();
+    const recording = startTimeline(document.querySelector("main")!, {
+      focus: false,
+      announcements: false,
+      interactions: true,
+    });
+    byId("b").click();
+    await tick();
+    expect(recording.stop().map((e) => e.kind)).toEqual(["click"]);
+  });
 });

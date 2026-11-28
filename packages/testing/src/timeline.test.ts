@@ -1382,3 +1382,345 @@ describe("recordTimeline options", () => {
     expect(box).toMatchInlineSnapshot(`focus     button "Delete draft"`);
   });
 });
+
+describe("recordTimeline interactions", () => {
+  /** A key as a browser sends it: a `keydown` at the focused element. */
+  function press(key: string, init: KeyboardEventInit = {}): void {
+    const target = document.activeElement ?? document.body;
+    target.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key,
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        ...init,
+      }),
+    );
+  }
+
+  /** A pointer click as a browser and `user-event` make one: the press
+   *  focuses what can take focus from the target up, then, a task later,
+   *  the release clicks. */
+  async function pointerClick(el: HTMLElement): Promise<void> {
+    const init = { bubbles: true, cancelable: true, composed: true };
+    el.dispatchEvent(new MouseEvent("pointerdown", init));
+    el.dispatchEvent(new MouseEvent("mousedown", init));
+    el.closest<HTMLElement>("button, a[href], input, [tabindex]")?.focus();
+    await tick();
+    el.dispatchEvent(new MouseEvent("pointerup", init));
+    el.dispatchEvent(new MouseEvent("mouseup", init));
+    el.click();
+  }
+
+  /** Typing as a browser does it: a `keydown`, the value written, then an
+   *  `input` carrying the character, for each one. */
+  async function typeInto(el: HTMLInputElement, text: string): Promise<void> {
+    for (const ch of text) {
+      press(ch);
+      el.dispatchEvent(
+        new InputEvent("beforeinput", { bubbles: true, data: ch }),
+      );
+      el.value += ch;
+      el.dispatchEvent(
+        new InputEvent("input", {
+          bubbles: true,
+          data: ch,
+          inputType: "insertText",
+        }),
+      );
+      await tick();
+    }
+  }
+
+  /** The markup, then a tick: the writes queue the observer's delivery. */
+  async function page(html: string): Promise<HTMLElement> {
+    document.body.innerHTML = `<main>${html}</main>`;
+    await tick();
+    return document.querySelector("main")!;
+  }
+
+  it("records none unless asked, so a timeline from before reads the same", async () => {
+    const main = await page(`<button id="a">A</button>`);
+    const timeline = recordTimeline(main);
+    await pointerClick(byId("a"));
+    press("Escape");
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`focus     button "A"`);
+  });
+
+  it("prints a Tab before the focus move it makes", async () => {
+    const main = await page(
+      `<button id="a">A</button><button id="b">B</button>`,
+    );
+    byId("a").focus();
+    const timeline = recordTimeline(main, { interactions: true });
+    // jsdom has no default action for Tab: the move is the one a browser
+    // makes once the keydown is through.
+    press("Tab");
+    byId("b").focus();
+    await tick();
+    press("Tab", { shiftKey: true });
+    byId("a").focus();
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`
+      focus     button "A"
+      press     Tab
+      focus     button "B"
+      press     Shift+Tab
+      focus     button "A"
+    `);
+  });
+
+  it("prints a pointer click after the focus its press moved, and before what its handler announced", async () => {
+    const main = await page(
+      `<button id="a">A</button><button id="b">Save</button><p role="status" id="s"></p>`,
+    );
+    byId("a").focus();
+    byId("b").addEventListener("click", () => {
+      byId("s").textContent = "Saved.";
+    });
+    const timeline = recordTimeline(main, { interactions: true });
+    await pointerClick(byId("b"));
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`
+      focus     button "A"
+      focus     button "Save"
+      click     button "Save"
+      announce  status "Saved."
+    `);
+  });
+
+  it("prints a scripted click with no focus move, as fireEvent sends it", async () => {
+    const main = await page(
+      `<button id="a">A</button><button id="b">Save</button><p role="status" id="s"></p>`,
+    );
+    byId("a").focus();
+    byId("b").addEventListener("click", () => {
+      byId("s").textContent = "Saved.";
+    });
+    const timeline = recordTimeline(main, { interactions: true });
+    byId("b").click();
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`
+      focus     button "A"
+      click     button "Save"
+      announce  status "Saved."
+    `);
+  });
+
+  it("names a click as it happened, though its handler removed what was clicked", async () => {
+    const main = await page(
+      `<ul><li>Draft <button id="d"><svg aria-hidden="true"></svg><span id="icon">Delete draft</span></button></li></ul><p role="status" id="s"></p>`,
+    );
+    byId("d").addEventListener("click", () => {
+      byId("d").closest("li")!.remove();
+      byId("s").textContent = "Draft deleted.";
+    });
+    const timeline = recordTimeline(main, { interactions: true });
+    await pointerClick(byId("icon"));
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`
+      focus     button "Delete draft"
+      click     button "Delete draft"
+      focus     (none)
+      announce  status "Draft deleted."
+    `);
+  });
+
+  it("names a click on what the tree folds away as generic, and leaves out one outside the root", async () => {
+    document.body.innerHTML = `<aside><button id="out">Out</button></aside><main><div id="d"></div></main>`;
+    await tick();
+    const timeline = recordTimeline(document.querySelector("main")!, {
+      interactions: true,
+    });
+    byId("d").click();
+    byId("out").click();
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`click     generic`);
+  });
+
+  it("prints Escape, the announcement it caused and the focus it returned, in order", async () => {
+    const main = await page(
+      `<button id="open">Filters</button><div role="dialog" aria-label="Filters" id="dlg"><button id="close">Close</button></div><p role="status" id="s"></p>`,
+    );
+    byId("close").focus();
+    byId("dlg").addEventListener("keydown", (event) => {
+      if ((event as KeyboardEvent).key !== "Escape") return;
+      byId("dlg").hidden = true;
+      byId("s").textContent = "Filters closed.";
+      byId("open").focus();
+    });
+    const timeline = recordTimeline(main, { interactions: true });
+    press("Escape");
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`
+      focus     button "Close"
+      press     Escape
+      announce  status "Filters closed."
+      focus     button "Filters"
+    `);
+  });
+
+  it("prints one line for typing into a field, broken by what comes between", async () => {
+    const main = await page(`<label>Email <input id="e"></label>`);
+    const e = byId<HTMLInputElement>("e");
+    e.focus();
+    const timeline = recordTimeline(main, { interactions: true });
+    await typeInto(e, "sam@exa");
+    press("Backspace");
+    e.value = e.value.slice(0, -1);
+    e.dispatchEvent(
+      new InputEvent("input", {
+        bubbles: true,
+        inputType: "deleteContentBackward",
+      }),
+    );
+    await tick();
+    await typeInto(e, "ample.com");
+    press("Enter");
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`
+      focus     textbox "Email"
+      type      textbox "Email"
+      press     Backspace
+      type      textbox "Email"
+      press     Enter
+    `);
+  });
+
+  it("prints a line for every press of a repeated key", async () => {
+    const main = await page(`<button id="a">A</button>`);
+    byId("a").focus();
+    const timeline = recordTimeline(main, {
+      interactions: true,
+      focus: false,
+    });
+    for (let i = 0; i < 3; i++) press("ArrowDown", { repeat: i > 0 });
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`
+      press     ArrowDown
+      press     ArrowDown
+      press     ArrowDown
+    `);
+  });
+
+  it("prints a shortcut, and Space outside a field, but no key that types a character", async () => {
+    const main = await page(
+      `<button id="b">Play</button><label>Note <input id="n"></label>`,
+    );
+    byId("b").focus();
+    const timeline = recordTimeline(main, {
+      interactions: true,
+      focus: false,
+    });
+    press(" ");
+    press("j");
+    byId("n").focus();
+    press(" ");
+    press("a", { ctrlKey: true });
+    press("a", { ctrlKey: true, altKey: true }); // AltGr types a character
+    press("€", { ctrlKey: true, altKey: true });
+    press("Shift", { shiftKey: true });
+    press("hunter2"); // a synthetic keydown's key is any string
+    press("Process", { isComposing: true });
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`
+      press     Space
+      press     Ctrl+A
+    `);
+  });
+
+  it("never prints a typed character, a pasted one or a password, nor carries one in an event", async () => {
+    const main = await page(`
+      <label>Note <input id="note"></label>
+      <label>Password <input type="password" id="pw" aria-describedby="hint" required></label>
+      <p id="hint">At least 12 characters</p>
+      <div contenteditable="true" role="textbox" aria-label="Message" id="ed"></div>`);
+    const timeline = recordTimeline(main, { interactions: true });
+    byId("note").focus();
+    await typeInto(byId<HTMLInputElement>("note"), "zqx");
+    byId("pw").focus();
+    await typeInto(byId<HTMLInputElement>("pw"), "hunter2!");
+    const pasted = new Event("paste", { bubbles: true });
+    Object.defineProperty(pasted, "clipboardData", {
+      value: { getData: () => "pasted-secret" },
+    });
+    byId("pw").dispatchEvent(pasted);
+    byId("ed").focus();
+    press("w");
+    byId("ed").textContent = "wvk";
+    byId("ed").dispatchEvent(
+      new InputEvent("input", { bubbles: true, data: "wvk" }),
+    );
+    await tick();
+    const { text } = timeline.stop();
+    expect(text).toMatchInlineSnapshot(`
+      "focus     textbox "Note"
+      type      textbox "Note"
+      focus     textbox "Password" {required, description="At least 12 characters"}
+      type      textbox "Password"
+      focus     textbox "Message"
+      type      textbox "Message""
+    `);
+    for (const secret of ["zqx", "hunter2", "pasted-secret", "wvk"]) {
+      expect(text).not.toContain(secret);
+    }
+  });
+
+  it("names a click inside an open shadow root by what was clicked there", async () => {
+    const main = await page(`<x-toolbar id="host"></x-toolbar>`);
+    const shadow = byId("host").attachShadow({ mode: "open" });
+    shadow.innerHTML = `<button id="inner">Bold</button>`;
+    await tick();
+    const timeline = recordTimeline(main, {
+      interactions: true,
+      focus: false,
+    });
+    shadow.getElementById("inner")!.click();
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`click     button "Bold"`);
+  });
+
+  it("redacts names in click and type lines as in focus lines", async () => {
+    const main = await page(
+      `<button id="b">Pay order 12345</button><label>Order 12345 note <input id="n"></label>`,
+    );
+    const timeline = recordTimeline(main, {
+      interactions: true,
+      focus: false,
+      redact: [/\d{5}/],
+    });
+    byId("b").click();
+    await tick();
+    await typeInto(byId<HTMLInputElement>("n"), "ok");
+    expect(timeline.stop()).toMatchInlineSnapshot(`
+      click     button "Pay order [REDACTED]"
+      type      textbox "Order [REDACTED] note"
+    `);
+  });
+
+  it("records interactions alone with focus and announcements off", async () => {
+    const main = await page(`<button id="b">Save</button>`);
+    const timeline = recordTimeline(main, {
+      interactions: true,
+      focus: false,
+      announcements: false,
+    });
+    await pointerClick(byId("b"));
+    await tick();
+    expect(timeline.stop()).toMatchInlineSnapshot(`click     button "Save"`);
+  });
+
+  it("stops listening for interactions once stopped", async () => {
+    const main = await page(`<button id="b">Save</button>`);
+    const timeline = recordTimeline(main, {
+      interactions: true,
+      focus: false,
+    });
+    const box = timeline.stop();
+    byId("b").click();
+    await tick();
+    expect(timeline.stop()).toBe(box);
+    expect(box).toMatchInlineSnapshot(`(nothing recorded)`);
+  });
+});

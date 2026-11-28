@@ -93,6 +93,40 @@ describe("serializeTimeline", () => {
     );
   });
 
+  it("writes a press line as its modifiers and key, joined by +", () => {
+    expect(
+      serializeTimeline([
+        { kind: "press", key: "Tab", modifiers: [] },
+        { kind: "press", key: "Tab", modifiers: ["Shift"] },
+        { kind: "press", key: "A", modifiers: ["Ctrl", "Shift"] },
+      ]),
+    ).toBe(
+      ["press     Tab", "press     Shift+Tab", "press     Ctrl+Shift+A"].join(
+        "\n",
+      ),
+    );
+  });
+
+  it("writes click and type lines as focus lines name their node, redacted alike", () => {
+    const save = focusOn("button", "Save 12345");
+    const email = focusOn("textbox", "Email", {}, true);
+    if (save.kind !== "focus" || email.kind !== "focus") throw new Error();
+    expect(
+      serializeTimeline(
+        [
+          { kind: "click", target: save.stop!, hidden: false },
+          { kind: "type", target: email.stop!, hidden: true },
+        ],
+        { redact: [/\d{5}/] },
+      ),
+    ).toBe(
+      [
+        `click     button "Save [REDACTED]"`,
+        `type      textbox "Email" [hidden]`,
+      ].join("\n"),
+    );
+  });
+
   it("says (nothing recorded) for no events", () => {
     expect(serializeTimeline([])).toBe("(nothing recorded)");
   });

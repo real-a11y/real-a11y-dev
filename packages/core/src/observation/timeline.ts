@@ -3,38 +3,35 @@
 // announce, as events in the order the page made them. It runs in the page
 // on every surface; `serialize`'s `serializeTimeline` writes the lines.
 
-import { buildA11yTree } from "../extraction/a11y-extractor.js";
 import {
   safeContains,
   safeNodeType,
   safeOwnerDocument,
 } from "../extraction/clobber-safe.js";
-import {
-  extractDomTree,
-  resolveFocusedElement,
-} from "../extraction/dom-extractor.js";
+import { resolveFocusedElement } from "../extraction/dom-extractor.js";
 import { renderingParent } from "../extraction/flat-tree.js";
 import { getImplicitRole } from "../extraction/role-map.js";
-import { asStop } from "../query/tab-sequence.js";
-import type { ExtractionResult } from "../types.js";
 
 import {
   freeze,
   timelineProblem,
   type TimelineAnnounceEvent,
   type TimelineEvent,
-  type TimelineFocusEvent,
   type TimelineOptions,
   type TimelineRecording,
-  unreached,
 } from "./timeline-events.js";
+import {
+  INTERACTION_TYPES,
+  interactionOf,
+  nodeStop,
+  TypingRun,
+} from "./timeline-interactions.js";
 import {
   alreadySaid,
   announcedRead,
   audibleRead,
   gains,
   heldFrom,
-  hiddenAbove,
   isLive,
   regionLevel,
   renderedIn,
@@ -50,25 +47,20 @@ function holds(node: Node, element: Element): boolean {
   return false;
 }
 
-/** Is the node `id`, and everything above it, exposed to assistive tech? */
-function exposed(tree: ExtractionResult, id: string): boolean {
-  for (let n = tree.nodes.get(id); n;) {
-    if (!n.a11y.isExposedToAT) return false;
-    n = n.parentId === null ? undefined : tree.nodes.get(n.parentId);
-  }
-  return true;
-}
-
 /** Note a change to the regions at a point in their block. */
 type Touch = (regions: Element[], at: number) => void;
 
 /**
  * An event, and where in its block it happened: record `i` is at `2i + 1`,
- * and a focus event before record `k` at `2k`, so the two sort together.
+ * and a focus event before record `k` at `2k`, so the two sort together. An
+ * interaction before record `k` is a quarter either side of `2k`, by
+ * whether a focus move there came before it ({@link onInteraction}). `el`
+ * is the field a type event names.
  */
 interface Pending {
   at: number;
   event: TimelineEvent;
+  el?: Element | null;
 }
 
 /** A focus event: before which record it happened, where in the root focus
@@ -116,6 +108,9 @@ class TimelineRecorder {
   private records: MutationRecord[] = [];
   /** The focus events among those changes. */
   private moves: Move[] = [];
+  /** The interactions among them. */
+  private acts: Pending[] = [];
+  private readonly typing = new TypingRun();
   /** A settle is queued for the end of this synchronous block. */
   private scheduled = false;
   /** Focus has left one element for another and not arrived yet. */
@@ -130,7 +125,7 @@ class TimelineRecorder {
   constructor(
     private readonly root: Element,
     private readonly options: Required<
-      Pick<TimelineOptions, "focus" | "announcements">
+      Pick<TimelineOptions, "focus" | "announcements" | "interactions">
     > &
       Pick<TimelineOptions, "onEvents">,
   ) {
@@ -154,6 +149,7 @@ class TimelineRecorder {
         ? { characterData: true, attributes: true }
         : {}),
     });
+    if (options.interactions) this.listenForActs(this.addListener);
     if (options.focus) {
       this.listen(this.doc, this.addListener);
       // Where focus starts. Nothing read yet counts as `(none)`, so a start
@@ -183,6 +179,7 @@ class TimelineRecorder {
       this.observer.disconnect();
       for (const target of [this.doc, ...this.shadowRoots])
         this.listen(target, this.removeListener);
+      if (this.options.interactions) this.listenForActs(this.removeListener);
       // Kept when a call `onEvents` was handed stopped it first.
       this.done ??= Object.freeze([...this.events]);
     }
@@ -230,6 +227,40 @@ class TimelineRecorder {
       method.call(target, type, this.onFocusOut, true);
     }
   }
+
+  /** Add or remove the interaction listeners: the document's alone, since
+   *  an event's composed path reaches into the open shadow roots it crossed. */
+  private listenForActs(
+    method: typeof EventTarget.prototype.addEventListener,
+  ): void {
+    for (const type of INTERACTION_TYPES) {
+      method.call(this.doc, type, this.onInteraction, true);
+    }
+  }
+
+  /**
+   * Note an interaction at this point among the page's changes, named as it
+   * happened: what a click removes is gone by the time the block settles.
+   * Just after a focus move already noted here, as a click's follows the
+   * `pointerdown`'s move; otherwise just before any move still to come, as a
+   * Tab's `keydown` comes before the move it makes.
+   */
+  private readonly onInteraction = (event: Event): void => {
+    if (this.done) return;
+    const act = interactionOf(
+      event,
+      this.root,
+      (el) => this.inRoot(el),
+      this.typing.last,
+    );
+    if (!act) return;
+    if (act.event.kind === "type") this.typing.last = act;
+    for (const record of this.observer.takeRecords()) this.records.push(record);
+    const k = this.records.length;
+    const after = this.moves[this.moves.length - 1]?.at === k;
+    this.acts.push({ at: 2 * k + (after ? 0.25 : -0.25), ...act });
+    this.schedule();
+  };
 
   private readonly onFocusIn = (): void => {
     this.leaving = false;
@@ -336,8 +367,10 @@ class TimelineRecorder {
     const records = this.records;
     for (const record of this.observer.takeRecords()) records.push(record);
     const moves = this.moves;
+    const acts = this.acts;
     this.records = [];
     this.moves = [];
+    this.acts = [];
     const pending = this.options.announcements
       ? this.announcements(records, moves)
       : [];
@@ -346,9 +379,12 @@ class TimelineRecorder {
       const change = this.focusChange(this.focusSettled(records, moves));
       if (change) pending.push(change);
     }
+    pending.push(...acts);
     // Stable, so events from one record keep the order they were read in.
     pending.sort((a, b) => a.at - b.at);
-    this.emit(pending.map((p) => p.event));
+    const events = pending.filter((p) => this.typing.keeps(p.event, p.el));
+    this.typing.settled();
+    this.emit(events.map((p) => p.event));
   }
 
   // ─── focus ─────────────────────────────────────────────────────────────────
@@ -403,7 +439,8 @@ class TimelineRecorder {
     if (element === this.seen) return null;
     this.seen = element;
     this.listenInside(element);
-    const named = element ? this.focusStop(element) : null;
+    const named =
+      element && this.inRoot(element) ? nodeStop(this.root, element) : null;
     const target = named === null ? null : element;
     if (target === this.focused) return null;
     this.focused = target;
@@ -415,49 +452,6 @@ class TimelineRecorder {
         hidden: named?.hidden ?? false,
       },
     };
-  }
-
-  /**
-   * `element` as the tab order singles it out, or null when the root doesn't
-   * hold it. A focused node the a11y view folds away (a `<div tabindex="-1">`
-   * with no name) is still where the user is, so it falls back to the DOM
-   * view's node. One assistive tech can't reach is `hidden`, since a screen
-   * reader meets nothing there: inside `aria-hidden`, `inert` or hidden
-   * content, above the root as well as in it, or somewhere the tree doesn't
-   * walk at all (jsdom lets a `hidden` element take focus).
-   */
-  private focusStop(
-    element: Element,
-  ): Pick<TimelineFocusEvent, "stop" | "hidden"> | null {
-    if (!this.inRoot(element)) return null;
-    // Partial, so the root is read as it is: never widened to a portaled
-    // overlay or narrowed to a modal, which would make what counts as inside
-    // it hang on the rest of the page.
-    const dom = extractDomTree(this.root, {
-      nodes: new Map(),
-      includeFocused: true,
-    });
-    const id = dom.focusedId;
-    const node = id ? dom.nodes.get(id) : undefined;
-    if (!id || !node) {
-      const role = getImplicitRole(element);
-      return { stop: unreached(role), hidden: true };
-    }
-    const kept = buildA11yTree(dom.nodes, dom.rootId, id, dom.source).nodes.get(
-      id,
-    );
-    // Singling a node out says what it is, so a sensitive field's choice is
-    // withheld here as the tab order withholds it (ADR-0001). The line never
-    // prints a value, and an event carries none either.
-    const { value: _value, ...stop } = asStop(kept ?? node).a11y;
-    const reachable = (kept || exposed(dom, id)) && !this.hiddenAboveRoot();
-    return { stop, hidden: !reachable };
-  }
-
-  /** Is the root inside `aria-hidden`, `inert` or hidden content? The
-   *  tree, read from the root down, can't see that. */
-  private hiddenAboveRoot(): boolean {
-    return hiddenAbove(this.root);
   }
 
   // ─── live regions ──────────────────────────────────────────────────────────
@@ -729,6 +723,11 @@ class TimelineRecorder {
  *   first, by itself or a container, it says it again. One hidden by
  *   `aria-hidden` or `inert` above it keeps its text, and one switched to
  *   `aria-live="off"` takes in what it shows silently.
+ * - With `{ interactions: true }`, **press**, **click** and **type** events
+ *   say what the user did: a key that types no text, a `click` the page
+ *   received, and typing into a field, collapsed to one event per field and
+ *   naming the field, never the characters (ADR-0001). Each is placed among
+ *   the page's changes as a focus move is.
  * - Events follow the order the page made its changes. What one synchronous
  *   run of the page's code does is read once: text set and cleared in it, or
  *   focus passing through an element, is no event. Anything an `await`
@@ -747,11 +746,10 @@ export function startTimeline(
 ): TimelineRecording {
   const problem = timelineProblem(root, options);
   if (problem) throw new TypeError(`startTimeline: ${problem}`);
-  const { focus = true, announcements = true, onEvents } = options;
+  const { focus = true, announcements = true, interactions = false } = options;
+  const { onEvents } = options;
   const recorder = new TimelineRecorder(root, {
-    focus,
-    announcements,
-    onEvents,
+    ...{ focus, announcements, interactions, onEvents },
   });
   return { stop: () => recorder.stop() };
 }

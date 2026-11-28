@@ -88,6 +88,28 @@ describe("recordTimeline — what a delete button does to focus", () => {
   });
 });
 
+describe("recordTimeline — with what the user did", () => {
+  it("prints the click that started it, ahead of what it caused", async () => {
+    render(<Drafts focusAfter />);
+    screen.getByRole("button", { name: "Delete Q3 plan" }).focus();
+    const timeline = recordTimeline(document.body, { interactions: true });
+
+    await deleteDraft();
+
+    // `fireEvent.click` sends a click and no pointer press, so it moves no
+    // focus: the click line says what the page received, and the rest is
+    // what the handler did with it.
+    expect(timeline.stop()).toMatchInlineSnapshot(`
+      focus     button "Delete Q3 plan"
+      click     button "Delete Q3 plan"
+      announce  status "Deleting…"
+      focus     (none)
+      focus     button "New draft"
+      announce  status "Q3 plan deleted."
+    `);
+  });
+});
+
 describe("recordTimeline — a portaled toast", () => {
   it("hears a status region that portals to the body", async () => {
     render(
